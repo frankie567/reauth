@@ -4,7 +4,10 @@ import hashlib
 import hmac
 import secrets
 import string
+import typing
 import zlib
+
+TokenHash = typing.NewType("TokenHash", str)
 
 
 def _crc32_to_base62(number: int) -> str:
@@ -17,7 +20,7 @@ def _crc32_to_base62(number: int) -> str:
     return encoded.zfill(6)  # Ensure the checksum is 6 characters long
 
 
-def get_token_hash(token: str, *, secret: str) -> str:
+def get_token_hash(token: str, *, secret: str) -> TokenHash:
     """Compute HMAC-SHA256 hash of a token.
 
     Args:
@@ -28,7 +31,7 @@ def get_token_hash(token: str, *, secret: str) -> str:
         Hexadecimal string of the HMAC-SHA256 hash.
     """
     hash = hmac.new(secret.encode("ascii"), token.encode("ascii"), hashlib.sha256)
-    return hash.hexdigest()
+    return TokenHash(hash.hexdigest())
 
 
 def generate_token(*, prefix: str = "") -> str:
@@ -60,7 +63,7 @@ def generate_token(*, prefix: str = "") -> str:
     return f"{prefix}{token}{checksum_base62}"
 
 
-def generate_token_hash_pair(*, secret: str, prefix: str = "") -> tuple[str, str]:
+def generate_token_hash_pair(*, secret: str, prefix: str = "") -> tuple[str, TokenHash]:
     """Generate a token and its HMAC-SHA256 hash pair.
 
     Generates a high-entropy token with embedded checksum and computes its
@@ -79,8 +82,31 @@ def generate_token_hash_pair(*, secret: str, prefix: str = "") -> tuple[str, str
     return token, get_token_hash(token, secret=secret)
 
 
+def generate_code_hash_pair(*, secret: str, length: int = 6) -> tuple[str, TokenHash]:
+    """Generate a 6-alphanumeric code and its HMAC-SHA256 hash pair.
+
+    This is useful for generating OTP codes where the raw code is sent to the
+    user and only the hash is stored for verification.
+
+    Args:
+        secret: The secret key used for HMAC computation.
+        length: The length of the numeric code to generate (default is 6).
+
+    Returns:
+        A tuple of (code, hash) where code is the raw code and hash is
+        its HMAC-SHA256 hexadecimal digest.
+    """
+    code = "".join(
+        secrets.choice(string.ascii_uppercase + string.digits) for _ in range(length)
+    )
+    code_hash = get_token_hash(code, secret=secret)
+    return code, code_hash
+
+
 __all__ = [
+    "TokenHash",
     "get_token_hash",
+    "generate_code_hash_pair",
     "generate_token",
     "generate_token_hash_pair",
 ]

@@ -2,7 +2,12 @@
 
 import pytest
 
-from reauth.crypto import generate_token, generate_token_hash_pair, get_token_hash
+from reauth.crypto import (
+    generate_code_hash_pair,
+    generate_token,
+    generate_token_hash_pair,
+    get_token_hash,
+)
 
 
 class TestGetTokenHash:
@@ -128,5 +133,26 @@ class TestGenerateTokenHashPair:
     def test_hash_is_valid_hex(self) -> None:
         """Hash in pair is a valid hexadecimal string."""
         _, hash_value = generate_token_hash_pair(secret="secret")
+        assert all(c in "0123456789abcdef" for c in hash_value)
+        assert len(hash_value) == 64
+
+
+class TestGenerateCodeHashPair:
+    """Tests for generate_code_hash_pair function."""
+
+    @pytest.mark.parametrize("length", [1, 4, 6, 8, 10])
+    def test_code_properties(self, length: int) -> None:
+        """Code has correct length and valid characters, hash is valid hex."""
+        code, hash_value = generate_code_hash_pair(secret="my_secret", length=length)
+
+        # Length check
+        assert len(code) == length
+
+        # Character set check (uppercase alphanumeric only)
+        valid_chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+        assert all(c in valid_chars for c in code)
+
+        # Hash is present and valid
+        assert isinstance(hash_value, str)
         assert all(c in "0123456789abcdef" for c in hash_value)
         assert len(hash_value) == 64

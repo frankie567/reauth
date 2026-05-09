@@ -1,15 +1,16 @@
+import abc
 import dataclasses
 import datetime
-from abc import ABC, abstractmethod
 
-from .crypto import generate_token_hash_pair, get_token_hash
+from .crypto import TokenHash, generate_token_hash_pair, get_token_hash
 from .exceptions import ReauthException
+from .timestamp import get_current_timestamp
 
 
 @dataclasses.dataclass
 class AuthenticationSession[IDType]:
     id: IDType | None
-    token_hash: str
+    token_hash: TokenHash
     expires_at: int
     identity_id: IDType | None
 
@@ -20,8 +21,7 @@ class AuthenticationSession[IDType]:
         Returns:
             True if the session has expired, False otherwise.
         """
-        now = datetime.datetime.now(datetime.UTC).timestamp()
-        return now >= self.expires_at
+        return get_current_timestamp() >= self.expires_at
 
 
 class AuthenticationSessionException(ReauthException):
@@ -42,7 +42,7 @@ class ExpiredSessionException(AuthenticationSessionException):
     pass
 
 
-class AuthenticationSessionService(ABC):
+class AuthenticationSessionService(abc.ABC):
     """
     Abstract base class for managing authentication sessions.
 
@@ -53,11 +53,11 @@ class AuthenticationSessionService(ABC):
     def __init__(
         self,
         *,
-        token_secret: str,
+        hash_secret: str,
         token_prefix: str = "ls_",
         lifetime: datetime.timedelta = datetime.timedelta(minutes=15),
     ) -> None:
-        self.token_secret = token_secret
+        self.hash_secret = hash_secret
         self.token_prefix = token_prefix
         self.lifetime = lifetime
 
@@ -69,13 +69,12 @@ class AuthenticationSessionService(ABC):
             A tuple of (token, AuthenticationSession instance).
         """
         token, token_hash = generate_token_hash_pair(
-            secret=self.token_secret, prefix=self.token_prefix
+            secret=self.hash_secret, prefix=self.token_prefix
         )
-        now = datetime.datetime.now(datetime.UTC).timestamp()
         authentication_session = AuthenticationSession[object](
             id=None,
             token_hash=token_hash,
-            expires_at=int(now + self.lifetime.total_seconds()),
+            expires_at=get_current_timestamp() + int(self.lifetime.total_seconds()),
             identity_id=None,
         )
         authentication_session.id = await self.insert(authentication_session)
@@ -95,7 +94,7 @@ class AuthenticationSessionService(ABC):
             InvalidTokenException: If the token is invalid or does not correspond to any session.
             ExpiredSessionException: If the session corresponding to the token has expired.
         """
-        token_hash = get_token_hash(token, secret=self.token_secret)
+        token_hash = get_token_hash(token, secret=self.hash_secret)
         authentication_session = await self.get_by_token_hash(token_hash)
         if authentication_session is None:
             raise InvalidSessionTokenException()
@@ -103,7 +102,7 @@ class AuthenticationSessionService(ABC):
             raise ExpiredSessionException()
         return authentication_session
 
-    @abstractmethod
+    @abc.abstractmethod
     async def insert[IDType](
         self, authentication_session: AuthenticationSession[IDType]
     ) -> IDType:
@@ -120,12 +119,12 @@ class AuthenticationSessionService(ABC):
         """
         ...
 
-    @abstractmethod
+    @abc.abstractmethod
     async def get_by_token_hash(
         self, token_hash: str
     ) -> AuthenticationSession[object] | None:
         """
-        Retrieve an authentication session by its token hash.
+        Retrieve an authentication session by its token hash from the persistent store.
 
         Implementers should implement this method.
 
@@ -137,7 +136,7 @@ class AuthenticationSessionService(ABC):
         """
         ...
 
-    @abstractmethod
+    @abc.abstractmethod
     async def update[IDType](
         self, authentication_session: AuthenticationSession[IDType]
     ) -> None:

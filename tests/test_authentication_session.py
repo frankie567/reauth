@@ -1,5 +1,4 @@
 import dataclasses
-import datetime
 from collections.abc import AsyncGenerator
 
 import pytest
@@ -22,13 +21,14 @@ from reauth.authentication_session import (
     InvalidSessionTokenException,
 )
 from reauth.crypto import generate_token_hash_pair, get_token_hash
+from reauth.timestamp import get_current_timestamp
 
 sqlalchemy_meta = MetaData()
 authentication_session_table = Table(
     "authentication_sessions",
     sqlalchemy_meta,
     Column("id", Integer, primary_key=True, autoincrement=True),
-    Column("token_hash", String(255), nullable=False),
+    Column("token_hash", String(64), nullable=False),
     Column("expires_at", Integer, nullable=False),
     Column("identity_id", Integer, nullable=True),
 )
@@ -37,9 +37,9 @@ authentication_session_table = Table(
 class SQLAlchemyAuthenticationSession(AuthenticationSessionService):
     """Concrete implementation of AuthenticationSessionService using SQLAlchemy."""
 
-    def __init__(self, connection: AsyncConnection, *, token_secret: str) -> None:
+    def __init__(self, connection: AsyncConnection, *, hash_secret: str) -> None:
         self.connection = connection
-        super().__init__(token_secret=token_secret)
+        super().__init__(hash_secret=hash_secret)
 
     async def insert[int](
         self, authentication_session: AuthenticationSession[int]
@@ -94,7 +94,7 @@ def authentication_session_service(
 ) -> SQLAlchemyAuthenticationSession:
     """Fixture that provides an instance of SQLAlchemyAuthenticationSession."""
     return SQLAlchemyAuthenticationSession(
-        connection=sqlalchemy_connection, token_secret="test_secret"
+        connection=sqlalchemy_connection, hash_secret="test_secret"
     )
 
 
@@ -106,11 +106,11 @@ class TestAuthenticationSessionCreate:
         token, session = await authentication_session_service.create()
         assert isinstance(session, AuthenticationSession)
         assert session.id is not None
-        assert session.expires_at > int(datetime.datetime.now(datetime.UTC).timestamp())
+        assert session.expires_at > get_current_timestamp()
         assert session.identity_id is None
 
         token_hash = get_token_hash(
-            token, secret=authentication_session_service.token_secret
+            token, secret=authentication_session_service.hash_secret
         )
         assert session.token_hash == token_hash
 
@@ -127,7 +127,7 @@ class TestAuthenticationSessionGetByToken:
         self, authentication_session_service: SQLAlchemyAuthenticationSession
     ) -> None:
         token, token_hash = generate_token_hash_pair(
-            secret=authentication_session_service.token_secret,
+            secret=authentication_session_service.hash_secret,
             prefix=authentication_session_service.token_prefix,
         )
         await authentication_session_service.insert(
@@ -146,15 +146,14 @@ class TestAuthenticationSessionGetByToken:
         self, authentication_session_service: SQLAlchemyAuthenticationSession
     ) -> None:
         token, token_hash = generate_token_hash_pair(
-            secret=authentication_session_service.token_secret,
+            secret=authentication_session_service.hash_secret,
             prefix=authentication_session_service.token_prefix,
         )
-        now = datetime.datetime.now(datetime.UTC).timestamp()
         session_id = await authentication_session_service.insert(
-            AuthenticationSession(
+            AuthenticationSession[int](
                 id=None,
                 token_hash=token_hash,
-                expires_at=int(now + 3600),
+                expires_at=get_current_timestamp() + 3600,
                 identity_id=None,
             )
         )
