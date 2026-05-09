@@ -1,0 +1,64 @@
+site_name: Reauth
+site_description: The authentication toolkit for Python
+
+repo_url: https://github.com/frankie567/reauth
+repo_name: frankie567/reauth
+
+theme:
+    name: material
+    icon:
+        logo: material/toy-brick
+    palette:
+        # Palette toggle for automatic mode
+        - media: "(prefers-color-scheme)"
+          toggle:
+            icon: material/brightness-auto
+            name: Switch to light mode
+
+        # Palette toggle for light mode
+        - media: "(prefers-color-scheme: light)"
+          scheme: default
+          primary: black
+          accent: blue
+          toggle:
+            icon: material/brightness-7
+            name: Switch to dark mode
+
+        # Palette toggle for dark mode
+        - media: "(prefers-color-scheme: dark)"
+          scheme: slate
+          primary: black
+          accent: blue
+          toggle:
+            icon: material/brightness-4
+            name: Switch to light mode
+
+markdown_extensions:
+    - toc:
+        permalink: true
+    - pymdownx.highlight:
+        anchor_linenums: true
+    - pymdownx.tasklist:
+        custom_checkbox: true
+    - pymdownx.inlinehilite
+    - pymdownx.snippets
+    - pymdownx.superfences
+
+plugins:
+    - search
+    - mkdocstrings:
+        handlers:
+            python:
+                inventories:
+                    - https://docs.python.org/3.14/objects.inv
+                options:
+                    docstring_style: google
+
+watch:
+    - docs
+    - reauth
+
+nav:
+    - About: index.md
+    - Reference:
+        - reauth: reference/reauth.md
