@@ -37,7 +37,8 @@ dev = [
     "pytest-cov",
     "mkdocs-material",
     "mkdocstrings[python]",
-    
+    "sqlalchemy[asyncio]>=2.0.49",
+    "aiosqlite>=0.22.1",
 ]
 
 [tool.ruff]
