@@ -31,6 +31,7 @@ rfc4226/
 3. Edit `SKILL.md` to:
     - Replace TODO placeholders with actual content
     - Add proper description (max 1024 chars)
+    - **Quote the description in YAML frontmatter** if it contains colons or special characters to avoid parsing errors
     - Add relevant sections (Quick Reference, Key Concepts, etc.)
     - Ensure frontmatter follows Agent Skills spec
 

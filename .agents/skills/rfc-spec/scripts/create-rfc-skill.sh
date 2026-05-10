@@ -60,7 +60,7 @@ fi
 cat > "$SKILL_DIR/SKILL.md" <<EOF
 ---
 name: $SKILL_NAME
-description: RFC $RFC_NUMBER. TODO: Add description based on RFC content. Use when working with this RFC.
+description: "RFC $RFC_NUMBER. TODO: Add description based on RFC content. Use when working with this RFC."
 ---
 
 # RFC $RFC_NUMBER

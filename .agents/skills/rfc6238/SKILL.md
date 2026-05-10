@@ -1,6 +1,6 @@
 ---
 name: rfc6238
-description: RFC 6238 - TOTP: Time-Based One-Time Password Algorithm. Extends HOTP (RFC 4226) by using time as the moving factor instead of a counter, enabling time-synchronized OTP generation. Use when working with TOTP, time-based authentication, Google Authenticator, or OATH time-based standards.
+description: "RFC 6238 - TOTP: Time-Based One-Time Password Algorithm. Extends HOTP (RFC 4226) by using time as the moving factor instead of a counter, enabling time-synchronized OTP generation. Use when working with TOTP, time-based authentication, Google Authenticator, or OATH time-based standards."
 ---
 
 # RFC 6238: TOTP Algorithm

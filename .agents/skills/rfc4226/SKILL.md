@@ -1,6 +1,6 @@
 ---
 name: rfc4226
-description: RFC 4226 - HOTP: An HMAC-Based One-Time Password Algorithm. Defines the standard algorithm for generating one-time password values using HMAC. Use when working with HOTP, one-time passwords, HMAC-based authentication, two-factor authentication systems, or OATH standards.
+description: "RFC 4226 - HOTP: An HMAC-Based One-Time Password Algorithm. Defines the standard algorithm for generating one-time password values using HMAC. Use when working with HOTP, one-time passwords, HMAC-based authentication, two-factor authentication systems, or OATH standards."
 ---
 
 # RFC 4226: HOTP Algorithm
