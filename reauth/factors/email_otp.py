@@ -1,9 +1,11 @@
 import abc
 import dataclasses
 import datetime
+from typing import ClassVar
 
 from reauth.exceptions import ReauthException
 
+from ..amr import AuthenticationMethodReference
 from ..crypto import generate_code_hash_pair, get_token_hash
 from ..timestamp import get_current_timestamp
 
@@ -45,6 +47,8 @@ class ExpiredOTPException(EmailOTPException):
 
 
 class EmailOTPFactor(abc.ABC):
+    AMR: ClassVar[AuthenticationMethodReference] = AuthenticationMethodReference.EMAIL
+
     def __init__(
         self,
         *,

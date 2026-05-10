@@ -2,6 +2,7 @@ import abc
 import dataclasses
 import datetime
 
+from .amr import AuthenticationMethodReference
 from .crypto import TokenHash, generate_token_hash_pair, get_token_hash
 from .exceptions import ReauthException
 from .timestamp import get_current_timestamp
@@ -13,6 +14,7 @@ class AuthenticationSession[IDType]:
     token_hash: TokenHash
     expires_at: int
     identity_id: IDType | None
+    amr: list[AuthenticationMethodReference] = dataclasses.field(default_factory=list)
 
     def is_expired(self) -> bool:
         """

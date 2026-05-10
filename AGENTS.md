@@ -23,3 +23,11 @@ Tests are located in the `tests/` directory. It uses `pytest` for testing. To ru
 ```bash
 just test
 ```
+
+### Running Python commands
+
+The project uses `uv` for environment and dependency management. To run Python commands, use:
+
+```bash
+uv run python <your_command_here>
+```

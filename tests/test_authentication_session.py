@@ -3,6 +3,7 @@ from collections.abc import AsyncGenerator
 
 import pytest
 from sqlalchemy import (
+    JSON,
     Column,
     Integer,
     MetaData,
@@ -31,6 +32,7 @@ authentication_session_table = Table(
     Column("token_hash", String(64), nullable=False),
     Column("expires_at", Integer, nullable=False),
     Column("identity_id", Integer, nullable=True),
+    Column("amr", JSON, nullable=False),
 )
 
 
