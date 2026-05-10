@@ -1,6 +1,7 @@
 import abc
 import dataclasses
 import datetime
+import typing
 
 from .amr import AuthenticationMethodReference
 from .crypto import TokenHash, generate_token_hash_pair, get_token_hash
@@ -9,11 +10,11 @@ from .timestamp import get_current_timestamp
 
 
 @dataclasses.dataclass
-class AuthenticationSession[IDType]:
-    id: IDType | None
+class AuthenticationSession:
+    id: typing.Any | None
     token_hash: TokenHash
     expires_at: int
-    identity_id: IDType | None
+    identity_id: typing.Any | None
     amr: list[AuthenticationMethodReference] = dataclasses.field(default_factory=list)
 
     def is_expired(self) -> bool:
@@ -63,7 +64,7 @@ class AuthenticationSessionService(abc.ABC):
         self.token_prefix = token_prefix
         self.lifetime = lifetime
 
-    async def create(self) -> tuple[str, AuthenticationSession[object]]:
+    async def create(self) -> tuple[str, AuthenticationSession]:
         """
         Create a fresh authentication session.
 
@@ -73,7 +74,7 @@ class AuthenticationSessionService(abc.ABC):
         token, token_hash = generate_token_hash_pair(
             secret=self.hash_secret, prefix=self.token_prefix
         )
-        authentication_session = AuthenticationSession[object](
+        authentication_session = AuthenticationSession(
             id=None,
             token_hash=token_hash,
             expires_at=get_current_timestamp() + int(self.lifetime.total_seconds()),
@@ -82,7 +83,7 @@ class AuthenticationSessionService(abc.ABC):
         authentication_session.id = await self.insert(authentication_session)
         return token, authentication_session
 
-    async def get_by_token(self, token: str) -> AuthenticationSession[object]:
+    async def get_by_token(self, token: str) -> AuthenticationSession:
         """
         Validate a token and return the corresponding authentication session.
 
@@ -105,9 +106,7 @@ class AuthenticationSessionService(abc.ABC):
         return authentication_session
 
     @abc.abstractmethod
-    async def insert[IDType](
-        self, authentication_session: AuthenticationSession[IDType]
-    ) -> IDType:
+    async def insert(self, authentication_session: AuthenticationSession) -> typing.Any:
         """
         Insert an authentication session into a persistent store.
 
@@ -122,9 +121,7 @@ class AuthenticationSessionService(abc.ABC):
         ...
 
     @abc.abstractmethod
-    async def get_by_token_hash(
-        self, token_hash: str
-    ) -> AuthenticationSession[object] | None:
+    async def get_by_token_hash(self, token_hash: str) -> AuthenticationSession | None:
         """
         Retrieve an authentication session by its token hash from the persistent store.
 
@@ -139,9 +136,7 @@ class AuthenticationSessionService(abc.ABC):
         ...
 
     @abc.abstractmethod
-    async def update[IDType](
-        self, authentication_session: AuthenticationSession[IDType]
-    ) -> None:
+    async def update(self, authentication_session: AuthenticationSession) -> None:
         """
         Update an authentication session in the persistent store.
 

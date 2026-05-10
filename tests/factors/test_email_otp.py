@@ -28,11 +28,12 @@ sqlalchemy_meta = MetaData()
 email_otp_table = Table(
     "email_otps",
     sqlalchemy_meta,
-    Column("id", Integer, primary_key=True, autoincrement=True),
+    Column("id", Integer, primary_key=True),
     Column("code_hash", String(64), nullable=False),
     Column("expires_at", Integer, nullable=False),
     Column("identity_id", Integer, nullable=False),
     Column("authentication_session_id", Integer, nullable=False),
+    sqlite_autoincrement=True,
 )
 
 
@@ -49,7 +50,7 @@ class SQLAlchemyEmailOTPFactor(EmailOTPFactor):
         self.connection = connection
         super().__init__(hash_secret=hash_secret, code_length=code_length)
 
-    async def insert[int](self, email_otp: EmailOTP[int]) -> int:
+    async def insert(self, email_otp: EmailOTP) -> int:
         """Insert an EmailOTP into the database."""
         result = await self.connection.execute(
             insert(email_otp_table)
@@ -58,9 +59,9 @@ class SQLAlchemyEmailOTPFactor(EmailOTPFactor):
         )
         return result.scalar_one()
 
-    async def get_by_code_hash_and_authentication_session_id[int](
+    async def get_by_code_hash_and_authentication_session_id(
         self, code_hash: str, authentication_session_id: int
-    ) -> EmailOTP[int] | None:
+    ) -> EmailOTP | None:
         """Retrieve an EmailOTP by its code hash and authentication session ID."""
         result = await self.connection.execute(
             select(email_otp_table).where(
@@ -74,7 +75,7 @@ class SQLAlchemyEmailOTPFactor(EmailOTPFactor):
             return None
         return EmailOTP(**row._asdict())
 
-    async def update[int](self, email_otp: EmailOTP[int]) -> None:
+    async def update(self, email_otp: EmailOTP) -> None:
         """Update an EmailOTP in the database."""
         await self.connection.execute(
             update(email_otp_table)
@@ -82,10 +83,20 @@ class SQLAlchemyEmailOTPFactor(EmailOTPFactor):
             .values(**dataclasses.asdict(email_otp))
         )
 
-    async def delete[int](self, email_otp: EmailOTP[int]) -> None:
+    async def delete(self, email_otp: EmailOTP) -> None:
         """Delete an EmailOTP from the database."""
         await self.connection.execute(
             delete(email_otp_table).where(email_otp_table.c.id == email_otp.id)
+        )
+
+    async def delete_by_authentication_session_id(
+        self, authentication_session_id: int
+    ) -> None:
+        """Delete all EmailOTPs associated with a given authentication session ID."""
+        await self.connection.execute(
+            delete(email_otp_table).where(
+                email_otp_table.c.authentication_session_id == authentication_session_id
+            )
         )
 
 
@@ -133,6 +144,29 @@ class TestEmailOTPCreate:
 
         code_hash = get_token_hash(code, secret=email_otp_factor.hash_secret)
         assert otp.code_hash == code_hash
+
+    async def test_overrides_existing_otp(
+        self, email_otp_factor: SQLAlchemyEmailOTPFactor
+    ) -> None:
+        identity_id = 123
+        authentication_session_id = 456
+        first_code, first_otp = await email_otp_factor.create(
+            identity_id, authentication_session_id
+        )
+
+        second_code, second_otp = await email_otp_factor.create(
+            identity_id, authentication_session_id
+        )
+
+        assert second_otp.id != first_otp.id
+        assert second_code != first_code
+
+        deleted_first_otp = (
+            await email_otp_factor.get_by_code_hash_and_authentication_session_id(
+                first_otp.code_hash, authentication_session_id
+            )
+        )
+        assert deleted_first_otp is None
 
     async def test_otp_not_expired_immediately(
         self, email_otp_factor: SQLAlchemyEmailOTPFactor

@@ -1,6 +1,7 @@
 import abc
 import dataclasses
 import datetime
+import typing
 from typing import ClassVar
 
 from reauth.exceptions import ReauthException
@@ -11,12 +12,12 @@ from ..timestamp import get_current_timestamp
 
 
 @dataclasses.dataclass
-class EmailOTP[IDType]:
-    id: IDType | None
+class EmailOTP:
+    id: typing.Any | None
     code_hash: str
     expires_at: int
-    identity_id: IDType
-    authentication_session_id: IDType
+    identity_id: typing.Any
+    authentication_session_id: typing.Any
 
     def is_expired(self) -> bool:
         """
@@ -60,11 +61,14 @@ class EmailOTPFactor(abc.ABC):
         self.code_length = code_length
         self.lifetime = lifetime
 
-    async def create[IDType](
-        self, identity_id: IDType, authentication_session_id: IDType
-    ) -> tuple[str, EmailOTP[IDType]]:
+    async def create(
+        self, identity_id: typing.Any, authentication_session_id: typing.Any
+    ) -> tuple[str, EmailOTP]:
         """
         Create a new OTP for the given identity.
+
+        If an existing OTP for the same authentication session exists,
+        it's deleted and replaced with the new one.
 
         Args:
             identity_id: The ID of the identity to create the OTP for.
@@ -73,10 +77,12 @@ class EmailOTPFactor(abc.ABC):
         Returns:
             A tuple of (OTP code, EmailOTP instance).
         """
+        await self.delete_by_authentication_session_id(authentication_session_id)
+
         code, code_hash = generate_code_hash_pair(
             secret=self.hash_secret, length=self.code_length
         )
-        email_otp = EmailOTP[IDType](
+        email_otp = EmailOTP(
             id=None,
             code_hash=code_hash,
             expires_at=get_current_timestamp() + int(self.lifetime.total_seconds()),
@@ -84,6 +90,7 @@ class EmailOTPFactor(abc.ABC):
             authentication_session_id=authentication_session_id,
         )
         email_otp.id = await self.insert(email_otp)
+
         return code, email_otp
 
     async def consume(self, code: str, authentication_session_id: object) -> None:
@@ -112,7 +119,7 @@ class EmailOTPFactor(abc.ABC):
         await self.delete(email_otp)
 
     @abc.abstractmethod
-    async def insert[IDType](self, email_otp: EmailOTP[IDType]) -> IDType:
+    async def insert(self, email_otp: EmailOTP) -> typing.Any:
         """
         Insert an EmailOTP instance into a persistent store.
 
@@ -127,9 +134,9 @@ class EmailOTPFactor(abc.ABC):
         ...
 
     @abc.abstractmethod
-    async def get_by_code_hash_and_authentication_session_id[IDType](
-        self, code_hash: str, authentication_session_id: IDType
-    ) -> EmailOTP[IDType] | None:
+    async def get_by_code_hash_and_authentication_session_id(
+        self, code_hash: str, authentication_session_id: typing.Any
+    ) -> EmailOTP | None:
         """
         Retrieve an EmailOTP instance by its code hash from the persistent store.
 
@@ -145,7 +152,7 @@ class EmailOTPFactor(abc.ABC):
         ...
 
     @abc.abstractmethod
-    async def update[IDType](self, email_otp: EmailOTP[IDType]) -> None:
+    async def update(self, email_otp: EmailOTP) -> None:
         """
         Update an EmailOTP instance in the persistent store.
 
@@ -157,7 +164,7 @@ class EmailOTPFactor(abc.ABC):
         ...
 
     @abc.abstractmethod
-    async def delete[IDType](self, email_otp: EmailOTP[IDType]) -> None:
+    async def delete(self, email_otp: EmailOTP) -> None:
         """
         Delete an EmailOTP instance from the persistent store.
 
@@ -165,5 +172,19 @@ class EmailOTPFactor(abc.ABC):
 
         Args:
             email_otp: The EmailOTP instance to delete.
+        """
+        ...
+
+    @abc.abstractmethod
+    async def delete_by_authentication_session_id(
+        self, authentication_session_id: typing.Any
+    ) -> None:
+        """
+        Delete all EmailOTP instances associated with a given authentication session ID.
+
+        Implementers should implement this method.
+
+        Args:
+            authentication_session_id: The ID of the authentication session to delete OTPs for.
         """
         ...

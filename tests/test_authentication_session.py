@@ -28,11 +28,12 @@ sqlalchemy_meta = MetaData()
 authentication_session_table = Table(
     "authentication_sessions",
     sqlalchemy_meta,
-    Column("id", Integer, primary_key=True, autoincrement=True),
+    Column("id", Integer, primary_key=True),
     Column("token_hash", String(64), nullable=False),
     Column("expires_at", Integer, nullable=False),
     Column("identity_id", Integer, nullable=True),
     Column("amr", JSON, nullable=False),
+    sqlite_autoincrement=True,
 )
 
 
@@ -43,9 +44,7 @@ class SQLAlchemyAuthenticationSession(AuthenticationSessionService):
         self.connection = connection
         super().__init__(hash_secret=hash_secret)
 
-    async def insert[int](
-        self, authentication_session: AuthenticationSession[int]
-    ) -> int:
+    async def insert(self, authentication_session: AuthenticationSession) -> int:
         """Insert an authentication session into the database."""
         result = await self.connection.execute(
             insert(authentication_session_table)
@@ -54,9 +53,7 @@ class SQLAlchemyAuthenticationSession(AuthenticationSessionService):
         )
         return result.scalar_one()
 
-    async def get_by_token_hash(
-        self, token_hash: str
-    ) -> AuthenticationSession[object] | None:
+    async def get_by_token_hash(self, token_hash: str) -> AuthenticationSession | None:
         """Retrieve an authentication session by its token hash."""
         result = await self.connection.execute(
             select(authentication_session_table).where(
@@ -68,9 +65,7 @@ class SQLAlchemyAuthenticationSession(AuthenticationSessionService):
             return None
         return AuthenticationSession(**row._asdict())
 
-    async def update[int](
-        self, authentication_session: AuthenticationSession[int]
-    ) -> None:
+    async def update(self, authentication_session: AuthenticationSession) -> None:
         """Update an existing authentication session in the database."""
         await self.connection.execute(
             update(authentication_session_table)
@@ -152,7 +147,7 @@ class TestAuthenticationSessionGetByToken:
             prefix=authentication_session_service.token_prefix,
         )
         session_id = await authentication_session_service.insert(
-            AuthenticationSession[int](
+            AuthenticationSession(
                 id=None,
                 token_hash=token_hash,
                 expires_at=get_current_timestamp() + 3600,
