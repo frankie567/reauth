@@ -8,6 +8,7 @@ from sqlalchemy import (
     MetaData,
     String,
     Table,
+    delete,
     insert,
     select,
     update,
@@ -32,7 +33,6 @@ email_otp_table = Table(
     Column("expires_at", Integer, nullable=False),
     Column("identity_id", Integer, nullable=False),
     Column("authentication_session_id", Integer, nullable=False),
-    Column("used_at", Integer, nullable=True),
 )
 
 
@@ -82,6 +82,12 @@ class SQLAlchemyEmailOTPFactor(EmailOTPFactor):
             .values(**dataclasses.asdict(email_otp))
         )
 
+    async def delete[int](self, email_otp: EmailOTP[int]) -> None:
+        """Delete an EmailOTP from the database."""
+        await self.connection.execute(
+            delete(email_otp_table).where(email_otp_table.c.id == email_otp.id)
+        )
+
 
 @pytest.fixture
 async def sqlalchemy_connection(
@@ -124,7 +130,6 @@ class TestEmailOTPCreate:
         assert otp.identity_id == identity_id
         assert otp.authentication_session_id == authentication_session_id
         assert not otp.is_expired()
-        assert not otp.is_used()
 
         code_hash = get_token_hash(code, secret=email_otp_factor.hash_secret)
         assert otp.code_hash == code_hash
@@ -190,25 +195,6 @@ class TestEmailOTPConsume:
         with pytest.raises(ExpiredOTPException):
             await email_otp_factor.consume(code, authentication_session_id)
 
-    async def test_already_used_otp(
-        self, email_otp_factor: SQLAlchemyEmailOTPFactor
-    ) -> None:
-        code, code_hash = generate_code_hash_pair(secret=email_otp_factor.hash_secret)
-        identity_id = 123
-        authentication_session_id = 456
-        email_otp = EmailOTP(
-            id=None,
-            code_hash=code_hash,
-            expires_at=get_current_timestamp() + 3600,
-            identity_id=identity_id,
-            authentication_session_id=authentication_session_id,
-            used_at=get_current_timestamp(),  # Already used
-        )
-        await email_otp_factor.insert(email_otp)
-
-        with pytest.raises(ExpiredOTPException):
-            await email_otp_factor.consume(code, authentication_session_id)
-
     async def test_successful_consume(
         self, email_otp_factor: SQLAlchemyEmailOTPFactor
     ) -> None:
@@ -224,9 +210,12 @@ class TestEmailOTPConsume:
         )
         email_otp.id = await email_otp_factor.insert(email_otp)
 
-        consumed_otp = await email_otp_factor.consume(code, authentication_session_id)
+        await email_otp_factor.consume(code, authentication_session_id)
 
-        assert consumed_otp.id == email_otp.id
-        assert consumed_otp.identity_id == identity_id
-        assert consumed_otp.authentication_session_id == authentication_session_id
-        assert consumed_otp.is_used()
+        # Verify that the OTP is deleted
+        deleted_email_otp = (
+            await email_otp_factor.get_by_code_hash_and_authentication_session_id(
+                code_hash, authentication_session_id
+            )
+        )
+        assert deleted_email_otp is None

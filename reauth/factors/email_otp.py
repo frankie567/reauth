@@ -15,7 +15,6 @@ class EmailOTP[IDType]:
     expires_at: int
     identity_id: IDType
     authentication_session_id: IDType
-    used_at: int | None = None
 
     def is_expired(self) -> bool:
         """
@@ -25,15 +24,6 @@ class EmailOTP[IDType]:
             True if the OTP has expired, False otherwise.
         """
         return get_current_timestamp() >= self.expires_at
-
-    def is_used(self) -> bool:
-        """
-        Check if the OTP has been used.
-
-        Returns:
-            True if the OTP has been used, False otherwise.
-        """
-        return self.used_at is not None
 
 
 class EmailOTPException(ReauthException):
@@ -49,7 +39,7 @@ class InvalidOTPException(EmailOTPException):
 
 
 class ExpiredOTPException(EmailOTPException):
-    """Raised when an OTP code has expired or has already been used."""
+    """Raised when an OTP code has expired."""
 
     pass
 
@@ -92,11 +82,9 @@ class EmailOTPFactor(abc.ABC):
         email_otp.id = await self.insert(email_otp)
         return code, email_otp
 
-    async def consume[IDType](
-        self, code: str, authentication_session_id: IDType
-    ) -> EmailOTP[IDType]:
+    async def consume(self, code: str, authentication_session_id: object) -> None:
         """
-        Consume an OTP code, marking it as used.
+        Consume an OTP code, deleting it from the persistent store if valid.
 
         Args:
             code: The OTP code to consume.
@@ -107,7 +95,7 @@ class EmailOTPFactor(abc.ABC):
 
         Raises:
             InvalidOTPException: If the code is invalid or does not correspond to any OTP.
-            ExpiredOTPException: If the OTP has expired or has already been used.
+            ExpiredOTPException: If the OTP has expired.
         """
         code_hash = get_token_hash(code, secret=self.hash_secret)
         email_otp = await self.get_by_code_hash_and_authentication_session_id(
@@ -115,11 +103,9 @@ class EmailOTPFactor(abc.ABC):
         )
         if email_otp is None:
             raise InvalidOTPException()
-        if email_otp.is_expired() or email_otp.is_used():
+        if email_otp.is_expired():
             raise ExpiredOTPException()
-        email_otp.used_at = get_current_timestamp()
-        await self.update(email_otp)
-        return email_otp
+        await self.delete(email_otp)
 
     @abc.abstractmethod
     async def insert[IDType](self, email_otp: EmailOTP[IDType]) -> IDType:
@@ -163,5 +149,17 @@ class EmailOTPFactor(abc.ABC):
 
         Args:
             email_otp: The EmailOTP instance to update.
+        """
+        ...
+
+    @abc.abstractmethod
+    async def delete[IDType](self, email_otp: EmailOTP[IDType]) -> None:
+        """
+        Delete an EmailOTP instance from the persistent store.
+
+        Implementers should implement this method.
+
+        Args:
+            email_otp: The EmailOTP instance to delete.
         """
         ...
