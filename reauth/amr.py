@@ -50,6 +50,9 @@ class AuthenticationMethodReference(StrEnum):
     HWK = "hwk"
     """Proof-of-Possession of a hardware-secured key."""
 
+    OTP = "otp"
+    """One-time password (HOTP/TOTP)."""
+
     SC = "sc"
     """Smart card authentication."""
 
