@@ -13,6 +13,7 @@ from cryptography.hazmat.primitives.twofactor.totp import TOTP as CryptoTOTP
 from reauth.exceptions import ReauthException
 
 from ..amr import AuthenticationMethodReference
+from .base import FactorBase
 
 type TOTPAlgorithm = typing.Literal["sha1", "sha256", "sha512"]
 
@@ -78,7 +79,7 @@ class InvalidTOTPCodeException(TOTPException):
     pass
 
 
-class TOTPFactor(abc.ABC):
+class TOTPFactor(FactorBase, abc.ABC):
     AMR: typing.ClassVar[AuthenticationMethodReference] = (
         AuthenticationMethodReference.OTP
     )
@@ -90,7 +91,9 @@ class TOTPFactor(abc.ABC):
         algorithm: TOTPAlgorithm = "sha256",
         time_step: int = 30,
         drift_tolerance: int = 1,
+        min_prior_factors: int = 1,
     ) -> None:
+        super().__init__(min_prior_factors=min_prior_factors)
         self.code_length = code_length
         self.algorithm: TOTPAlgorithm = algorithm
         self.time_step = time_step

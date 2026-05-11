@@ -12,6 +12,7 @@ from cryptography.hazmat.primitives.twofactor.hotp import HOTP as CryptoHOTP
 from reauth.exceptions import ReauthException
 
 from ..amr import AuthenticationMethodReference
+from .base import FactorBase
 
 type HOTPAlgorithm = typing.Literal["sha1"]
 
@@ -67,7 +68,7 @@ class InvalidHOTPCodeException(HOTPException):
     pass
 
 
-class HOTPFactor(abc.ABC):
+class HOTPFactor(FactorBase, abc.ABC):
     AMR: typing.ClassVar[AuthenticationMethodReference] = (
         AuthenticationMethodReference.OTP
     )
@@ -78,7 +79,9 @@ class HOTPFactor(abc.ABC):
         code_length: int = 6,
         algorithm: HOTPAlgorithm = "sha1",
         look_ahead: int = 5,
+        min_prior_factors: int = 1,
     ) -> None:
+        super().__init__(min_prior_factors=min_prior_factors)
         self.code_length = code_length
         self.algorithm: HOTPAlgorithm = algorithm
         self.look_ahead = look_ahead

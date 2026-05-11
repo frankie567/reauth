@@ -8,6 +8,7 @@ from reauth.exceptions import ReauthException
 from ..amr import AuthenticationMethodReference
 from ..crypto import generate_code_hash_pair, get_token_hash
 from ..timestamp import get_current_timestamp
+from .base import FactorBase
 
 
 @dataclasses.dataclass
@@ -46,7 +47,7 @@ class ExpiredOTPException(EmailOTPException):
     pass
 
 
-class EmailOTPFactor(abc.ABC):
+class EmailOTPFactor(FactorBase, abc.ABC):
     AMR: typing.ClassVar[AuthenticationMethodReference] = (
         AuthenticationMethodReference.EMAIL
     )
@@ -57,7 +58,9 @@ class EmailOTPFactor(abc.ABC):
         hash_secret: str,
         code_length: int = 6,
         lifetime: datetime.timedelta = datetime.timedelta(minutes=10),
+        min_prior_factors: int = 0,
     ) -> None:
+        super().__init__(min_prior_factors=min_prior_factors)
         self.hash_secret = hash_secret
         self.code_length = code_length
         self.lifetime = lifetime
