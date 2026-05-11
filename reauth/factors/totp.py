@@ -36,6 +36,7 @@ def _get_algorithm(algorithm: TOTPAlgorithm) -> typing.Any:
 class TOTPEnrollment:
     id: typing.Any | None
     identity_id: typing.Any
+    enabled: bool
     secret: str
     algorithm: TOTPAlgorithm
     code_length: int
@@ -79,6 +80,18 @@ class InvalidTOTPCodeException(TOTPException):
     pass
 
 
+class AlreadyEnabledTOTPException(TOTPException):
+    """Raised when trying to enable an already enabled TOTP factor."""
+
+    pass
+
+
+class NotEnabledTOTPException(TOTPException):
+    """Raised when trying to verify a TOTP factor that is not enabled."""
+
+    pass
+
+
 class TOTPFactor(FactorBase, abc.ABC):
     AMR: typing.ClassVar[AuthenticationMethodReference] = (
         AuthenticationMethodReference.OTP
@@ -103,6 +116,9 @@ class TOTPFactor(FactorBase, abc.ABC):
         """
         Enroll a new TOTP factor for a given identity.
 
+        It starts in a disabled state, and must be enabled by verifying a first
+        code with the `enable` method.
+
         Args:
             identity_id: The ID of the identity to enroll the factor for.
 
@@ -112,15 +128,37 @@ class TOTPFactor(FactorBase, abc.ABC):
         secret = secrets.token_bytes(20)  # 160-bit secret key
         totp = TOTPEnrollment(
             id=None,
+            identity_id=identity_id,
+            enabled=False,
             secret=base64.b32encode(secret).decode("ascii"),
             algorithm=self.algorithm,
             code_length=self.code_length,
             time_step=self.time_step,
-            identity_id=identity_id,
             last_verified_time_step=None,
         )
         totp.id = await self.insert(totp)
         return totp
+
+    async def enable(self, totp: TOTPEnrollment, code: str) -> None:
+        """
+        Enable a TOTP factor by verifying a provided OTP code against the expected value.
+
+        On success, the TOTP factor is marked as enabled and updated in the persistent store.
+
+        Args:
+            totp: The TOTP factor to enable.
+            code: The OTP code provided by the user.
+
+        Raises:
+            AlreadyEnabledTOTPException: If the TOTP factor is already enabled.
+            InvalidTOTPCodeException: If the provided code is invalid.
+        """
+        if totp.enabled:
+            raise AlreadyEnabledTOTPException()
+
+        totp = self._verify(totp, code)
+        totp.enabled = True
+        await self.update(totp)
 
     async def verify(self, totp: TOTPEnrollment, code: str) -> None:
         """
@@ -131,8 +169,16 @@ class TOTPFactor(FactorBase, abc.ABC):
             code: The OTP code provided by the user.
 
         Raises:
+            NotEnabledTOTPException: If the TOTP factor is not enabled.
             InvalidTOTPCodeException: If the provided code is invalid or has already been used.
         """
+        if not totp.enabled:
+            raise NotEnabledTOTPException()
+
+        totp = self._verify(totp, code)
+        await self.update(totp)
+
+    def _verify(self, totp: TOTPEnrollment, code: str) -> TOTPEnrollment:
         encoded_code = code.encode("ascii")
         current_time = int(time.time())
         drift = -self.drift_tolerance
@@ -158,10 +204,9 @@ class TOTPFactor(FactorBase, abc.ABC):
                     raise InvalidTOTPCodeException() from e
                 drift += 1
             else:
-                # Update last verified time step and persist
+                # Update last verified time step
                 totp.last_verified_time_step = check_time_step
-                await self.update(totp)
-                return
+                return totp
 
     @abc.abstractmethod
     async def insert(self, totp: TOTPEnrollment) -> typing.Any:

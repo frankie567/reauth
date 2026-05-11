@@ -27,6 +27,7 @@ def _get_algorithm(algorithm: HOTPAlgorithm) -> SHA1:
 class HOTPEnrollment:
     id: typing.Any | None
     identity_id: typing.Any
+    enabled: bool
     secret: str
     algorithm: HOTPAlgorithm
     code_length: int
@@ -62,6 +63,18 @@ class HOTPException(ReauthException):
     pass
 
 
+class AlreadyEnabledHOTPException(HOTPException):
+    """Raised when trying to enable an already enabled HOTP factor."""
+
+    pass
+
+
+class NotEnabledHOTPException(HOTPException):
+    """Raised when trying to verify an HOTP factor that is not enabled."""
+
+    pass
+
+
 class InvalidHOTPCodeException(HOTPException):
     """Raised when an HOTP code is invalid."""
 
@@ -90,6 +103,9 @@ class HOTPFactor(FactorBase, abc.ABC):
         """
         Enroll a new HOTP factor for a given identity.
 
+        It starts in a disabled state, and must be enabled by verifying a first
+        code with the `enable` method.
+
         Args:
             identity_id: The ID of the identity to enroll the factor for.
 
@@ -99,6 +115,7 @@ class HOTPFactor(FactorBase, abc.ABC):
         secret = secrets.token_bytes(20)  # 160-bit secret key
         hotp = HOTPEnrollment(
             id=None,
+            enabled=False,
             secret=base64.b32encode(secret).decode("ascii"),
             algorithm=self.algorithm,
             code_length=self.code_length,
@@ -107,6 +124,27 @@ class HOTPFactor(FactorBase, abc.ABC):
         )
         hotp.id = await self.insert(hotp)
         return hotp
+
+    async def enable(self, hotp: HOTPEnrollment, code: str) -> None:
+        """
+        Enable an HOTP factor by verifying a provided OTP code against the expected value.
+
+        On success, the HOTP factor is marked as enabled and updated in the persistent store.
+
+        Args:
+            hotp: The HOTP factor to enable.
+            code: The OTP code provided by the user.
+
+        Raises:
+            AlreadyEnabledHOTPException: If the HOTP factor is already enabled.
+            InvalidHOTPCodeException: If the provided code is invalid.
+        """
+        if hotp.enabled:
+            raise AlreadyEnabledHOTPException()
+
+        hotp = self._verify(hotp, code)
+        hotp.enabled = True
+        await self.update(hotp)
 
     async def verify(self, hotp: HOTPEnrollment, code: str) -> None:
         """
@@ -119,8 +157,16 @@ class HOTPFactor(FactorBase, abc.ABC):
             code: The OTP code provided by the user.
 
         Raises:
+            NotEnabledHOTPException: If the HOTP factor is not enabled.
             InvalidHOTPCodeException: If the provided code is invalid.
         """
+        if not hotp.enabled:
+            raise NotEnabledHOTPException()
+
+        hotp = self._verify(hotp, code)
+        await self.update(hotp)
+
+    def _verify(self, hotp: HOTPEnrollment, code: str) -> HOTPEnrollment:
         encoded_code = code.encode("ascii")
         counter = hotp.counter
 
@@ -134,7 +180,7 @@ class HOTPFactor(FactorBase, abc.ABC):
                 counter += 1
 
         hotp.counter = counter + 1
-        await self.update(hotp)
+        return hotp
 
     @abc.abstractmethod
     async def insert(self, hotp: HOTPEnrollment) -> typing.Any:
