@@ -2,7 +2,6 @@ import abc
 import dataclasses
 import datetime
 import typing
-from typing import ClassVar
 
 from reauth.exceptions import ReauthException
 
@@ -48,7 +47,9 @@ class ExpiredOTPException(EmailOTPException):
 
 
 class EmailOTPFactor(abc.ABC):
-    AMR: ClassVar[AuthenticationMethodReference] = AuthenticationMethodReference.EMAIL
+    AMR: typing.ClassVar[AuthenticationMethodReference] = (
+        AuthenticationMethodReference.EMAIL
+    )
 
     def __init__(
         self,
@@ -100,9 +101,6 @@ class EmailOTPFactor(abc.ABC):
         Args:
             code: The OTP code to consume.
             authentication_session_id: The ID of the authentication session this OTP is associated with.
-
-        Returns:
-            The corresponding EmailOTP instance.
 
         Raises:
             InvalidOTPException: If the code is invalid or does not correspond to any OTP.
