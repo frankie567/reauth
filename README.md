@@ -16,6 +16,36 @@
 
 ---
 
+> [!WARNING]
+> This is an early-stage project with many moving parts and mostly missing documentation. The API is not yet stable and breaking changes are expected.
+
+## Roadmap
+
+Our vision is to build a comprehensive, flexible authentication toolkit for Python that handles everything from low-level factor primitives to high-level OIDC server capabilities.
+
+### Short-term: Core Foundation
+
+- [ ] Factor primitives — building blocks for authentication factors
+    - [x] Email OTP
+    - [x] HOTP
+    - [x] TOTP
+    - [ ] Passwords
+    - [ ] Security keys
+    - [ ] Passkeys
+    - [ ] Social Login
+- [x] MFA authentication management — multi-factor authentication workflows
+
+### Mid-term: Integration Layer
+
+- [ ] Sessions management — robust session handling
+- [ ] ORM and web frameworks wrappers — seamless integration with popular frameworks
+
+### Long-term: Full Platform
+
+- [ ] OIDC server — complete OpenID Connect provider implementation
+- [ ] Team management — multi-user and organizational features
+- [ ] And more — expanding the ecosystem
+
 ## Development
 
 ### Setup environment
