@@ -11,11 +11,12 @@ from sqlalchemy import (
     String,
     Table,
     insert,
+    select,
 )
 from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine
 from sqlalchemy.sql.expression import update
 
-from reauth.factors.hotp import HOTP, HOTPFactor, InvalidHOTPCodeException
+from reauth.factors.hotp import HOTPEnrollment, HOTPFactor, InvalidHOTPCodeException
 
 sqlalchemy_meta = MetaData()
 hotp_table = Table(
@@ -38,7 +39,17 @@ class SQLAlchemyHOTPFactor(HOTPFactor):
         self.connection = connection
         super().__init__()
 
-    async def insert(self, hotp: HOTP) -> int:
+    async def get_enrollment(self, identity_id: int) -> HOTPEnrollment | None:
+        """Retrieve the HOTP enrollment for a given identity."""
+        result = await self.connection.execute(
+            select(hotp_table).where(hotp_table.c.identity_id == identity_id)
+        )
+        row = result.fetchone()
+        if row is None:
+            return None
+        return HOTPEnrollment(**row._asdict())
+
+    async def insert(self, hotp: HOTPEnrollment) -> int:
         """Insert an HOTP into the database."""
         result = await self.connection.execute(
             insert(hotp_table)
@@ -47,7 +58,7 @@ class SQLAlchemyHOTPFactor(HOTPFactor):
         )
         return result.scalar_one()
 
-    async def update(self, hotp: HOTP) -> None:
+    async def update(self, hotp: HOTPEnrollment) -> None:
         """Update an existing HOTP in the database."""
         await self.connection.execute(
             update(hotp_table)
@@ -79,7 +90,7 @@ class TestHOTP:
     def test_get_provisioning_uri(self) -> None:
         secret = secrets.token_bytes(20)  # 160-bit secret key
         base64.b32encode(secret).decode("ascii")
-        hotp = HOTP(
+        hotp = HOTPEnrollment(
             id=1,
             secret=base64.b32encode(secret).decode("ascii"),
             algorithm="sha1",
@@ -97,7 +108,7 @@ class TestHOTPEnroll:
         identity_id = 123
         hotp = await hotp_factor.enroll(identity_id)
 
-        assert isinstance(hotp, HOTP)
+        assert isinstance(hotp, HOTPEnrollment)
         assert hotp.id is not None
         assert hotp.identity_id == identity_id
         assert hotp.counter == 0

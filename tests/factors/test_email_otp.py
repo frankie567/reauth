@@ -18,6 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine
 from reauth.crypto import generate_code_hash_pair, get_token_hash
 from reauth.factors.email_otp import (
     EmailOTP,
+    EmailOTPEnrollment,
     EmailOTPFactor,
     ExpiredOTPException,
     InvalidOTPException,
@@ -49,6 +50,12 @@ class SQLAlchemyEmailOTPFactor(EmailOTPFactor):
     ) -> None:
         self.connection = connection
         super().__init__(hash_secret=hash_secret, code_length=code_length)
+
+    async def get_enrollment(self, identity_id: int) -> EmailOTPEnrollment | None:
+        """Return a dummy enrollment for testing purposes."""
+        return EmailOTPEnrollment(
+            id=None, identity_id=identity_id, email="reauth@example.com"
+        )
 
     async def insert(self, email_otp: EmailOTP) -> int:
         """Insert an EmailOTP into the database."""

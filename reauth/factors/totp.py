@@ -33,13 +33,13 @@ def _get_algorithm(algorithm: TOTPAlgorithm) -> typing.Any:
 
 
 @dataclasses.dataclass
-class TOTP:
+class TOTPEnrollment:
     id: typing.Any | None
+    identity_id: typing.Any
     secret: str
     algorithm: TOTPAlgorithm
     code_length: int
     time_step: int
-    identity_id: typing.Any
     last_verified_time_step: int | None = None
 
     @functools.cached_property
@@ -99,7 +99,7 @@ class TOTPFactor(FactorBase, abc.ABC):
         self.time_step = time_step
         self.drift_tolerance = drift_tolerance
 
-    async def enroll(self, identity_id: typing.Any) -> TOTP:
+    async def enroll(self, identity_id: typing.Any) -> TOTPEnrollment:
         """
         Enroll a new TOTP factor for a given identity.
 
@@ -110,7 +110,7 @@ class TOTPFactor(FactorBase, abc.ABC):
             The enrolled TOTP factor.
         """
         secret = secrets.token_bytes(20)  # 160-bit secret key
-        totp = TOTP(
+        totp = TOTPEnrollment(
             id=None,
             secret=base64.b32encode(secret).decode("ascii"),
             algorithm=self.algorithm,
@@ -122,7 +122,7 @@ class TOTPFactor(FactorBase, abc.ABC):
         totp.id = await self.insert(totp)
         return totp
 
-    async def verify(self, totp: TOTP, code: str) -> None:
+    async def verify(self, totp: TOTPEnrollment, code: str) -> None:
         """
         Verify a provided OTP code against the expected value for the given TOTP factor.
 
@@ -164,11 +164,11 @@ class TOTPFactor(FactorBase, abc.ABC):
                 return
 
     @abc.abstractmethod
-    async def insert(self, totp: TOTP) -> typing.Any:
+    async def insert(self, totp: TOTPEnrollment) -> typing.Any:
         """Insert a TOTP factor into a persistent store."""
         ...
 
     @abc.abstractmethod
-    async def update(self, totp: TOTP) -> None:
+    async def update(self, totp: TOTPEnrollment) -> None:
         """Update a TOTP factor in the persistent store."""
         ...

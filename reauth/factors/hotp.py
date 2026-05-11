@@ -24,13 +24,13 @@ def _get_algorithm(algorithm: HOTPAlgorithm) -> SHA1:
 
 
 @dataclasses.dataclass
-class HOTP:
+class HOTPEnrollment:
     id: typing.Any | None
+    identity_id: typing.Any
     secret: str
     algorithm: HOTPAlgorithm
     code_length: int
     counter: int
-    identity_id: typing.Any
 
     @functools.cached_property
     def _impl(self) -> CryptoHOTP:
@@ -86,7 +86,7 @@ class HOTPFactor(FactorBase, abc.ABC):
         self.algorithm: HOTPAlgorithm = algorithm
         self.look_ahead = look_ahead
 
-    async def enroll(self, identity_id: typing.Any) -> HOTP:
+    async def enroll(self, identity_id: typing.Any) -> HOTPEnrollment:
         """
         Enroll a new HOTP factor for a given identity.
 
@@ -97,7 +97,7 @@ class HOTPFactor(FactorBase, abc.ABC):
             The enrolled HOTP factor.
         """
         secret = secrets.token_bytes(20)  # 160-bit secret key
-        hotp = HOTP(
+        hotp = HOTPEnrollment(
             id=None,
             secret=base64.b32encode(secret).decode("ascii"),
             algorithm=self.algorithm,
@@ -108,7 +108,7 @@ class HOTPFactor(FactorBase, abc.ABC):
         hotp.id = await self.insert(hotp)
         return hotp
 
-    async def verify(self, hotp: HOTP, code: str) -> None:
+    async def verify(self, hotp: HOTPEnrollment, code: str) -> None:
         """
         Verify a provided OTP code against the expected value for the given HOTP factor.
 
@@ -137,7 +137,7 @@ class HOTPFactor(FactorBase, abc.ABC):
         await self.update(hotp)
 
     @abc.abstractmethod
-    async def insert(self, hotp: HOTP) -> typing.Any:
+    async def insert(self, hotp: HOTPEnrollment) -> typing.Any:
         """
         Insert an HOTP factor into a persistent store.
 
@@ -152,7 +152,7 @@ class HOTPFactor(FactorBase, abc.ABC):
         ...
 
     @abc.abstractmethod
-    async def update(self, hotp: HOTP) -> None:
+    async def update(self, hotp: HOTPEnrollment) -> None:
         """
         Update an HOTP factor in the persistent store.
 

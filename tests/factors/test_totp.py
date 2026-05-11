@@ -12,14 +12,15 @@ from sqlalchemy import (
     String,
     Table,
     insert,
+    select,
 )
 from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine
 from sqlalchemy.sql.expression import update
 
 from reauth.factors.totp import (
-    TOTP,
     InvalidTOTPCodeException,
     TOTPAlgorithm,
+    TOTPEnrollment,
     TOTPFactor,
 )
 
@@ -47,7 +48,17 @@ class SQLAlchemyTOTPFactor(TOTPFactor):
         self.connection = connection
         super().__init__(algorithm=algorithm)
 
-    async def insert(self, totp: TOTP) -> int:
+    async def get_enrollment(self, identity_id: int) -> TOTPEnrollment | None:
+        """Retrieve the TOTP enrollment for a given identity."""
+        result = await self.connection.execute(
+            select(totp_table).where(totp_table.c.identity_id == identity_id)
+        )
+        row = result.fetchone()
+        if row is None:
+            return None
+        return TOTPEnrollment(**row._asdict())
+
+    async def insert(self, totp: TOTPEnrollment) -> int:
         """Insert a TOTP into the database."""
         result = await self.connection.execute(
             insert(totp_table)
@@ -56,7 +67,7 @@ class SQLAlchemyTOTPFactor(TOTPFactor):
         )
         return result.scalar_one()
 
-    async def update(self, totp: TOTP) -> None:
+    async def update(self, totp: TOTPEnrollment) -> None:
         """Update an existing TOTP in the database."""
         await self.connection.execute(
             update(totp_table)
@@ -90,7 +101,7 @@ def totp_factor(
 class TestTOTP:
     def test_get_provisioning_uri(self) -> None:
         secret = secrets.token_bytes(20)
-        totp = TOTP(
+        totp = TOTPEnrollment(
             id=1,
             secret=base64.b32encode(secret).decode("ascii"),
             algorithm="sha256",
@@ -108,7 +119,7 @@ class TestTOTPEnroll:
         identity_id = 123
         totp = await totp_factor.enroll(identity_id)
 
-        assert isinstance(totp, TOTP)
+        assert isinstance(totp, TOTPEnrollment)
         assert totp.id is not None
         assert totp.identity_id == identity_id
         assert totp.code_length == 6

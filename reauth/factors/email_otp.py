@@ -12,11 +12,18 @@ from .base import FactorBase
 
 
 @dataclasses.dataclass
+class EmailOTPEnrollment:
+    id: typing.Any | None
+    identity_id: typing.Any
+    email: str
+
+
+@dataclasses.dataclass
 class EmailOTP:
     id: typing.Any | None
+    identity_id: typing.Any
     code_hash: str
     expires_at: int
-    identity_id: typing.Any
     authentication_session_id: typing.Any
 
     def is_expired(self) -> bool:
