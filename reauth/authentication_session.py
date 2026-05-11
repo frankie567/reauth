@@ -6,6 +6,7 @@ import typing
 from .amr import AuthenticationMethodReference
 from .crypto import TokenHash, generate_token_hash_pair, get_token_hash
 from .exceptions import ReauthException
+from .factors import FactorBase
 from .timestamp import get_current_timestamp
 
 
@@ -45,6 +46,12 @@ class ExpiredSessionException(AuthenticationSessionException):
     pass
 
 
+class UnavailableFactorException(AuthenticationSessionException):
+    """Raised when trying to advance a session with a factor that is not available for the session."""
+
+    pass
+
+
 class AuthenticationSessionService(abc.ABC):
     """
     Abstract base class for managing authentication sessions.
@@ -57,10 +64,12 @@ class AuthenticationSessionService(abc.ABC):
         self,
         *,
         hash_secret: str,
+        factors: set[FactorBase],
         token_prefix: str = "ls_",
         lifetime: datetime.timedelta = datetime.timedelta(minutes=15),
     ) -> None:
         self.hash_secret = hash_secret
+        self.factors = factors
         self.token_prefix = token_prefix
         self.lifetime = lifetime
 
@@ -103,6 +112,66 @@ class AuthenticationSessionService(abc.ABC):
             raise InvalidSessionTokenException()
         if authentication_session.is_expired():
             raise ExpiredSessionException()
+        return authentication_session
+
+    async def get_available_factors(
+        self, authentication_session: AuthenticationSession
+    ) -> set[FactorBase]:
+        """
+        Get the set of available factors for a given authentication session.
+
+        Args:
+            authentication_session: The AuthenticationSession instance to get available factors for.
+
+        Returns:
+            A set of FactorBase instances representing the available factors for the session.
+        """
+        available: set[FactorBase] = set()
+        for factor in self.factors:
+            # Already used?
+            if factor.AMR in authentication_session.amr:
+                continue
+            # Meets min_prior_factors?
+            if len(authentication_session.amr) < factor.min_prior_factors:
+                continue
+            # Enrolled for the identity in the session (if any)?
+            if authentication_session.identity_id is not None:
+                factor_enrollment = await factor.get_enrollment(
+                    authentication_session.identity_id
+                )
+                if factor_enrollment is None:
+                    continue
+            available.add(factor)
+        return available
+
+    async def advance(
+        self,
+        authentication_session: AuthenticationSession,
+        identity_id: typing.Any,
+        factor: FactorBase,
+    ) -> AuthenticationSession:
+        """
+        Advance an authentication session by marking a factor as completed.
+
+        Args:
+            authentication_session: The AuthenticationSession instance to advance.
+            identity_id: The ID of the identity that has completed the factor.
+            factor: The FactorBase instance representing the factor that has been completed.
+
+        Returns:
+            The updated AuthenticationSession instance.
+
+        Raises:
+            UnavailableFactorException: If the factor is not available for the session.
+        """
+        available_factors = await self.get_available_factors(authentication_session)
+        if factor not in available_factors:
+            raise UnavailableFactorException()
+
+        authentication_session.identity_id = identity_id
+        authentication_session.amr.append(factor.AMR)
+        await self.update(authentication_session)
+
         return authentication_session
 
     @abc.abstractmethod

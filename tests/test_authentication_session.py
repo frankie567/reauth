@@ -15,13 +15,16 @@ from sqlalchemy import (
 )
 from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine
 
+from reauth.amr import AuthenticationMethodReference
 from reauth.authentication_session import (
     AuthenticationSession,
     AuthenticationSessionService,
     ExpiredSessionException,
     InvalidSessionTokenException,
+    UnavailableFactorException,
 )
 from reauth.crypto import generate_token_hash_pair, get_token_hash
+from reauth.factors import FactorBase
 from reauth.timestamp import get_current_timestamp
 
 sqlalchemy_meta = MetaData()
@@ -37,12 +40,56 @@ authentication_session_table = Table(
 )
 
 
+@dataclasses.dataclass
+class DummyPasswordFactorEnrollment:
+    id: int | None
+    identity_id: int
+
+
+class DummyPasswordFactor(FactorBase):
+    """Dummy factor for testing purposes that simulates a password-based authentication method."""
+
+    AMR = AuthenticationMethodReference.PWD
+
+    def __init__(self) -> None:
+        super().__init__(min_prior_factors=0)
+
+    async def get_enrollment(
+        self, identity_id: int
+    ) -> DummyPasswordFactorEnrollment | None:
+        if identity_id != 1:
+            return None
+        return DummyPasswordFactorEnrollment(id=1, identity_id=identity_id)
+
+
+@dataclasses.dataclass
+class DummyMFAFactorEnrollment:
+    id: int | None
+    identity_id: int
+
+
+class DummyMFAFactor(FactorBase):
+    """Dummy factor for testing purposes that simulates a multi-factor authentication method."""
+
+    AMR = AuthenticationMethodReference.MFA
+
+    def __init__(self) -> None:
+        super().__init__(min_prior_factors=1)
+
+    async def get_enrollment(self, identity_id: int) -> DummyMFAFactorEnrollment | None:
+        if identity_id != 1:
+            return None
+        return DummyMFAFactorEnrollment(id=1, identity_id=identity_id)
+
+
 class SQLAlchemyAuthenticationSession(AuthenticationSessionService):
     """Concrete implementation of AuthenticationSessionService using SQLAlchemy."""
 
-    def __init__(self, connection: AsyncConnection, *, hash_secret: str) -> None:
+    def __init__(
+        self, connection: AsyncConnection, *, hash_secret: str, factors: set[FactorBase]
+    ) -> None:
         self.connection = connection
-        super().__init__(hash_secret=hash_secret)
+        super().__init__(hash_secret=hash_secret, factors=factors)
 
     async def insert(self, authentication_session: AuthenticationSession) -> int:
         """Insert an authentication session into the database."""
@@ -86,12 +133,28 @@ async def sqlalchemy_connection(
 
 
 @pytest.fixture
+def password_factor() -> DummyPasswordFactor:
+    """Fixture that provides an instance of DummyPasswordFactor."""
+    return DummyPasswordFactor()
+
+
+@pytest.fixture
+def mfa_factor() -> DummyMFAFactor:
+    """Fixture that provides an instance of DummyMFAFactor."""
+    return DummyMFAFactor()
+
+
+@pytest.fixture
 def authentication_session_service(
     sqlalchemy_connection: AsyncConnection,
+    password_factor: DummyPasswordFactor,
+    mfa_factor: DummyMFAFactor,
 ) -> SQLAlchemyAuthenticationSession:
     """Fixture that provides an instance of SQLAlchemyAuthenticationSession."""
     return SQLAlchemyAuthenticationSession(
-        connection=sqlalchemy_connection, hash_secret="test_secret"
+        connection=sqlalchemy_connection,
+        hash_secret="test_secret",
+        factors={password_factor, mfa_factor},
     )
 
 
@@ -157,3 +220,145 @@ class TestAuthenticationSessionGetByToken:
 
         session = await authentication_session_service.get_by_token(token)
         assert session.id == session_id
+
+
+@pytest.mark.anyio
+class TestGetAvailableFactors:
+    async def test_no_identity_zero_factor(
+        self, authentication_session_service: SQLAlchemyAuthenticationSession
+    ) -> None:
+        token, token_hash = generate_token_hash_pair(
+            secret=authentication_session_service.hash_secret,
+            prefix=authentication_session_service.token_prefix,
+        )
+        session = AuthenticationSession(
+            id=None,
+            token_hash=token_hash,
+            expires_at=get_current_timestamp() + 3600,
+            identity_id=None,
+            amr=[],
+        )
+        session.id = await authentication_session_service.insert(session)
+
+        factors = await authentication_session_service.get_available_factors(session)
+
+        assert len(factors) == 1
+        assert isinstance(next(iter(factors)), DummyPasswordFactor)
+
+    async def test_identity_one_factor_enrolled(
+        self, authentication_session_service: SQLAlchemyAuthenticationSession
+    ) -> None:
+        token, token_hash = generate_token_hash_pair(
+            secret=authentication_session_service.hash_secret,
+            prefix=authentication_session_service.token_prefix,
+        )
+        session = AuthenticationSession(
+            id=None,
+            token_hash=token_hash,
+            expires_at=get_current_timestamp() + 3600,
+            identity_id=1,
+            amr=[AuthenticationMethodReference.PWD],
+        )
+        session.id = await authentication_session_service.insert(session)
+
+        factors = await authentication_session_service.get_available_factors(session)
+
+        assert len(factors) == 1
+        assert isinstance(next(iter(factors)), DummyMFAFactor)
+
+    async def test_identity_one_factor_not_enrolled(
+        self, authentication_session_service: SQLAlchemyAuthenticationSession
+    ) -> None:
+        token, token_hash = generate_token_hash_pair(
+            secret=authentication_session_service.hash_secret,
+            prefix=authentication_session_service.token_prefix,
+        )
+        session = AuthenticationSession(
+            id=None,
+            token_hash=token_hash,
+            expires_at=get_current_timestamp() + 3600,
+            identity_id=2,
+            amr=[AuthenticationMethodReference.PWD],
+        )
+        session.id = await authentication_session_service.insert(session)
+
+        factors = await authentication_session_service.get_available_factors(session)
+
+        assert len(factors) == 0
+
+
+@pytest.mark.anyio
+class TestAdvance:
+    async def test_no_identity_zero_factor(
+        self,
+        authentication_session_service: SQLAlchemyAuthenticationSession,
+        password_factor: DummyPasswordFactor,
+    ) -> None:
+        token, token_hash = generate_token_hash_pair(
+            secret=authentication_session_service.hash_secret,
+            prefix=authentication_session_service.token_prefix,
+        )
+        session = AuthenticationSession(
+            id=None,
+            token_hash=token_hash,
+            expires_at=get_current_timestamp() + 3600,
+            identity_id=None,
+            amr=[],
+        )
+        session.id = await authentication_session_service.insert(session)
+
+        updated_session = await authentication_session_service.advance(
+            session, 1, password_factor
+        )
+
+        assert updated_session.id == session.id
+        assert updated_session.amr == [AuthenticationMethodReference.PWD]
+
+    async def test_identity_one_factor_enrolled(
+        self,
+        authentication_session_service: SQLAlchemyAuthenticationSession,
+        mfa_factor: DummyMFAFactor,
+    ) -> None:
+        token, token_hash = generate_token_hash_pair(
+            secret=authentication_session_service.hash_secret,
+            prefix=authentication_session_service.token_prefix,
+        )
+        session = AuthenticationSession(
+            id=None,
+            token_hash=token_hash,
+            expires_at=get_current_timestamp() + 3600,
+            identity_id=1,
+            amr=[AuthenticationMethodReference.PWD],
+        )
+        session.id = await authentication_session_service.insert(session)
+
+        updated_session = await authentication_session_service.advance(
+            session, 1, mfa_factor
+        )
+
+        assert updated_session.id == session.id
+        assert updated_session.amr == [
+            AuthenticationMethodReference.PWD,
+            AuthenticationMethodReference.MFA,
+        ]
+
+    async def test_identity_one_factor_not_enrolled(
+        self,
+        authentication_session_service: SQLAlchemyAuthenticationSession,
+        mfa_factor: DummyMFAFactor,
+    ) -> None:
+        token, token_hash = generate_token_hash_pair(
+            secret=authentication_session_service.hash_secret,
+            prefix=authentication_session_service.token_prefix,
+        )
+        session = AuthenticationSession(
+            id=None,
+            token_hash=token_hash,
+            expires_at=get_current_timestamp() + 3600,
+            identity_id=2,
+            amr=[AuthenticationMethodReference.PWD],
+        )
+        session.id = await authentication_session_service.insert(session)
+
+        with pytest.raises(UnavailableFactorException):
+            await authentication_session_service.advance(session, 1, mfa_factor)
