@@ -54,7 +54,7 @@ class ExpiredOTPException(EmailOTPException):
     pass
 
 
-class EmailOTPFactor(FactorBase, abc.ABC):
+class EmailOTPFactor(FactorBase[EmailOTPEnrollment], abc.ABC):
     AMR: typing.ClassVar[AuthenticationMethodReference] = (
         AuthenticationMethodReference.EMAIL
     )

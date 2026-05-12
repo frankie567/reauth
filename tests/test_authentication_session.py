@@ -1,4 +1,5 @@
 import dataclasses
+import typing
 from collections.abc import AsyncGenerator
 
 import pytest
@@ -46,7 +47,7 @@ class DummyPasswordFactorEnrollment:
     identity_id: int
 
 
-class DummyPasswordFactor(FactorBase):
+class DummyPasswordFactor(FactorBase[DummyPasswordFactorEnrollment]):
     """Dummy factor for testing purposes that simulates a password-based authentication method."""
 
     AMR = AuthenticationMethodReference.PWD
@@ -68,7 +69,7 @@ class DummyMFAFactorEnrollment:
     identity_id: int
 
 
-class DummyMFAFactor(FactorBase):
+class DummyMFAFactor(FactorBase[DummyMFAFactorEnrollment]):
     """Dummy factor for testing purposes that simulates a multi-factor authentication method."""
 
     AMR = AuthenticationMethodReference.MFA
@@ -86,7 +87,11 @@ class SQLAlchemyAuthenticationSession(AuthenticationSessionService):
     """Concrete implementation of AuthenticationSessionService using SQLAlchemy."""
 
     def __init__(
-        self, connection: AsyncConnection, *, hash_secret: str, factors: set[FactorBase]
+        self,
+        connection: AsyncConnection,
+        *,
+        hash_secret: str,
+        factors: set[FactorBase[typing.Any]],
     ) -> None:
         self.connection = connection
         super().__init__(hash_secret=hash_secret, factors=factors)

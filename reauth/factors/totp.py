@@ -98,7 +98,13 @@ class AlreadyEnrolledTOTPException(TOTPException):
     pass
 
 
-class TOTPFactor(FactorBase, abc.ABC):
+class NotEnrolledTOTPException(TOTPException):
+    """Raised when trying to enable or verify a TOTP factor for an identity with no enrollment."""
+
+    pass
+
+
+class TOTPFactor(FactorBase[TOTPEnrollment], abc.ABC):
     AMR: typing.ClassVar[AuthenticationMethodReference] = (
         AuthenticationMethodReference.OTP
     )
@@ -152,44 +158,60 @@ class TOTPFactor(FactorBase, abc.ABC):
         totp.id = await self.insert(totp)
         return totp
 
-    async def enable(self, totp: TOTPEnrollment, code: str) -> None:
+    async def enable(self, identity_id: typing.Any, code: str) -> TOTPEnrollment:
         """
         Enable a TOTP factor by verifying a provided OTP code against the expected value.
 
         On success, the TOTP factor is marked as enabled and updated in the persistent store.
 
         Args:
-            totp: The TOTP factor to enable.
+            identity_id: The ID of the identity to enable the TOTP factor for.
             code: The OTP code provided by the user.
 
+        Returns:
+            The updated TOTP enrollment.
+
         Raises:
+            NotEnrolledTOTPException: If the identity has no TOTP enrollment.
             AlreadyEnabledTOTPException: If the TOTP factor is already enabled.
             InvalidTOTPCodeException: If the provided code is invalid.
         """
+        totp = await self.get_enrollment(identity_id)
+        if totp is None:
+            raise NotEnrolledTOTPException()
         if totp.enabled:
             raise AlreadyEnabledTOTPException()
 
         totp = self._verify(totp, code)
         totp.enabled = True
         await self.update(totp)
+        return totp
 
-    async def verify(self, totp: TOTPEnrollment, code: str) -> None:
+    async def verify(self, identity_id: typing.Any, code: str) -> TOTPEnrollment:
         """
         Verify a provided OTP code against the expected value for the given TOTP factor.
 
         Args:
-            totp: The TOTP factor to verify against.
+            identity_id: The ID of the identity to verify the TOTP code for.
             code: The OTP code provided by the user.
 
+        Returns:
+            The updated TOTP enrollment.
+
         Raises:
+            NotEnrolledTOTPException: If the identity has no TOTP enrollment.
             NotEnabledTOTPException: If the TOTP factor is not enabled.
             InvalidTOTPCodeException: If the provided code is invalid or has already been used.
         """
+        totp = await self.get_enrollment(identity_id)
+        if totp is None:
+            raise NotEnrolledTOTPException()
         if not totp.enabled:
             raise NotEnabledTOTPException()
 
         totp = self._verify(totp, code)
         await self.update(totp)
+        return totp
 
     def _verify(self, totp: TOTPEnrollment, code: str) -> TOTPEnrollment:
         encoded_code = code.encode("ascii")

@@ -23,6 +23,7 @@ from reauth.factors.totp import (
     AlreadyEnrolledTOTPException,
     InvalidTOTPCodeException,
     NotEnabledTOTPException,
+    NotEnrolledTOTPException,
     TOTPAlgorithm,
     TOTPEnrollment,
     TOTPFactor,
@@ -184,6 +185,10 @@ class TestTOTPEnroll:
 
 @pytest.mark.anyio
 class TestTOTPEnable:
+    async def test_enable_not_enrolled(self, totp_factor: SQLAlchemyTOTPFactor) -> None:
+        with pytest.raises(NotEnrolledTOTPException):
+            await totp_factor.enable(999, "123456")
+
     async def test_enable_with_valid_code(
         self, totp_factor: SQLAlchemyTOTPFactor, make_totp: MakeTOTPCallable
     ) -> None:
@@ -191,9 +196,9 @@ class TestTOTPEnable:
 
         current_time = time.time()
         expected_code = totp._impl.generate(current_time).decode("ascii")
-        await totp_factor.enable(totp, expected_code)
+        updated_totp = await totp_factor.enable(totp.identity_id, expected_code)
 
-        assert totp.enabled is True
+        assert updated_totp.enabled is True
 
     async def test_enable_with_invalid_code(
         self, totp_factor: SQLAlchemyTOTPFactor, make_totp: MakeTOTPCallable
@@ -201,9 +206,7 @@ class TestTOTPEnable:
         totp = await make_totp(enabled=False)
 
         with pytest.raises(InvalidTOTPCodeException):
-            await totp_factor.enable(totp, "000000")
-
-        assert totp.enabled is False
+            await totp_factor.enable(totp.identity_id, "000000")
 
     async def test_enable_already_enabled(
         self, totp_factor: SQLAlchemyTOTPFactor, make_totp: MakeTOTPCallable
@@ -213,23 +216,22 @@ class TestTOTPEnable:
         current_time = time.time()
         expected_code = totp._impl.generate(current_time).decode("ascii")
         with pytest.raises(AlreadyEnabledTOTPException):
-            await totp_factor.enable(totp, expected_code)
-
-        assert totp.enabled is True
+            await totp_factor.enable(totp.identity_id, expected_code)
 
 
 @pytest.mark.anyio
 class TestTOTPVerify:
+    async def test_not_enrolled(self, totp_factor: SQLAlchemyTOTPFactor) -> None:
+        with pytest.raises(NotEnrolledTOTPException):
+            await totp_factor.verify(999, "123456")
+
     async def test_not_enabled(
         self, totp_factor: SQLAlchemyTOTPFactor, make_totp: MakeTOTPCallable
     ) -> None:
         totp = await make_totp(enabled=False)
 
         with pytest.raises(NotEnabledTOTPException):
-            await totp_factor.verify(totp, "000000")
-
-        assert totp.last_verified_time_step is None
-        assert totp.enabled is False
+            await totp_factor.verify(totp.identity_id, "000000")
 
     async def test_invalid_code(
         self, totp_factor: SQLAlchemyTOTPFactor, make_totp: MakeTOTPCallable
@@ -237,7 +239,7 @@ class TestTOTPVerify:
         totp = await make_totp(enabled=True)
 
         with pytest.raises(InvalidTOTPCodeException):
-            await totp_factor.verify(totp, "000000")
+            await totp_factor.verify(totp.identity_id, "000000")
 
     async def test_valid_code(
         self, totp_factor: SQLAlchemyTOTPFactor, make_totp: MakeTOTPCallable
@@ -247,7 +249,8 @@ class TestTOTPVerify:
         current_time = time.time()
         expected_code = totp._impl.generate(current_time).decode("ascii")
 
-        await totp_factor.verify(totp, expected_code)
+        updated_totp = await totp_factor.verify(totp.identity_id, expected_code)
+        assert updated_totp.last_verified_time_step is not None
 
     async def test_beyond_drift_tolerance(
         self, totp_factor: SQLAlchemyTOTPFactor, make_totp: MakeTOTPCallable
@@ -257,7 +260,7 @@ class TestTOTPVerify:
         expected_code = totp._impl.generate(9999999999).decode("ascii")
 
         with pytest.raises(InvalidTOTPCodeException):
-            await totp_factor.verify(totp, expected_code)
+            await totp_factor.verify(totp.identity_id, expected_code)
 
     async def test_within_drift_tolerance(
         self, totp_factor: SQLAlchemyTOTPFactor, make_totp: MakeTOTPCallable
@@ -266,7 +269,8 @@ class TestTOTPVerify:
 
         expected_code = totp._impl.generate(time.time() + 30).decode("ascii")
 
-        await totp_factor.verify(totp, expected_code)
+        updated_totp = await totp_factor.verify(totp.identity_id, expected_code)
+        assert updated_totp.last_verified_time_step is not None
 
     async def test_replay_protection_same_time_step(
         self, totp_factor: SQLAlchemyTOTPFactor, make_totp: MakeTOTPCallable
@@ -277,12 +281,12 @@ class TestTOTPVerify:
         expected_code = totp._impl.generate(current_time).decode("ascii")
 
         # First verification should succeed
-        await totp_factor.verify(totp, expected_code)
-        assert totp.last_verified_time_step is not None
+        updated_totp = await totp_factor.verify(totp.identity_id, expected_code)
+        assert updated_totp.last_verified_time_step is not None
 
         # Second verification with same code should fail (replay)
         with pytest.raises(InvalidTOTPCodeException):
-            await totp_factor.verify(totp, expected_code)
+            await totp_factor.verify(totp.identity_id, expected_code)
 
     async def test_replay_protection_previous_time_step(
         self, totp_factor: SQLAlchemyTOTPFactor, make_totp: MakeTOTPCallable
@@ -296,11 +300,11 @@ class TestTOTPVerify:
 
         # First verify current code to set last_verified_time_step
         current_code = totp._impl.generate(current_time).decode("ascii")
-        await totp_factor.verify(totp, current_code)
+        await totp_factor.verify(totp.identity_id, current_code)
 
         # Now past code should be rejected
         with pytest.raises(InvalidTOTPCodeException):
-            await totp_factor.verify(totp, past_code)
+            await totp_factor.verify(totp.identity_id, past_code)
 
     async def test_future_time_step_accepted(
         self, totp_factor: SQLAlchemyTOTPFactor, make_totp: MakeTOTPCallable
@@ -311,9 +315,10 @@ class TestTOTPVerify:
 
         # Verify code at current time
         current_code = totp._impl.generate(current_time).decode("ascii")
-        await totp_factor.verify(totp, current_code)
+        await totp_factor.verify(totp.identity_id, current_code)
 
         # Code from next time step should still work (within drift tolerance)
         next_time = current_time + totp.time_step
         next_code = totp._impl.generate(next_time).decode("ascii")
-        await totp_factor.verify(totp, next_code)
+        updated_totp = await totp_factor.verify(totp.identity_id, next_code)
+        assert updated_totp.last_verified_time_step is not None

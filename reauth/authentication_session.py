@@ -64,7 +64,7 @@ class AuthenticationSessionService(abc.ABC):
         self,
         *,
         hash_secret: str,
-        factors: set[FactorBase],
+        factors: set[FactorBase[typing.Any]],
         token_prefix: str = "ls_",
         lifetime: datetime.timedelta = datetime.timedelta(minutes=15),
     ) -> None:
@@ -116,7 +116,7 @@ class AuthenticationSessionService(abc.ABC):
 
     async def get_available_factors(
         self, authentication_session: AuthenticationSession
-    ) -> set[FactorBase]:
+    ) -> set[FactorBase[typing.Any]]:
         """
         Get the set of available factors for a given authentication session.
 
@@ -126,7 +126,7 @@ class AuthenticationSessionService(abc.ABC):
         Returns:
             A set of FactorBase instances representing the available factors for the session.
         """
-        available: set[FactorBase] = set()
+        available: set[FactorBase[typing.Any]] = set()
         for factor in self.factors:
             # Already used?
             if factor.AMR in authentication_session.amr:
@@ -148,7 +148,7 @@ class AuthenticationSessionService(abc.ABC):
         self,
         authentication_session: AuthenticationSession,
         identity_id: typing.Any,
-        factor: FactorBase,
+        factor: FactorBase[typing.Any],
     ) -> AuthenticationSession:
         """
         Advance an authentication session by marking a factor as completed.

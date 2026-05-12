@@ -14,7 +14,7 @@ class FactorEnrollment(typing.Protocol):
     identity_id: typing.Any
 
 
-class FactorBase(abc.ABC):
+class FactorBase[ENROLLMENT: FactorEnrollment](abc.ABC):
     """Base abstract class for all factor services."""
 
     AMR: typing.ClassVar[AuthenticationMethodReference]
@@ -30,7 +30,7 @@ class FactorBase(abc.ABC):
         self.min_prior_factors = min_prior_factors
 
     @abc.abstractmethod
-    async def get_enrollment(self, identity_id: typing.Any) -> FactorEnrollment | None:
+    async def get_enrollment(self, identity_id: typing.Any) -> ENROLLMENT | None:
         """
         Get the enrollment information for a given identity.
 

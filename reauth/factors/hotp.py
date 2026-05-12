@@ -87,7 +87,13 @@ class AlreadyEnrolledHOTPException(HOTPException):
     pass
 
 
-class HOTPFactor(FactorBase, abc.ABC):
+class NotEnrolledHOTPException(HOTPException):
+    """Raised when trying to enable or verify an HOTP factor for an identity with no enrollment."""
+
+    pass
+
+
+class HOTPFactor(FactorBase[HOTPEnrollment], abc.ABC):
     AMR: typing.ClassVar[AuthenticationMethodReference] = (
         AuthenticationMethodReference.OTP
     )
@@ -138,46 +144,62 @@ class HOTPFactor(FactorBase, abc.ABC):
         hotp.id = await self.insert(hotp)
         return hotp
 
-    async def enable(self, hotp: HOTPEnrollment, code: str) -> None:
+    async def enable(self, identity_id: typing.Any, code: str) -> HOTPEnrollment:
         """
         Enable an HOTP factor by verifying a provided OTP code against the expected value.
 
         On success, the HOTP factor is marked as enabled and updated in the persistent store.
 
         Args:
-            hotp: The HOTP factor to enable.
+            identity_id: The ID of the identity to enable the HOTP factor for.
             code: The OTP code provided by the user.
 
+        Returns:
+            The updated HOTP enrollment.
+
         Raises:
+            NotEnrolledHOTPException: If the identity has no HOTP enrollment.
             AlreadyEnabledHOTPException: If the HOTP factor is already enabled.
             InvalidHOTPCodeException: If the provided code is invalid.
         """
+        hotp = await self.get_enrollment(identity_id)
+        if hotp is None:
+            raise NotEnrolledHOTPException()
         if hotp.enabled:
             raise AlreadyEnabledHOTPException()
 
         hotp = self._verify(hotp, code)
         hotp.enabled = True
         await self.update(hotp)
+        return hotp
 
-    async def verify(self, hotp: HOTPEnrollment, code: str) -> None:
+    async def verify(self, identity_id: typing.Any, code: str) -> HOTPEnrollment:
         """
         Verify a provided OTP code against the expected value for the given HOTP factor.
 
         On success, the counter is incremented and the HOTP factor is updated in the persistent store.
 
         Args:
-            hotp: The HOTP factor to verify against.
+            identity_id: The ID of the identity to verify the HOTP code for.
             code: The OTP code provided by the user.
 
+        Returns:
+            The updated HOTP enrollment.
+
         Raises:
+            NotEnrolledHOTPException: If the identity has no HOTP enrollment.
             NotEnabledHOTPException: If the HOTP factor is not enabled.
             InvalidHOTPCodeException: If the provided code is invalid.
         """
+        hotp = await self.get_enrollment(identity_id)
+        if hotp is None:
+            raise NotEnrolledHOTPException()
         if not hotp.enabled:
             raise NotEnabledHOTPException()
 
         hotp = self._verify(hotp, code)
         await self.update(hotp)
+        return hotp
 
     def _verify(self, hotp: HOTPEnrollment, code: str) -> HOTPEnrollment:
         encoded_code = code.encode("ascii")

@@ -24,6 +24,7 @@ from reauth.factors.hotp import (
     HOTPFactor,
     InvalidHOTPCodeException,
     NotEnabledHOTPException,
+    NotEnrolledHOTPException,
 )
 
 sqlalchemy_meta = MetaData()
@@ -170,16 +171,20 @@ class TestHOTPEnroll:
 
 @pytest.mark.anyio
 class TestHOTPEnable:
+    async def test_enable_not_enrolled(self, hotp_factor: SQLAlchemyHOTPFactor) -> None:
+        with pytest.raises(NotEnrolledHOTPException):
+            await hotp_factor.enable(999, "123456")
+
     async def test_enable_with_valid_code(
         self, hotp_factor: SQLAlchemyHOTPFactor, make_hotp: MakeHOTPCallable
     ) -> None:
         hotp = await make_hotp(enabled=False)
 
         expected_code = hotp._impl.generate(hotp.counter).decode("ascii")
-        await hotp_factor.enable(hotp, expected_code)
+        updated_hotp = await hotp_factor.enable(hotp.identity_id, expected_code)
 
-        assert hotp.enabled is True
-        assert hotp.counter == 1
+        assert updated_hotp.enabled is True
+        assert updated_hotp.counter == 1
 
     async def test_enable_with_invalid_code(
         self, hotp_factor: SQLAlchemyHOTPFactor, make_hotp: MakeHOTPCallable
@@ -187,10 +192,7 @@ class TestHOTPEnable:
         hotp = await make_hotp(enabled=False)
 
         with pytest.raises(InvalidHOTPCodeException):
-            await hotp_factor.enable(hotp, "000000")
-
-        assert hotp.enabled is False
-        assert hotp.counter == 0
+            await hotp_factor.enable(hotp.identity_id, "000000")
 
     async def test_enable_already_enabled(
         self, hotp_factor: SQLAlchemyHOTPFactor, make_hotp: MakeHOTPCallable
@@ -199,25 +201,23 @@ class TestHOTPEnable:
 
         with pytest.raises(AlreadyEnabledHOTPException):
             await hotp_factor.enable(
-                hotp, hotp._impl.generate(hotp.counter).decode("ascii")
+                hotp.identity_id, hotp._impl.generate(hotp.counter).decode("ascii")
             )
-
-        assert hotp.enabled is True
-        assert hotp.counter == 0
 
 
 @pytest.mark.anyio
 class TestHOTPVerify:
+    async def test_not_enrolled(self, hotp_factor: SQLAlchemyHOTPFactor) -> None:
+        with pytest.raises(NotEnrolledHOTPException):
+            await hotp_factor.verify(999, "123456")
+
     async def test_not_enabled(
         self, hotp_factor: SQLAlchemyHOTPFactor, make_hotp: MakeHOTPCallable
     ) -> None:
         hotp = await make_hotp(enabled=False)
 
         with pytest.raises(NotEnabledHOTPException):
-            await hotp_factor.verify(hotp, "000000")
-
-        assert hotp.counter == 0
-        assert hotp.enabled is False
+            await hotp_factor.verify(hotp.identity_id, "000000")
 
     async def test_invalid_code(
         self, hotp_factor: SQLAlchemyHOTPFactor, make_hotp: MakeHOTPCallable
@@ -225,9 +225,7 @@ class TestHOTPVerify:
         hotp = await make_hotp(enabled=True)
 
         with pytest.raises(InvalidHOTPCodeException):
-            await hotp_factor.verify(hotp, "000000")
-
-        assert hotp.counter == 0
+            await hotp_factor.verify(hotp.identity_id, "000000")
 
     async def test_valid_code(
         self, hotp_factor: SQLAlchemyHOTPFactor, make_hotp: MakeHOTPCallable
@@ -236,9 +234,9 @@ class TestHOTPVerify:
 
         expected_code = hotp._impl.generate(hotp.counter).decode("ascii")
 
-        await hotp_factor.verify(hotp, expected_code)
+        updated_hotp = await hotp_factor.verify(hotp.identity_id, expected_code)
 
-        assert hotp.counter == 1
+        assert updated_hotp.counter == 1
 
     async def test_beyond_lookahead(
         self, hotp_factor: SQLAlchemyHOTPFactor, make_hotp: MakeHOTPCallable
@@ -248,9 +246,7 @@ class TestHOTPVerify:
         expected_code = hotp._impl.generate(hotp.counter + 10).decode("ascii")
 
         with pytest.raises(InvalidHOTPCodeException):
-            await hotp_factor.verify(hotp, expected_code)
-
-        assert hotp.counter == 0
+            await hotp_factor.verify(hotp.identity_id, expected_code)
 
     async def test_valid_code_desync(
         self, hotp_factor: SQLAlchemyHOTPFactor, make_hotp: MakeHOTPCallable
@@ -259,6 +255,6 @@ class TestHOTPVerify:
 
         expected_code = hotp._impl.generate(hotp.counter + 4).decode("ascii")
 
-        await hotp_factor.verify(hotp, expected_code)
+        updated_hotp = await hotp_factor.verify(hotp.identity_id, expected_code)
 
-        assert hotp.counter == 5
+        assert updated_hotp.counter == 5
