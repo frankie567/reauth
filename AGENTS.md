@@ -31,3 +31,10 @@ The project uses `uv` for environment and dependency management. To run Python c
 ```bash
 uv run python <your_command_here>
 ```
+
+## Committing
+
+When asked to commit on behalf of the team, please follow the following guidelines.
+
+- Always check the unstaged changes before committing. Developers usually polish the code after the LLM has done its part, and there might be some changes you need to be aware of.
+- Always prefix your message with the area of the codebase you are modifying (close to the module hierarchy), followed by a colon and a brief description of the change. For example: `factors/totp: Add support for HMAC-SHA-256`, `authentication_session: Refactor session management logic`

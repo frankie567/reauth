@@ -22,6 +22,7 @@ class EmailOTPEnrollment:
 class EmailOTP:
     id: typing.Any | None
     identity_id: typing.Any
+    email: str
     code_hash: str
     expires_at: int
     authentication_session_id: typing.Any
@@ -73,7 +74,10 @@ class EmailOTPFactor(FactorBase[EmailOTPEnrollment], abc.ABC):
         self.lifetime = lifetime
 
     async def create(
-        self, identity_id: typing.Any, authentication_session_id: typing.Any
+        self,
+        identity_id: typing.Any,
+        email: str,
+        authentication_session_id: typing.Any,
     ) -> tuple[str, EmailOTP]:
         """
         Create a new OTP for the given identity.
@@ -83,6 +87,7 @@ class EmailOTPFactor(FactorBase[EmailOTPEnrollment], abc.ABC):
 
         Args:
             identity_id: The ID of the identity to create the OTP for.
+            email: The email address this OTP is sent to.
             authentication_session_id: The ID of the authentication session this OTP is associated with.
 
         Returns:
@@ -99,6 +104,7 @@ class EmailOTPFactor(FactorBase[EmailOTPEnrollment], abc.ABC):
             expires_at=get_current_timestamp() + int(self.lifetime.total_seconds()),
             identity_id=identity_id,
             authentication_session_id=authentication_session_id,
+            email=email,
         )
         email_otp.id = await self.insert(email_otp)
 

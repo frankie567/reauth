@@ -34,6 +34,7 @@ email_otp_table = Table(
     Column("expires_at", Integer, nullable=False),
     Column("identity_id", Integer, nullable=False),
     Column("authentication_session_id", Integer, nullable=False),
+    Column("email", String, nullable=False),
     sqlite_autoincrement=True,
 )
 
@@ -138,7 +139,9 @@ class TestEmailOTPCreate:
         identity_id = 123
         authentication_session_id = 456
         code, otp = await email_otp_factor.create(
-            identity_id, authentication_session_id
+            identity_id,
+            "reauth@example.com",
+            authentication_session_id,
         )
 
         assert isinstance(code, str)
@@ -147,6 +150,7 @@ class TestEmailOTPCreate:
         assert otp.id is not None
         assert otp.identity_id == identity_id
         assert otp.authentication_session_id == authentication_session_id
+        assert otp.email == "reauth@example.com"
         assert not otp.is_expired()
 
         code_hash = get_token_hash(code, secret=email_otp_factor.hash_secret)
@@ -158,11 +162,15 @@ class TestEmailOTPCreate:
         identity_id = 123
         authentication_session_id = 456
         first_code, first_otp = await email_otp_factor.create(
-            identity_id, authentication_session_id
+            identity_id,
+            "reauth@example.com",
+            authentication_session_id,
         )
 
         second_code, second_otp = await email_otp_factor.create(
-            identity_id, authentication_session_id
+            identity_id,
+            "reauth@example.com",
+            authentication_session_id,
         )
 
         assert second_otp.id != first_otp.id
@@ -180,7 +188,11 @@ class TestEmailOTPCreate:
     ) -> None:
         identity_id = 123
         authentication_session_id = 456
-        _, otp = await email_otp_factor.create(identity_id, authentication_session_id)
+        _, otp = await email_otp_factor.create(
+            identity_id,
+            "reauth@example.com",
+            authentication_session_id,
+        )
         assert not otp.is_expired()
 
     async def test_code_is_uppercase_alphanumeric(
@@ -188,7 +200,11 @@ class TestEmailOTPCreate:
     ) -> None:
         identity_id = 123
         authentication_session_id = 456
-        code, _ = await email_otp_factor.create(identity_id, authentication_session_id)
+        code, _ = await email_otp_factor.create(
+            identity_id,
+            "reauth@example.com",
+            authentication_session_id,
+        )
         valid_chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
         assert all(c in valid_chars for c in code)
 
@@ -213,6 +229,7 @@ class TestEmailOTPConsume:
             expires_at=get_current_timestamp() + 3600,
             identity_id=identity_id,
             authentication_session_id=authentication_session_id,
+            email="reauth@example.com",
         )
         await email_otp_factor.insert(email_otp)
         with pytest.raises(InvalidOTPException):
@@ -230,6 +247,7 @@ class TestEmailOTPConsume:
             expires_at=0,  # Expired
             identity_id=identity_id,
             authentication_session_id=authentication_session_id,
+            email="reauth@example.com",
         )
         await email_otp_factor.insert(email_otp)
 
@@ -248,6 +266,7 @@ class TestEmailOTPConsume:
             expires_at=get_current_timestamp() + 3600,
             identity_id=identity_id,
             authentication_session_id=authentication_session_id,
+            email="reauth@example.com",
         )
         email_otp.id = await email_otp_factor.insert(email_otp)
 
