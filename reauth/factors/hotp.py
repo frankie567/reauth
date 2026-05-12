@@ -81,6 +81,12 @@ class InvalidHOTPCodeException(HOTPException):
     pass
 
 
+class AlreadyEnrolledHOTPException(HOTPException):
+    """Raised when trying to enroll an identity that already has an HOTP enrollment."""
+
+    pass
+
+
 class HOTPFactor(FactorBase, abc.ABC):
     AMR: typing.ClassVar[AuthenticationMethodReference] = (
         AuthenticationMethodReference.OTP
@@ -111,7 +117,14 @@ class HOTPFactor(FactorBase, abc.ABC):
 
         Returns:
             The enrolled HOTP factor.
+
+        Raises:
+            AlreadyEnrolledHOTPException: If the identity already has an HOTP enrollment.
         """
+        existing = await self.get_enrollment(identity_id)
+        if existing is not None:
+            raise AlreadyEnrolledHOTPException()
+
         secret = secrets.token_bytes(20)  # 160-bit secret key
         hotp = HOTPEnrollment(
             id=None,

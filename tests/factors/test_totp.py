@@ -20,6 +20,7 @@ from sqlalchemy.sql.expression import update
 
 from reauth.factors.totp import (
     AlreadyEnabledTOTPException,
+    AlreadyEnrolledTOTPException,
     InvalidTOTPCodeException,
     NotEnabledTOTPException,
     TOTPAlgorithm,
@@ -170,6 +171,15 @@ class TestTOTPEnroll:
         assert totp.last_verified_time_step is None
         assert len(totp.secret) == 32
         assert totp.enabled is False
+
+    async def test_enroll_duplicate_identity(
+        self, totp_factor: SQLAlchemyTOTPFactor, make_totp: MakeTOTPCallable
+    ) -> None:
+        identity_id = 123
+        await make_totp(identity_id=identity_id)
+
+        with pytest.raises(AlreadyEnrolledTOTPException):
+            await totp_factor.enroll(identity_id)
 
 
 @pytest.mark.anyio

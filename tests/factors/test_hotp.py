@@ -19,6 +19,7 @@ from sqlalchemy.sql.expression import update
 
 from reauth.factors.hotp import (
     AlreadyEnabledHOTPException,
+    AlreadyEnrolledHOTPException,
     HOTPEnrollment,
     HOTPFactor,
     InvalidHOTPCodeException,
@@ -156,6 +157,15 @@ class TestHOTPEnroll:
         assert hotp.algorithm == "sha1"
         assert len(hotp.secret) == 32  # Base32-encoded 160-bit key is 32 chars
         assert hotp.enabled is False
+
+    async def test_enroll_duplicate_identity(
+        self, hotp_factor: SQLAlchemyHOTPFactor, make_hotp: MakeHOTPCallable
+    ) -> None:
+        identity_id = 123
+        await make_hotp(identity_id=identity_id)
+
+        with pytest.raises(AlreadyEnrolledHOTPException):
+            await hotp_factor.enroll(identity_id)
 
 
 @pytest.mark.anyio

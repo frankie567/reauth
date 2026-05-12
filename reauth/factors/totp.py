@@ -92,6 +92,12 @@ class NotEnabledTOTPException(TOTPException):
     pass
 
 
+class AlreadyEnrolledTOTPException(TOTPException):
+    """Raised when trying to enroll an identity that already has a TOTP enrollment."""
+
+    pass
+
+
 class TOTPFactor(FactorBase, abc.ABC):
     AMR: typing.ClassVar[AuthenticationMethodReference] = (
         AuthenticationMethodReference.OTP
@@ -124,7 +130,14 @@ class TOTPFactor(FactorBase, abc.ABC):
 
         Returns:
             The enrolled TOTP factor.
+
+        Raises:
+            AlreadyEnrolledTOTPException: If the identity already has a TOTP enrollment.
         """
+        existing = await self.get_enrollment(identity_id)
+        if existing is not None:
+            raise AlreadyEnrolledTOTPException()
+
         secret = secrets.token_bytes(20)  # 160-bit secret key
         totp = TOTPEnrollment(
             id=None,
