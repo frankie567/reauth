@@ -52,6 +52,25 @@ class UnavailableFactorException(AuthenticationSessionException):
     pass
 
 
+class IdentityNotAttachedException(AuthenticationSessionException):
+    """Raised when trying to complete a session without an identity_id."""
+
+    pass
+
+
+class FactorsRemainingException(AuthenticationSessionException):
+    """
+    Raised when trying to complete a session with remaining factors.
+
+    Attributes:
+        factors: A set of the remaining factors instances.
+    """
+
+    def __init__(self, factors: set[FactorBase[typing.Any]]) -> None:
+        self.factors = factors
+        super().__init__("Cannot complete session: factors are remaining")
+
+
 class AuthenticationSessionService(abc.ABC):
     """
     Abstract base class for managing authentication sessions.
@@ -174,6 +193,35 @@ class AuthenticationSessionService(abc.ABC):
 
         return authentication_session
 
+    async def complete(
+        self, authentication_session: AuthenticationSession
+    ) -> tuple[typing.Any, list[AuthenticationMethodReference]]:
+        """
+        Complete an authentication session and return identity info.
+
+        Validates that the session is complete (identity attached, no factors remaining),
+        deletes the session, and returns the identity_id and AMR list.
+
+        Args:
+            authentication_session: The session to complete.
+
+        Returns:
+            A tuple of (identity_id, amr) for creating a user session.
+
+        Raises:
+            IdentityNotAttachedException: If no identity_id is attached to the session.
+            FactorsRemainingException: If there are still available factors.
+        """
+        if authentication_session.identity_id is None:
+            raise IdentityNotAttachedException()
+
+        available_factors = await self.get_available_factors(authentication_session)
+        if available_factors:
+            raise FactorsRemainingException(available_factors)
+
+        await self.delete(authentication_session)
+        return authentication_session.identity_id, authentication_session.amr
+
     @abc.abstractmethod
     async def insert(self, authentication_session: AuthenticationSession) -> typing.Any:
         """
@@ -213,5 +261,17 @@ class AuthenticationSessionService(abc.ABC):
 
         Args:
             authentication_session: The AuthenticationSession instance to update.
+        """
+        ...
+
+    @abc.abstractmethod
+    async def delete(self, authentication_session: AuthenticationSession) -> None:
+        """
+        Delete an authentication session from the persistent store.
+
+        Implementers should implement this method.
+
+        Args:
+            authentication_session: The AuthenticationSession instance to delete.
         """
         ...

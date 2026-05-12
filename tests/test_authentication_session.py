@@ -10,6 +10,7 @@ from sqlalchemy import (
     MetaData,
     String,
     Table,
+    delete,
     insert,
     select,
     update,
@@ -21,6 +22,8 @@ from reauth.authentication_session import (
     AuthenticationSession,
     AuthenticationSessionService,
     ExpiredSessionException,
+    FactorsRemainingException,
+    IdentityNotAttachedException,
     InvalidSessionTokenException,
     UnavailableFactorException,
 )
@@ -123,6 +126,14 @@ class SQLAlchemyAuthenticationSession(AuthenticationSessionService):
             update(authentication_session_table)
             .where(authentication_session_table.c.id == authentication_session.id)
             .values(**dataclasses.asdict(authentication_session))
+        )
+
+    async def delete(self, authentication_session: AuthenticationSession) -> None:
+        """Delete an AuthenticationSession from the database."""
+        await self.connection.execute(
+            delete(authentication_session_table).where(
+                authentication_session_table.c.id == authentication_session.id
+            )
         )
 
 
@@ -367,3 +378,55 @@ class TestAdvance:
 
         with pytest.raises(UnavailableFactorException):
             await authentication_session_service.advance(session, 1, mfa_factor)
+
+
+@pytest.mark.anyio
+class TestComplete:
+    async def test_returns_identity_and_amr(
+        self,
+        authentication_session_service: SQLAlchemyAuthenticationSession,
+        password_factor: DummyPasswordFactor,
+        mfa_factor: DummyMFAFactor,
+    ) -> None:
+        token, session = await authentication_session_service.create()
+        session = await authentication_session_service.advance(
+            session, 1, password_factor
+        )
+        session = await authentication_session_service.advance(session, 1, mfa_factor)
+
+        identity_id, amr = await authentication_session_service.complete(session)
+        assert identity_id == 1
+        assert amr == [
+            AuthenticationMethodReference.PWD,
+            AuthenticationMethodReference.MFA,
+        ]
+
+        # Verify session was deleted
+        deleted = await authentication_session_service.get_by_token_hash(
+            session.token_hash
+        )
+        assert deleted is None
+
+    async def test_raises_identity_not_attached(
+        self, authentication_session_service: SQLAlchemyAuthenticationSession
+    ) -> None:
+        token, session = await authentication_session_service.create()
+
+        with pytest.raises(IdentityNotAttachedException):
+            await authentication_session_service.complete(session)
+
+    async def test_raises_factors_remaining(
+        self,
+        authentication_session_service: SQLAlchemyAuthenticationSession,
+        password_factor: DummyPasswordFactor,
+    ) -> None:
+        token, session = await authentication_session_service.create()
+        session = await authentication_session_service.advance(
+            session, 1, password_factor
+        )
+
+        with pytest.raises(FactorsRemainingException) as exc_info:
+            await authentication_session_service.complete(session)
+
+        assert len(exc_info.value.factors) == 1
+        assert isinstance(next(iter(exc_info.value.factors)), DummyMFAFactor)

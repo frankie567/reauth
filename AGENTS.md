@@ -24,6 +24,8 @@ Tests are located in the `tests/` directory. It uses `pytest` for testing. To ru
 just test
 ```
 
+Always privilege the `just` commands as described above to check your work. **Don't run manual linting or testing commands without being asked to do so.**
+
 ### Running Python commands
 
 The project uses `uv` for environment and dependency management. To run Python commands, use:
@@ -34,7 +36,9 @@ uv run python <your_command_here>
 
 ## Committing
 
-When asked to commit on behalf of the team, please follow the following guidelines.
+**Never proactively commit without being asked to do so.**
 
-- Always check the unstaged changes before committing. Developers usually polish the code after the LLM has done its part, and there might be some changes you need to be aware of.
+If you are asked to commit, make sure to:
+
+- Always check the unstaged changes before committing. Developers usually polish the code after the AI agent has done its part, and there might be some changes you need to be aware of.
 - Always prefix your message with the area of the codebase you are modifying (close to the module hierarchy), followed by a colon and a brief description of the change. For example: `factors/totp: Add support for HMAC-SHA-256`, `authentication_session: Refactor session management logic`
