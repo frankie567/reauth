@@ -110,13 +110,18 @@ class EmailOTPFactor(FactorBase[EmailOTPEnrollment], abc.ABC):
 
         return code, email_otp
 
-    async def consume(self, code: str, authentication_session_id: object) -> None:
+    async def consume(
+        self, code: str, authentication_session_id: object
+    ) -> tuple[typing.Any, str]:
         """
         Consume an OTP code, deleting it from the persistent store if valid.
 
         Args:
             code: The OTP code to consume.
             authentication_session_id: The ID of the authentication session this OTP is associated with.
+
+        Returns:
+            A tuple of (identity_id, email) for the consumed OTP.
 
         Raises:
             InvalidOTPException: If the code is invalid or does not correspond to any OTP.
@@ -131,6 +136,7 @@ class EmailOTPFactor(FactorBase[EmailOTPEnrollment], abc.ABC):
         if email_otp.is_expired():
             raise ExpiredOTPException()
         await self.delete(email_otp)
+        return email_otp.identity_id, email_otp.email
 
     @abc.abstractmethod
     async def insert(self, email_otp: EmailOTP) -> typing.Any:

@@ -251,17 +251,22 @@ class TestEmailOTPConsume:
         code, code_hash = generate_code_hash_pair(secret=email_otp_factor.hash_secret)
         identity_id = 123
         authentication_session_id = 456
+        email = "reauth@example.com"
         email_otp = EmailOTP(
             id=None,
             code_hash=code_hash,
             expires_at=get_current_timestamp() + 3600,
             identity_id=identity_id,
             authentication_session_id=authentication_session_id,
-            email="reauth@example.com",
+            email=email,
         )
         email_otp.id = await email_otp_factor.insert(email_otp)
 
-        await email_otp_factor.consume(code, authentication_session_id)
+        returned_identity_id, returned_email = await email_otp_factor.consume(
+            code, authentication_session_id
+        )
+        assert returned_identity_id == identity_id
+        assert returned_email == email
 
         # Verify that the OTP is deleted
         deleted_email_otp = (
