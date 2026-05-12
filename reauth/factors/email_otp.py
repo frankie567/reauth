@@ -166,18 +166,6 @@ class EmailOTPFactor(FactorBase[EmailOTPEnrollment], abc.ABC):
         ...
 
     @abc.abstractmethod
-    async def update(self, email_otp: EmailOTP) -> None:
-        """
-        Update an EmailOTP instance in the persistent store.
-
-        Implementers should implement this method.
-
-        Args:
-            email_otp: The EmailOTP instance to update.
-        """
-        ...
-
-    @abc.abstractmethod
     async def delete(self, email_otp: EmailOTP) -> None:
         """
         Delete an EmailOTP instance from the persistent store.

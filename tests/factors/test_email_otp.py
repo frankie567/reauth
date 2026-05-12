@@ -11,7 +11,6 @@ from sqlalchemy import (
     delete,
     insert,
     select,
-    update,
 )
 from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine
 
@@ -82,14 +81,6 @@ class SQLAlchemyEmailOTPFactor(EmailOTPFactor):
         if row is None:
             return None
         return EmailOTP(**row._asdict())
-
-    async def update(self, email_otp: EmailOTP) -> None:
-        """Update an EmailOTP in the database."""
-        await self.connection.execute(
-            update(email_otp_table)
-            .where(email_otp_table.c.id == email_otp.id)
-            .values(**dataclasses.asdict(email_otp))
-        )
 
     async def delete(self, email_otp: EmailOTP) -> None:
         """Delete an EmailOTP from the database."""
