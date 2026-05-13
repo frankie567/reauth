@@ -176,11 +176,11 @@ def authentication_session_service(
 
 
 @pytest.mark.anyio
-class TestAuthenticationSessionCreate:
+class TestAuthenticationSessionStart:
     async def test_returns_valid_session(
         self, authentication_session_service: SQLAlchemyAuthenticationSession
     ) -> None:
-        token, session = await authentication_session_service.create()
+        token, session = await authentication_session_service.start()
         assert isinstance(session, AuthenticationSession)
         assert session.id is not None
         assert session.expires_at > get_current_timestamp()
@@ -393,7 +393,7 @@ class TestComplete:
         password_factor: DummyPasswordFactor,
         mfa_factor: DummyMFAFactor,
     ) -> None:
-        token, session = await authentication_session_service.create()
+        token, session = await authentication_session_service.start()
         session = await authentication_session_service.advance(
             session, 1, password_factor
         )
@@ -416,7 +416,7 @@ class TestComplete:
     async def test_raises_identity_not_attached(
         self, authentication_session_service: SQLAlchemyAuthenticationSession
     ) -> None:
-        token, session = await authentication_session_service.create()
+        token, session = await authentication_session_service.start()
 
         with pytest.raises(IdentityNotAttachedException):
             await authentication_session_service.complete(session)
@@ -426,7 +426,7 @@ class TestComplete:
         authentication_session_service: SQLAlchemyAuthenticationSession,
         password_factor: DummyPasswordFactor,
     ) -> None:
-        token, session = await authentication_session_service.create()
+        token, session = await authentication_session_service.start()
         session = await authentication_session_service.advance(
             session, 1, password_factor
         )

@@ -93,9 +93,9 @@ class AuthenticationSessionService(abc.ABC):
         self.token_prefix = token_prefix
         self.lifetime = lifetime
 
-    async def create(self) -> tuple[str, AuthenticationSession]:
+    async def start(self) -> tuple[str, AuthenticationSession]:
         """
-        Create a fresh authentication session.
+        Start a fresh authentication session.
 
         Returns:
             A tuple of (token, AuthenticationSession instance).
