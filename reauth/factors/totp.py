@@ -13,7 +13,10 @@ from cryptography.hazmat.primitives.twofactor.totp import TOTP as CryptoTOTP
 from reauth.exceptions import ReauthException
 
 from ..amr import AuthenticationMethodReference
+from ..logging import get_logger
 from .base import FactorBase
+
+logger = get_logger(__name__)
 
 type TOTPAlgorithm = typing.Literal["sha1", "sha256", "sha512"]
 
@@ -141,6 +144,14 @@ class TOTPFactor(FactorBase[TOTPEnrollment], abc.ABC):
         Raises:
             AlreadyEnrolledTOTPException: If the identity already has a TOTP enrollment.
         """
+        logger.info(
+            "TOTP enrollment created",
+            extra={
+                "identity_id": identity_id,
+                "code_length": self.code_length,
+                "algorithm": self.algorithm,
+            },
+        )
         existing = await self.get_enrollment(identity_id)
         if existing is not None:
             raise AlreadyEnrolledTOTPException()
@@ -177,15 +188,33 @@ class TOTPFactor(FactorBase[TOTPEnrollment], abc.ABC):
             AlreadyEnabledTOTPException: If the TOTP factor is already enabled.
             InvalidTOTPCodeException: If the provided code is invalid.
         """
+        logger.info("TOTP enable attempted", extra={"identity_id": identity_id})
         totp = await self.get_enrollment(identity_id)
         if totp is None:
+            logger.warning(
+                "TOTP enable failed: not enrolled",
+                extra={"identity_id": identity_id},
+            )
             raise NotEnrolledTOTPException()
         if totp.enabled:
+            logger.warning(
+                "TOTP enable failed: already enabled",
+                extra={"identity_id": identity_id},
+            )
             raise AlreadyEnabledTOTPException()
 
-        totp = self._verify(totp, code)
+        try:
+            totp = self._verify(totp, code)
+        except InvalidTOTPCodeException:
+            logger.warning(
+                "TOTP enable failed: invalid code",
+                extra={"identity_id": identity_id},
+            )
+            raise
+
         totp.enabled = True
         await self.update(totp)
+        logger.info("TOTP enabled", extra={"identity_id": identity_id})
         return totp
 
     async def verify(self, identity_id: typing.Any, code: str) -> TOTPEnrollment:
@@ -204,14 +233,32 @@ class TOTPFactor(FactorBase[TOTPEnrollment], abc.ABC):
             NotEnabledTOTPException: If the TOTP factor is not enabled.
             InvalidTOTPCodeException: If the provided code is invalid or has already been used.
         """
+        logger.debug("TOTP verification attempted", extra={"identity_id": identity_id})
         totp = await self.get_enrollment(identity_id)
         if totp is None:
+            logger.warning(
+                "TOTP verify failed: not enrolled",
+                extra={"identity_id": identity_id},
+            )
             raise NotEnrolledTOTPException()
         if not totp.enabled:
+            logger.warning(
+                "TOTP verify failed: not enabled",
+                extra={"identity_id": identity_id},
+            )
             raise NotEnabledTOTPException()
 
-        totp = self._verify(totp, code)
+        try:
+            totp = self._verify(totp, code)
+        except InvalidTOTPCodeException:
+            logger.warning(
+                "TOTP verify failed: invalid code",
+                extra={"identity_id": identity_id},
+            )
+            raise
+
         await self.update(totp)
+        logger.info("TOTP verification successful", extra={"identity_id": identity_id})
         return totp
 
     def _verify(self, totp: TOTPEnrollment, code: str) -> TOTPEnrollment:

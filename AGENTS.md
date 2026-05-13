@@ -34,6 +34,44 @@ The project uses `uv` for environment and dependency management. To run Python c
 uv run python <your_command_here>
 ```
 
+## Logging
+
+The library has a built-in OWASP-compliant logging infrastructure. Use it for security-relevant events.
+
+**Infrastructure:**
+`reauth/logging.py` with NullHandler (disabled by default, no warnings). Get logger via:
+
+```python
+from reauth.logging import get_logger
+logger = get_logger(__name__)
+```
+
+**Levels:**
+
+- DEBUG: method entry/attempt
+- INFO: success events (session created, TOTP enabled)
+- WARNING: auth failures (invalid code/token), validation errors (not enrolled/enabled)
+
+**Add logging to:** authentication methods, session lifecycle, factor operations, authorization failures.
+
+**NEVER log:** tokens, secrets, passwords, encryption keys, raw PII, database connection strings.
+
+**PII handling:** Use `_hash_email(email)` (SHA-256) for correlation without exposing raw emails.
+
+**Pattern:**
+
+```python
+logger.debug("Method called", extra={"safe": "data"})
+try:
+    # ... logic ...
+    logger.info("Success", extra={"result": "data"})
+except AuthException:
+    logger.warning("Failed: reason", extra={"context": "data"})
+    raise
+```
+
+**OWASP checklist:** auth successes/failures, session events, authorization failures, sensitive data excluded, PII handled, disabled by default.
+
 ## Committing
 
 **Never proactively commit without being asked to do so.**

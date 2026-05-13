@@ -12,7 +12,10 @@ from cryptography.hazmat.primitives.twofactor.hotp import HOTP as CryptoHOTP
 from reauth.exceptions import ReauthException
 
 from ..amr import AuthenticationMethodReference
+from ..logging import get_logger
 from .base import FactorBase
+
+logger = get_logger(__name__)
 
 type HOTPAlgorithm = typing.Literal["sha1"]
 
@@ -128,6 +131,14 @@ class HOTPFactor(FactorBase[HOTPEnrollment], abc.ABC):
         Raises:
             AlreadyEnrolledHOTPException: If the identity already has an HOTP enrollment.
         """
+        logger.info(
+            "HOTP enrollment created",
+            extra={
+                "identity_id": identity_id,
+                "code_length": self.code_length,
+                "algorithm": self.algorithm,
+            },
+        )
         existing = await self.get_enrollment(identity_id)
         if existing is not None:
             raise AlreadyEnrolledHOTPException()
@@ -163,15 +174,33 @@ class HOTPFactor(FactorBase[HOTPEnrollment], abc.ABC):
             AlreadyEnabledHOTPException: If the HOTP factor is already enabled.
             InvalidHOTPCodeException: If the provided code is invalid.
         """
+        logger.info("HOTP enable attempted", extra={"identity_id": identity_id})
         hotp = await self.get_enrollment(identity_id)
         if hotp is None:
+            logger.warning(
+                "HOTP enable failed: not enrolled",
+                extra={"identity_id": identity_id},
+            )
             raise NotEnrolledHOTPException()
         if hotp.enabled:
+            logger.warning(
+                "HOTP enable failed: already enabled",
+                extra={"identity_id": identity_id},
+            )
             raise AlreadyEnabledHOTPException()
 
-        hotp = self._verify(hotp, code)
+        try:
+            hotp = self._verify(hotp, code)
+        except InvalidHOTPCodeException:
+            logger.warning(
+                "HOTP enable failed: invalid code",
+                extra={"identity_id": identity_id},
+            )
+            raise
+
         hotp.enabled = True
         await self.update(hotp)
+        logger.info("HOTP enabled", extra={"identity_id": identity_id})
         return hotp
 
     async def verify(self, identity_id: typing.Any, code: str) -> HOTPEnrollment:
@@ -192,14 +221,32 @@ class HOTPFactor(FactorBase[HOTPEnrollment], abc.ABC):
             NotEnabledHOTPException: If the HOTP factor is not enabled.
             InvalidHOTPCodeException: If the provided code is invalid.
         """
+        logger.debug("HOTP verification attempted", extra={"identity_id": identity_id})
         hotp = await self.get_enrollment(identity_id)
         if hotp is None:
+            logger.warning(
+                "HOTP verify failed: not enrolled",
+                extra={"identity_id": identity_id},
+            )
             raise NotEnrolledHOTPException()
         if not hotp.enabled:
+            logger.warning(
+                "HOTP verify failed: not enabled",
+                extra={"identity_id": identity_id},
+            )
             raise NotEnabledHOTPException()
 
-        hotp = self._verify(hotp, code)
+        try:
+            hotp = self._verify(hotp, code)
+        except InvalidHOTPCodeException:
+            logger.warning(
+                "HOTP verify failed: invalid code",
+                extra={"identity_id": identity_id},
+            )
+            raise
+
         await self.update(hotp)
+        logger.info("HOTP verification successful", extra={"identity_id": identity_id})
         return hotp
 
     def _verify(self, hotp: HOTPEnrollment, code: str) -> HOTPEnrollment:

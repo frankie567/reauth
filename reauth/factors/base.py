@@ -2,6 +2,9 @@ import abc
 import typing
 
 from ..amr import AuthenticationMethodReference
+from ..logging import get_logger
+
+logger = get_logger(__name__)
 
 
 class FactorEnrollment(typing.Protocol):
@@ -29,6 +32,14 @@ class FactorBase[ENROLLMENT: FactorEnrollment](abc.ABC):
             min_prior_factors: Minimum number of prior factors that must complete
                 before this factor can be used. Defaults to 0 (can be first factor).
         """
+        logger.debug(
+            "Factor initialized",
+            extra={
+                "identifier": identifier,
+                "min_prior_factors": min_prior_factors,
+                "amr": str(self.AMR),
+            },
+        )
         self.identifier = identifier
         self.min_prior_factors = min_prior_factors
 

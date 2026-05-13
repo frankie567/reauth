@@ -7,7 +7,10 @@ from .amr import AuthenticationMethodReference
 from .crypto import TokenHash, generate_token_hash_pair, get_token_hash
 from .exceptions import ReauthException
 from .factors import FactorBase
+from .logging import get_logger
 from .timestamp import get_current_timestamp
+
+logger = get_logger(__name__)
 
 
 @dataclasses.dataclass
@@ -88,6 +91,14 @@ class AuthenticationSessionService(abc.ABC):
         token_prefix: str = "ls_",
         lifetime: datetime.timedelta = datetime.timedelta(minutes=15),
     ) -> None:
+        logger.debug(
+            "AuthenticationSessionService initialized",
+            extra={
+                "token_prefix": token_prefix,
+                "lifetime_seconds": int(lifetime.total_seconds()),
+                "factor_count": len(factors),
+            },
+        )
         self.hash_secret = hash_secret
         self.factors = factors
         self.token_prefix = token_prefix
@@ -110,6 +121,13 @@ class AuthenticationSessionService(abc.ABC):
             identity_id=None,
         )
         authentication_session.id = await self.insert(authentication_session)
+        logger.info(
+            "Session created",
+            extra={
+                "session_id": authentication_session.id,
+                "expires_at": authentication_session.expires_at,
+            },
+        )
         return token, authentication_session
 
     async def get_by_token(self, token: str) -> AuthenticationSession:
@@ -126,11 +144,16 @@ class AuthenticationSessionService(abc.ABC):
             InvalidTokenException: If the token is invalid or does not correspond to any session.
             ExpiredSessionException: If the session corresponding to the token has expired.
         """
+        logger.debug("Token validation attempted")
         token_hash = get_token_hash(token, secret=self.hash_secret)
         authentication_session = await self.get_by_token_hash(token_hash)
         if authentication_session is None:
+            logger.warning("Invalid token provided")
             raise InvalidSessionTokenException()
         if authentication_session.is_expired():
+            logger.warning(
+                "Session expired", extra={"session_id": authentication_session.id}
+            )
             raise ExpiredSessionException()
         return authentication_session
 
@@ -193,6 +216,15 @@ class AuthenticationSessionService(abc.ABC):
         authentication_session.used_factors.append(factor.identifier)
         await self.update(authentication_session)
 
+        logger.info(
+            "Session advanced",
+            extra={
+                "session_id": authentication_session.id,
+                "identity_id": identity_id,
+                "factor_identifier": factor.identifier,
+                "factor_amr": str(factor.AMR),
+            },
+        )
         return authentication_session
 
     async def complete(
@@ -215,13 +247,32 @@ class AuthenticationSessionService(abc.ABC):
             FactorsRemainingException: If there are still available factors.
         """
         if authentication_session.identity_id is None:
+            logger.warning(
+                "Session completion failed: no identity",
+                extra={"session_id": authentication_session.id},
+            )
             raise IdentityNotAttachedException()
 
         available_factors = await self.get_available_factors(authentication_session)
         if available_factors:
+            logger.warning(
+                "Session completion failed: factors remaining",
+                extra={
+                    "session_id": authentication_session.id,
+                    "remaining_count": len(available_factors),
+                },
+            )
             raise FactorsRemainingException(available_factors)
 
         await self.delete(authentication_session)
+        logger.info(
+            "Session completed",
+            extra={
+                "session_id": authentication_session.id,
+                "identity_id": authentication_session.identity_id,
+                "amr": [str(m) for m in authentication_session.amr],
+            },
+        )
         return authentication_session.identity_id, authentication_session.amr
 
     @abc.abstractmethod

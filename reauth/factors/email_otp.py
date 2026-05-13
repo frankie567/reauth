@@ -1,14 +1,23 @@
 import abc
 import dataclasses
 import datetime
+import hashlib
 import typing
 
 from reauth.exceptions import ReauthException
 
 from ..amr import AuthenticationMethodReference
 from ..crypto import generate_code_hash_pair, get_token_hash
+from ..logging import get_logger
 from ..timestamp import get_current_timestamp
 from .base import FactorBase
+
+logger = get_logger(__name__)
+
+
+def _hash_email(email: str) -> str:
+    """Hash email for logging correlation without exposing PII."""
+    return hashlib.sha256(email.encode()).hexdigest()
 
 
 @dataclasses.dataclass
@@ -109,6 +118,14 @@ class EmailOTPFactor(FactorBase[EmailOTPEnrollment], abc.ABC):
         )
         email_otp.id = await self.insert(email_otp)
 
+        logger.info(
+            "Email OTP created",
+            extra={
+                "identity_id": identity_id,
+                "authentication_session_id": authentication_session_id,
+                "email_hash": _hash_email(email),
+            },
+        )
         return code, email_otp
 
     async def consume(
@@ -128,15 +145,35 @@ class EmailOTPFactor(FactorBase[EmailOTPEnrollment], abc.ABC):
             InvalidOTPException: If the code is invalid or does not correspond to any OTP.
             ExpiredOTPException: If the OTP has expired.
         """
+        logger.debug(
+            "Email OTP consumption attempted",
+            extra={"authentication_session_id": authentication_session_id},
+        )
         code_hash = get_token_hash(code, secret=self.hash_secret)
         email_otp = await self.get_by_code_hash_and_authentication_session_id(
             code_hash, authentication_session_id
         )
         if email_otp is None:
+            logger.warning(
+                "Email OTP consume failed: invalid",
+                extra={"authentication_session_id": authentication_session_id},
+            )
             raise InvalidOTPException()
         if email_otp.is_expired():
+            logger.warning(
+                "Email OTP consume failed: expired",
+                extra={"authentication_session_id": authentication_session_id},
+            )
             raise ExpiredOTPException()
         await self.delete(email_otp)
+        logger.info(
+            "Email OTP consumed",
+            extra={
+                "authentication_session_id": authentication_session_id,
+                "identity_id": email_otp.identity_id,
+                "email_hash": _hash_email(email_otp.email),
+            },
+        )
         return email_otp.identity_id, email_otp.email
 
     @abc.abstractmethod
