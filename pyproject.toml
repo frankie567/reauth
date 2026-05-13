@@ -32,7 +32,7 @@ path = "reauth/__init__.py"
 
 [dependency-groups]
 dev = [
-    "mypy",
+    "ty",
     "ruff",
     "pytest",
     "pytest-cov",
@@ -54,15 +54,3 @@ addopts = "--cov=reauth/ --cov-report=term-missing"
 
 [tool.uv]
 default-groups = ["dev"]
-
-[tool.mypy]
-warn_redundant_casts = true
-warn_unused_ignores = true
-disallow_any_generics = true
-check_untyped_defs = true
-no_implicit_reexport = true
-strict_equality = true
-disallow_untyped_defs = true
-
-[tool.basedpyright]
-typeCheckingMode = "off"

@@ -6,12 +6,12 @@ install:
 lint:
     uv run ruff format .
     uv run ruff check --fix .
-    uv run mypy reauth/ tests/
+    uv run ty check reauth/ tests/
 
 lint-check:
     uv run ruff format --check .
     uv run ruff check .
-    uv run mypy reauth/ tests/
+    uv run ty check reauth/ tests/
 
 test:
     uv run pytest
