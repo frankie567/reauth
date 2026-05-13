@@ -66,9 +66,10 @@ class EmailOTPFactor(FactorBase[EmailOTPEnrollment], abc.ABC):
         hash_secret: str,
         code_length: int = 6,
         lifetime: datetime.timedelta = datetime.timedelta(minutes=10),
+        identifier: str = "email_otp",
         min_prior_factors: int = 0,
     ) -> None:
-        super().__init__(min_prior_factors=min_prior_factors)
+        super().__init__(identifier=identifier, min_prior_factors=min_prior_factors)
         self.hash_secret = hash_secret
         self.code_length = code_length
         self.lifetime = lifetime
