@@ -40,6 +40,7 @@ authentication_session_table = Table(
     Column("expires_at", Integer, nullable=False),
     Column("identity_id", Integer, nullable=True),
     Column("amr", JSON, nullable=False),
+    Column("used_factors", JSON, nullable=False),
     sqlite_autoincrement=True,
 )
 
@@ -252,7 +253,6 @@ class TestGetAvailableFactors:
             token_hash=token_hash,
             expires_at=get_current_timestamp() + 3600,
             identity_id=None,
-            amr=[],
         )
         session.id = await authentication_session_service.insert(session)
 
@@ -274,6 +274,7 @@ class TestGetAvailableFactors:
             expires_at=get_current_timestamp() + 3600,
             identity_id=1,
             amr=[AuthenticationMethodReference.PWD],
+            used_factors=["dummy_password"],
         )
         session.id = await authentication_session_service.insert(session)
 
@@ -295,6 +296,7 @@ class TestGetAvailableFactors:
             expires_at=get_current_timestamp() + 3600,
             identity_id=2,
             amr=[AuthenticationMethodReference.PWD],
+            used_factors=["dummy_password"],
         )
         session.id = await authentication_session_service.insert(session)
 
@@ -319,7 +321,6 @@ class TestAdvance:
             token_hash=token_hash,
             expires_at=get_current_timestamp() + 3600,
             identity_id=None,
-            amr=[],
         )
         session.id = await authentication_session_service.insert(session)
 
@@ -329,6 +330,7 @@ class TestAdvance:
 
         assert updated_session.id == session.id
         assert updated_session.amr == [AuthenticationMethodReference.PWD]
+        assert updated_session.used_factors == ["dummy_password"]
 
     async def test_identity_one_factor_enrolled(
         self,
@@ -345,6 +347,7 @@ class TestAdvance:
             expires_at=get_current_timestamp() + 3600,
             identity_id=1,
             amr=[AuthenticationMethodReference.PWD],
+            used_factors=["dummy_password"],
         )
         session.id = await authentication_session_service.insert(session)
 
@@ -357,6 +360,7 @@ class TestAdvance:
             AuthenticationMethodReference.PWD,
             AuthenticationMethodReference.MFA,
         ]
+        assert updated_session.used_factors == ["dummy_password", "dummy_mfa"]
 
     async def test_identity_one_factor_not_enrolled(
         self,
@@ -373,6 +377,7 @@ class TestAdvance:
             expires_at=get_current_timestamp() + 3600,
             identity_id=2,
             amr=[AuthenticationMethodReference.PWD],
+            used_factors=["dummy_password"],
         )
         session.id = await authentication_session_service.insert(session)
 
@@ -400,6 +405,7 @@ class TestComplete:
             AuthenticationMethodReference.PWD,
             AuthenticationMethodReference.MFA,
         ]
+        assert session.used_factors == ["dummy_password", "dummy_mfa"]
 
         # Verify session was deleted
         deleted = await authentication_session_service.get_by_token_hash(

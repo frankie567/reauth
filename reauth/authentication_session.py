@@ -17,6 +17,7 @@ class AuthenticationSession:
     expires_at: int
     identity_id: typing.Any | None
     amr: list[AuthenticationMethodReference] = dataclasses.field(default_factory=list)
+    used_factors: list[str] = dataclasses.field(default_factory=list)
 
     def is_expired(self) -> bool:
         """
@@ -189,6 +190,7 @@ class AuthenticationSessionService(abc.ABC):
 
         authentication_session.identity_id = identity_id
         authentication_session.amr.append(factor.AMR)
+        authentication_session.used_factors.append(factor.identifier)
         await self.update(authentication_session)
 
         return authentication_session
