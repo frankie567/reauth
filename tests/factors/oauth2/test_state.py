@@ -4,12 +4,14 @@ from collections.abc import AsyncGenerator
 
 import pytest
 from sqlalchemy import (
+    JSON,
     BigInteger,
     Column,
     Integer,
     MetaData,
     String,
     Table,
+    delete,
     insert,
     select,
 )
@@ -33,6 +35,7 @@ oauth2_state_table = Table(
     Column("nonce", String(128), nullable=True),
     Column("redirect_uri", String(512), nullable=False),
     Column("identity_id", BigInteger, nullable=True),
+    Column("scope", JSON, nullable=True),
     Column("expires_at", BigInteger, nullable=False),
 )
 
@@ -74,9 +77,7 @@ class SQLAlchemyOAuth2StateService(OAuth2StateService):
     async def delete(self, oauth2_state: OAuth2State) -> None:
         """Delete OAuth2 state from the database."""
         await self.connection.execute(
-            oauth2_state_table.delete().where(
-                oauth2_state_table.c.id == oauth2_state.id
-            )
+            delete(oauth2_state_table).where(oauth2_state_table.c.id == oauth2_state.id)
         )
 
 
@@ -166,6 +167,27 @@ class TestOAuth2StateCreate:
         )
 
         assert oauth2_state.code_verifier is None
+
+    async def test_with_scope(
+        self, oauth2_state_service: SQLAlchemyOAuth2StateService
+    ) -> None:
+        _, oauth2_state = await oauth2_state_service.create(
+            provider="google",
+            redirect_uri="https://example.com/callback",
+            scope=["read", "write", "profile"],
+        )
+
+        assert oauth2_state.scope == ["read", "write", "profile"]
+
+    async def test_without_scope(
+        self, oauth2_state_service: SQLAlchemyOAuth2StateService
+    ) -> None:
+        _, oauth2_state = await oauth2_state_service.create(
+            provider="google",
+            redirect_uri="https://example.com/callback",
+        )
+
+        assert oauth2_state.scope is None
 
 
 @pytest.mark.anyio

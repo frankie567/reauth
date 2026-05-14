@@ -21,6 +21,7 @@ class OAuth2State:
     nonce: str | None
     redirect_uri: str
     identity_id: typing.Any | None
+    scope: list[str] | None
     expires_at: int
 
 
@@ -62,6 +63,7 @@ class OAuth2StateService(abc.ABC):
         identity_id: typing.Any | None = None,
         nonce: str | None = None,
         code_verifier: str | None = None,
+        scope: list[str] | None = None,
     ) -> tuple[str, OAuth2State]:
         """
         Create a new OAuth2 state and store it.
@@ -81,6 +83,7 @@ class OAuth2StateService(abc.ABC):
             nonce=nonce,
             redirect_uri=redirect_uri,
             identity_id=identity_id,
+            scope=scope,
             expires_at=get_current_timestamp() + int(self.lifetime.total_seconds()),
         )
         oauth2_state.id = await self.insert(oauth2_state)

@@ -72,6 +72,12 @@ class AuthenticationMethodReference(StrEnum):
     This is a custom extension to RFC 8176, not part of the standard.
     """
 
+    OAUTH2 = "oauth2"
+    """OAuth 2.0 authentication, including social login.
+
+    This is a custom extension to RFC 8176, not part of the standard.
+    """
+
     # Multi-factor and risk-based methods
     MFA = "mfa"
     """Multiple-factor authentication."""

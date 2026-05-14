@@ -129,7 +129,7 @@ class EmailOTPFactor(FactorBase[EmailOTPEnrollment], abc.ABC):
         return code, email_otp
 
     async def consume(
-        self, code: str, authentication_session_id: object
+        self, code: str, authentication_session_id: typing.Any
     ) -> tuple[typing.Any, str]:
         """
         Consume an OTP code, deleting it from the persistent store if valid.
