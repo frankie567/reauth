@@ -88,7 +88,7 @@ class AuthenticationSessionService(abc.ABC):
         *,
         hash_secret: str,
         factors: set[FactorBase[typing.Any]],
-        token_prefix: str = "ls_",
+        token_prefix: str = "reauth_as_",
         lifetime: datetime.timedelta = datetime.timedelta(minutes=15),
     ) -> None:
         logger.debug(
