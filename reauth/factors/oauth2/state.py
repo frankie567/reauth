@@ -23,7 +23,6 @@ class OAuth2State:
     identity_id: typing.Any | None
     scope: list[str] | None
     expires_at: int
-    extra: dict[str, typing.Any] | None
 
 
 class OAuth2StateException(ReauthException):
@@ -65,19 +64,9 @@ class OAuth2StateService(abc.ABC):
         nonce: str | None = None,
         code_verifier: str | None = None,
         scope: list[str] | None = None,
-        extra: dict[str, typing.Any] | None = None,
     ) -> tuple[str, OAuth2State]:
         """
         Create a new OAuth2 state and store it.
-
-        Args:
-            provider: The OAuth2 provider, usually corresponds to the factor identifier (e.g., "google", "github").
-            redirect_uri: The redirect URI to use for this OAuth2 flow.
-            identity_id: Optional identity ID to associate with this state (used for enrollment flows).
-            nonce: Optional nonce value for OIDC flows.
-            code_verifier: Optional PKCE code verifier.
-            scope: Optional list of scopes requested for this OAuth2 flow.
-            extra: Optional dictionary for any additional data to store with the state.
 
         Returns:
             A tuple of (state_token, OAuth2State).
@@ -95,7 +84,6 @@ class OAuth2StateService(abc.ABC):
             redirect_uri=redirect_uri,
             identity_id=identity_id,
             scope=scope,
-            extra=extra,
             expires_at=get_current_timestamp() + int(self.lifetime.total_seconds()),
         )
         oauth2_state.id = await self.insert(oauth2_state)
