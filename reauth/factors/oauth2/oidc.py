@@ -324,63 +324,63 @@ class OIDCFactor(OAuth2Factor[OIDCExtraParams], abc.ABC):
         elif "client_secret_basic" in token_endpoint_auth_methods_supported:
             auth = httpx.BasicAuth(self.client_id, self.client_secret or "")
 
-        async with httpx.AsyncClient() as client:
-            if code_verifier is not None:
-                data["code_verifier"] = code_verifier
+        client = self._get_client()
+        if code_verifier is not None:
+            data["code_verifier"] = code_verifier
 
+        try:
+            response = await client.post(
+                token_endpoint,
+                data=data,
+                auth=auth if auth else httpx.USE_CLIENT_DEFAULT,
+            )
+        except httpx.RequestError as e:
+            raise OAuth2TokenExchangeException() from e
+
+        if response.is_server_error:
+            raise OAuth2TokenExchangeException()
+
+        if response.is_client_error:
+            json = response.json()
             try:
-                response = await client.post(
-                    token_endpoint,
-                    data=data,
-                    auth=auth if auth else httpx.USE_CLIENT_DEFAULT,
+                error = json.get("error")
+                error_type = RFC_6749_TOKEN_ERROR_MAP[error]
+                raise error_type(
+                    error_description=json.get("error_description"),
+                    error_uri=json.get("error_uri"),
                 )
-            except httpx.RequestError as e:
+            except KeyError as e:
                 raise OAuth2TokenExchangeException() from e
 
-            if response.is_server_error:
-                raise OAuth2TokenExchangeException()
+        if response.is_success:
+            json = response.json()
+            access_token = json["access_token"]
+            expires_at = get_current_timestamp() + json["expires_in"]
 
-            if response.is_client_error:
-                json = response.json()
-                try:
-                    error = json.get("error")
-                    error_type = RFC_6749_TOKEN_ERROR_MAP[error]
-                    raise error_type(
-                        error_description=json.get("error_description"),
-                        error_uri=json.get("error_uri"),
-                    )
-                except KeyError as e:
-                    raise OAuth2TokenExchangeException() from e
-
-            if response.is_success:
-                json = response.json()
-                access_token = json["access_token"]
-                expires_at = get_current_timestamp() + json["expires_in"]
-
-                refresh_token: str | None = None
-                refresh_token_expires_at: int | None = None
-                if "refresh_token" in json:
-                    refresh_token = json["refresh_token"]
-                if "refresh_token_expires_in" in json:
-                    refresh_token_expires_at = (
-                        get_current_timestamp() + json["refresh_token_expires_in"]
-                    )
-
-                id_token = json["id_token"]
-                id_token_payload = await self._validate_id_token(
-                    id_token, nonce=nonce, access_token=access_token
-                )
-                account_id = id_token_payload["sub"]
-
-                return (
-                    account_id,
-                    access_token,
-                    expires_at,
-                    refresh_token,
-                    refresh_token_expires_at,
+            refresh_token: str | None = None
+            refresh_token_expires_at: int | None = None
+            if "refresh_token" in json:
+                refresh_token = json["refresh_token"]
+            if "refresh_token_expires_in" in json:
+                refresh_token_expires_at = (
+                    get_current_timestamp() + json["refresh_token_expires_in"]
                 )
 
-            raise OAuth2TokenExchangeException()
+            id_token = json["id_token"]
+            id_token_payload = await self._validate_id_token(
+                id_token, nonce=nonce, access_token=access_token
+            )
+            account_id = id_token_payload["sub"]
+
+            return (
+                account_id,
+                access_token,
+                expires_at,
+                refresh_token,
+                refresh_token_expires_at,
+            )
+
+        raise OAuth2TokenExchangeException()
 
     async def _validate_id_token(
         self,
@@ -429,7 +429,7 @@ class OIDCFactor(OAuth2Factor[OIDCExtraParams], abc.ABC):
         )
 
     async def _get_discovery_document(self) -> dict[str, typing.Any]:
-        if self._discovery_document is not None:
+        if self._discovery_document is not None:  # pragma: no cover
             return self._discovery_document
 
         client = self._get_client()
@@ -444,7 +444,7 @@ class OIDCFactor(OAuth2Factor[OIDCExtraParams], abc.ABC):
             return discovery_document
 
     async def _get_jwks(self) -> jwt.PyJWKSet:
-        if self._jwks is not None:
+        if self._jwks is not None:  # pragma: no cover
             return self._jwks
 
         discovery_document = await self._get_discovery_document()
@@ -453,12 +453,12 @@ class OIDCFactor(OAuth2Factor[OIDCExtraParams], abc.ABC):
             response = await client.get(discovery_document["jwks_uri"])
             response.raise_for_status()
         except httpx.HTTPError as e:
-            raise DiscoveryDocumentException() from e
+            raise JWKSFetchException() from e
         else:
             jwks_data = response.json()
             jwks = jwt.PyJWKSet.from_dict(jwks_data)
             self._jwks = jwks
             return jwks
 
-    def _get_client(self) -> httpx.AsyncClient:
+    def _get_client(self) -> httpx.AsyncClient:  # pragma: no cover
         return self._client

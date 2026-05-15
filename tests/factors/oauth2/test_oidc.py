@@ -1,18 +1,35 @@
 import base64
 import secrets
 import typing
+import urllib.parse
 
+import httpx
 import jwt
 import pytest
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography.hazmat.primitives.asymmetric.rsa import RSAPrivateKey
+from sqlalchemy.ext.asyncio import AsyncConnection
 
+from reauth.factors.oauth2.base import (
+    OAuth2Enrollment,
+    OAuth2InvalidClientException,
+    OAuth2InvalidGrantException,
+    OAuth2TokenExchangeException,
+    OAuth2TokenInvalidRequestException,
+    OAuth2TokenUnauthorizedClientException,
+    OAuth2TokenUnsupportedGrantTypeException,
+)
 from reauth.factors.oauth2.oidc import (
+    DiscoveryDocumentException,
     InvalidIDTokenException,
+    JWKSFetchException,
+    OIDCFactor,
     validate_id_token,
 )
 from reauth.timestamp import get_current_timestamp
+
+from .conftest import SQLAlchemyOAuth2StateService
 
 
 def generate_rsa_key() -> RSAPrivateKey:
@@ -70,6 +87,122 @@ def create_id_token(
     return jwt.encode(claims, key, algorithm="RS256", headers=headers)
 
 
+DISCOVERY_ENDPOINT = "https://provider.example.com/.well-known/openid-configuration"
+AUTHORIZATION_ENDPOINT = "https://provider.example.com/auth"
+TOKEN_ENDPOINT = "https://provider.example.com/token"
+JWKS_URI = "https://provider.example.com/jwks"
+ISSUER = "https://provider.example.com"
+
+
+def _create_token_response(
+    key: RSAPrivateKey,
+    *,
+    client_id: str,
+    access_token: str = "test-access-token",
+    refresh_token: str = "test-refresh-token",
+    nonce: str | None = None,
+) -> dict[str, typing.Any]:
+    """Create a test token response with a valid ID token."""
+    id_token = create_id_token(
+        key,
+        issuer=ISSUER,
+        audience=client_id,
+        nonce=nonce,
+        access_token=access_token,
+    )
+    return {
+        "access_token": access_token,
+        "expires_in": 3600,
+        "refresh_token": refresh_token,
+        "refresh_token_expires_in": 7200,
+        "id_token": id_token,
+    }
+
+
+class SQLAlchemyOIDCFactor(OIDCFactor):
+    """Concrete implementation of OIDCFactor using SQLAlchemy for testing."""
+
+    DISCOVERY_ENDPOINT = DISCOVERY_ENDPOINT
+
+    def __init__(
+        self,
+        connection: AsyncConnection,
+        state_service: SQLAlchemyOAuth2StateService,
+        key: RSAPrivateKey,
+        token_endpoint_auth_methods_supported: list[str],
+    ) -> None:
+        super().__init__(
+            identifier="oidc",
+            client_id="test-client-id",
+            client_secret="test-client-secret",
+            state_service=state_service,
+        )
+
+        self.connection = connection
+        algorithm = jwt.get_algorithm_by_name("RS256")
+        jwk = {
+            **algorithm.to_jwk(key.public_key(), as_dict=True),
+            "kid": "test-key-1",
+        }
+        jwks = {"keys": [jwk]}
+
+        self.response_map = {
+            DISCOVERY_ENDPOINT: httpx.Response(
+                200,
+                json={
+                    "authorization_endpoint": AUTHORIZATION_ENDPOINT,
+                    "token_endpoint": TOKEN_ENDPOINT,
+                    "jwks_uri": JWKS_URI,
+                    "issuer": ISSUER,
+                    "id_token_signing_alg_values_supported": ["RS256"],
+                    "token_endpoint_auth_methods_supported": token_endpoint_auth_methods_supported,
+                },
+            ),
+            JWKS_URI: httpx.Response(200, json=jwks),
+            TOKEN_ENDPOINT: httpx.Response(
+                200,
+                json={
+                    "access_token": "test-access-token",
+                    "expires_in": 3600,
+                    "refresh_token": "test-refresh-token",
+                    "refresh_token_expires_in": 7200,
+                    "id_token": create_id_token(
+                        key,
+                        issuer=ISSUER,
+                        audience=self.client_id,
+                        nonce="NONCE",
+                        access_token="test-access-token",
+                    ),
+                },
+            ),
+        }
+
+    def _get_client(self) -> httpx.AsyncClient:
+        """Return an httpx.AsyncClient with MockTransport."""
+
+        def handle_request(request: httpx.Request) -> httpx.Response:
+            url = str(request.url)
+            return self.response_map.get(
+                url, httpx.Response(404, json={"error": "Not found"})
+            )
+
+        return httpx.AsyncClient(transport=httpx.MockTransport(handle_request))
+
+    async def insert(self, enrollment: OAuth2Enrollment) -> int:
+        raise NotImplementedError()
+
+    async def update(self, enrollment: OAuth2Enrollment) -> None:
+        raise NotImplementedError()
+
+    async def get_enrollment(self, identity_id: int) -> OAuth2Enrollment | None:
+        raise NotImplementedError()
+
+    async def get_enrollment_by_provider_and_account(
+        self, provider: str, account_id: str
+    ) -> OAuth2Enrollment | None:
+        raise NotImplementedError()
+
+
 @pytest.fixture
 def rsa_key() -> RSAPrivateKey:
     return generate_rsa_key()
@@ -78,6 +211,18 @@ def rsa_key() -> RSAPrivateKey:
 @pytest.fixture
 def jwks(rsa_key: RSAPrivateKey) -> jwt.PyJWKSet:
     return get_jwks_from_rsa_key(rsa_key, "test-key-1")
+
+
+@pytest.fixture(params=[["client_secret_basic"], ["client_secret_post"]])
+def oidc_factor(
+    request: pytest.FixtureRequest,
+    sqlalchemy_connection: AsyncConnection,
+    oauth2_state_service: SQLAlchemyOAuth2StateService,
+    rsa_key: RSAPrivateKey,
+) -> SQLAlchemyOIDCFactor:
+    return SQLAlchemyOIDCFactor(
+        sqlalchemy_connection, oauth2_state_service, rsa_key, request.param
+    )
 
 
 class TestValidateIDToken:
@@ -223,4 +368,194 @@ class TestValidateIDToken:
                 issuer="https://wrong-issuer.example.com",
                 client_id="test-client-id",
                 id_token_signing_alg_values_supported=["RS256"],
+            )
+
+
+@pytest.mark.anyio
+class TestOIDCFactorGetAuthorizationURL:
+    """Tests for OIDCFactor.get_authorization_url()."""
+
+    @pytest.mark.parametrize(
+        "scope,expected_scopes",
+        [
+            ([], ["openid"]),
+            (["profile"], ["openid", "profile"]),
+            (["profile", "email"], ["openid", "profile", "email"]),
+            (["openid"], ["openid"]),
+            (["openid", "profile"], ["openid", "profile"]),
+        ],
+    )
+    async def test_scope_includes_openid(
+        self,
+        oidc_factor: SQLAlchemyOIDCFactor,
+        scope: list[str],
+        expected_scopes: list[str],
+    ) -> None:
+        """Test that openid scope is automatically added."""
+        url = await oidc_factor.get_authorization_url(
+            redirect_uri="https://example.com/callback",
+            scope=scope,
+            state="test-state",
+        )
+        parsed = urllib.parse.urlparse(url)
+        params = urllib.parse.parse_qs(parsed.query)
+
+        actual_scopes = params.get("scope", [""])[0].split()
+        assert sorted(actual_scopes) == sorted(expected_scopes)
+
+    async def test_returns_authorization_endpoint_from_discovery(
+        self, oidc_factor: SQLAlchemyOIDCFactor
+    ) -> None:
+        """Test that URL uses authorization_endpoint from discovery."""
+        url = await oidc_factor.get_authorization_url(
+            redirect_uri="https://example.com/callback",
+            state="test-state",
+        )
+        assert url.startswith(f"{AUTHORIZATION_ENDPOINT}?")
+
+    async def test_includes_required_params(
+        self, oidc_factor: SQLAlchemyOIDCFactor
+    ) -> None:
+        """Test that required OAuth2 params are included."""
+        url = await oidc_factor.get_authorization_url(
+            redirect_uri="https://example.com/callback",
+            state="test-state",
+        )
+        parsed = urllib.parse.urlparse(url)
+        params = urllib.parse.parse_qs(parsed.query)
+
+        assert params["response_type"] == ["code"]
+        assert params["client_id"] == ["test-client-id"]
+        assert "redirect_uri" in params
+        assert params["state"] == ["test-state"]
+
+    async def test_includes_pkce_params(
+        self, oidc_factor: SQLAlchemyOIDCFactor
+    ) -> None:
+        """Test that PKCE params are included when provided."""
+        url = await oidc_factor.get_authorization_url(
+            redirect_uri="https://example.com/callback",
+            state="test-state",
+            code_challenge="test-challenge",
+            code_challenge_method="S256",
+        )
+        parsed = urllib.parse.urlparse(url)
+        params = urllib.parse.parse_qs(parsed.query)
+
+        assert params["code_challenge"] == ["test-challenge"]
+        assert params["code_challenge_method"] == ["S256"]
+
+    async def test_includes_nonce(self, oidc_factor: SQLAlchemyOIDCFactor) -> None:
+        """Test that nonce is included when provided."""
+        url = await oidc_factor.get_authorization_url(
+            redirect_uri="https://example.com/callback",
+            state="test-state",
+            nonce="test-nonce",
+        )
+        parsed = urllib.parse.urlparse(url)
+        params = urllib.parse.parse_qs(parsed.query)
+
+        assert params["nonce"] == ["test-nonce"]
+
+    async def test_includes_extra_params(
+        self, oidc_factor: SQLAlchemyOIDCFactor
+    ) -> None:
+        """Test that extra OIDC params are included."""
+        url = await oidc_factor.get_authorization_url(
+            redirect_uri="https://example.com/callback",
+            state="test-state",
+            extra={"prompt": "login", "login_hint": "user@example.com"},
+        )
+        parsed = urllib.parse.urlparse(url)
+        params = urllib.parse.parse_qs(parsed.query)
+
+        assert params["prompt"] == ["login"]
+        assert params["login_hint"] == ["user@example.com"]
+
+
+@pytest.mark.anyio
+class TestOIDCFactorExchangeCode:
+    """Tests for OIDCFactor.exchange_code()."""
+
+    async def test_successful_exchange(self, oidc_factor: SQLAlchemyOIDCFactor) -> None:
+        """Test successful token exchange returns correct data."""
+        (
+            account_id,
+            access_token,
+            expires_at,
+            refresh_token,
+            refresh_token_expires_at,
+        ) = await oidc_factor.exchange_code(
+            code="test-code",
+            redirect_uri="https://example.com/callback",
+        )
+
+        assert account_id == "test-user-id"
+        assert access_token == "test-access-token"
+        assert expires_at > 0
+        assert refresh_token == "test-refresh-token"
+        assert refresh_token_expires_at is not None
+        assert refresh_token_expires_at > 0
+
+    async def test_discovery_document_error(
+        self, oidc_factor: SQLAlchemyOIDCFactor
+    ) -> None:
+        """Test DiscoveryDocumentException when discovery endpoint fails."""
+        oidc_factor.response_map[DISCOVERY_ENDPOINT] = httpx.Response(
+            500, json={"error": "Server error"}
+        )
+        with pytest.raises(DiscoveryDocumentException):
+            await oidc_factor.exchange_code(
+                code="test-code",
+                redirect_uri="https://example.com/callback",
+            )
+
+    async def test_jwks_error(self, oidc_factor: SQLAlchemyOIDCFactor) -> None:
+        """Test DiscoveryDocumentException when JWKS endpoint fails."""
+        oidc_factor.response_map[JWKS_URI] = httpx.Response(
+            500, json={"error": "Server error"}
+        )
+        with pytest.raises(JWKSFetchException):
+            await oidc_factor.exchange_code(
+                code="test-code",
+                redirect_uri="https://example.com/callback",
+            )
+
+    async def test_server_error_on_token_exchange(
+        self, oidc_factor: SQLAlchemyOIDCFactor
+    ) -> None:
+        """Test OAuth2TokenExchangeException on server error."""
+        oidc_factor.response_map[TOKEN_ENDPOINT] = httpx.Response(
+            500, json={"error": "Server error"}
+        )
+        with pytest.raises(OAuth2TokenExchangeException):
+            await oidc_factor.exchange_code(
+                code="test-code",
+                redirect_uri="https://example.com/callback",
+            )
+
+    @pytest.mark.parametrize(
+        "error,expected_exception",
+        [
+            ("invalid_request", OAuth2TokenInvalidRequestException),
+            ("invalid_client", OAuth2InvalidClientException),
+            ("invalid_grant", OAuth2InvalidGrantException),
+            ("unauthorized_client", OAuth2TokenUnauthorizedClientException),
+            ("unsupported_grant_type", OAuth2TokenUnsupportedGrantTypeException),
+        ],
+    )
+    async def test_rfc6749_token_errors(
+        self,
+        oidc_factor: SQLAlchemyOIDCFactor,
+        error: str,
+        expected_exception: type[Exception],
+    ) -> None:
+        """Test that RFC 6749 token errors are properly mapped."""
+        oidc_factor.response_map[TOKEN_ENDPOINT] = httpx.Response(
+            400, json={"error": error, "error_description": "Test error"}
+        )
+        with pytest.raises(expected_exception):
+            await oidc_factor.exchange_code(
+                code="test-code",
+                redirect_uri="https://example.com/callback",
             )
