@@ -72,6 +72,48 @@ except AuthException:
 
 **OWASP checklist:** auth successes/failures, session events, authorization failures, sensitive data excluded, PII handled, disabled by default.
 
+## Data Persistence Pattern
+
+When implementing abstract methods for data persistence (insert, update, delete), follow this consistent pattern:
+
+**insert method:**
+- Signature: `async def insert(self, model: ModelType) -> typing.Any`
+- Receives the full data model containing data to persist
+- Returns only the ID of the inserted record
+
+**update method:**
+- Signature: `async def update(self, model: ModelType) -> None`
+- Receives the full data model containing data to persist
+- Returns nothing
+
+**delete method:**
+- Signature: `async def delete(self, model: ModelType) -> None`
+- Receives the full data model to delete
+- Returns nothing
+
+### Testing
+
+- Leverage `dataclasses.asdict(model)` to easily dump dataclass instances for database operations
+
+```python
+# Example implementation
+async def insert(self, enrollment: Enrollment) -> int:
+    result = await self.connection.execute(
+        insert(table).values(**dataclasses.asdict(enrollment)).returning(table.c.id)
+    )
+    return result.scalar_one()
+
+async def update(self, enrollment: Enrollment) -> None:
+    await self.connection.execute(
+        update(table).where(table.c.id == enrollment.id).values(**dataclasses.asdict(enrollment))
+    )
+
+async def delete(self, enrollment: Enrollment) -> None:
+    await self.connection.execute(
+        delete(table).where(table.c.id == enrollment.id)
+    )
+```
+
 ## Committing
 
 **Never proactively commit without being asked to do so.**
