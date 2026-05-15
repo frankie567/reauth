@@ -97,6 +97,17 @@ class TestOAuth2StateCreate:
 
         assert oauth2_state.scope is None
 
+    async def test_with_extra(
+        self, oauth2_state_service: SQLAlchemyOAuth2StateService
+    ) -> None:
+        _, oauth2_state = await oauth2_state_service.create(
+            provider="google",
+            redirect_uri="https://example.com/callback",
+            extra={"return_to": "https://example.com/dashboard"},
+        )
+
+        assert oauth2_state.extra == {"return_to": "https://example.com/dashboard"}
+
 
 @pytest.mark.anyio
 class TestOAuth2StateConsume:

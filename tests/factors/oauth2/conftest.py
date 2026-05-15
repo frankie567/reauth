@@ -34,6 +34,7 @@ oauth2_state_table = Table(
     Column("redirect_uri", String(512), nullable=False),
     Column("identity_id", BigInteger, nullable=True),
     Column("scope", JSON, nullable=True),
+    Column("extra", JSON, nullable=True),
     Column("expires_at", BigInteger, nullable=False),
 )
 
