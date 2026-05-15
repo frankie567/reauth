@@ -1,3 +1,4 @@
+import dataclasses
 import datetime
 from collections.abc import AsyncGenerator
 
@@ -13,11 +14,23 @@ from sqlalchemy import (
     delete,
     insert,
     select,
+    update,
 )
 from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine
 
-from reauth.factors.oauth2.base import OAuth2Factor
-from reauth.factors.oauth2.state import OAuth2State, OAuth2StateService
+from reauth.factors.oauth2.base import (
+    OAuth2Enrollment,
+    OAuth2Factor,
+    OAuth2IdentityMismatchException,
+    OAuth2MissingCodeException,
+    OAuth2NoIdentityException,
+)
+from reauth.factors.oauth2.state import (
+    ExpiredStateException,
+    InvalidStateException,
+    OAuth2State,
+    OAuth2StateService,
+)
 
 sqlalchemy_meta = MetaData()
 oauth2_state_table = Table(
@@ -32,6 +45,21 @@ oauth2_state_table = Table(
     Column("identity_id", BigInteger, nullable=True),
     Column("scope", JSON, nullable=True),
     Column("expires_at", BigInteger, nullable=False),
+)
+
+# Enrollment table for testing
+oauth2_enrollment_table = Table(
+    "oauth2_enrollments",
+    sqlalchemy_meta,
+    Column("id", Integer, primary_key=True),
+    Column("identity_id", BigInteger, nullable=False),
+    Column("provider", String(64), nullable=False),
+    Column("account_id", String(128), nullable=False),
+    Column("access_token", String(512), nullable=False),
+    Column("expires_at", BigInteger, nullable=True),
+    Column("refresh_token", String(512), nullable=True),
+    Column("refresh_token_expires_at", BigInteger, nullable=True),
+    Column("scope", JSON, nullable=True),
 )
 
 
@@ -76,12 +104,41 @@ class SQLAlchemyOAuth2StateService(OAuth2StateService):
         )
 
 
-class ConcreteOAuth2Factor(OAuth2Factor):
-    """Concrete implementation for testing."""
+class SQLAlchemyOAuth2Factor(OAuth2Factor):
+    """Concrete implementation of OAuth2Factor using SQLAlchemy for testing."""
 
-    async def get_enrollment(self, identity_id: int) -> None:
-        """Mock implementation for testing."""
-        return None
+    def __init__(
+        self,
+        connection: AsyncConnection,
+        *,
+        identifier: str = "test",
+        client_id: str = "test-client-id",
+        hash_secret: str = "test-secret",
+        lifetime: datetime.timedelta = datetime.timedelta(minutes=10),
+    ) -> None:
+        self.connection = connection
+        state_service = SQLAlchemyOAuth2StateService(
+            connection=connection,
+            hash_secret=hash_secret,
+            lifetime=lifetime,
+        )
+        super().__init__(
+            identifier=identifier,
+            client_id=client_id,
+            state_service=state_service,
+        )
+
+    async def get_enrollment(self, identity_id: int) -> OAuth2Enrollment | None:
+        """Get enrollment by identity_id."""
+        result = await self.connection.execute(
+            select(oauth2_enrollment_table).where(
+                oauth2_enrollment_table.c.identity_id == identity_id
+            )
+        )
+        row = result.fetchone()
+        if row is None:
+            return None
+        return OAuth2Enrollment(**row._asdict())
 
     async def get_authorization_url(
         self,
@@ -95,6 +152,56 @@ class ConcreteOAuth2Factor(OAuth2Factor):
         extra: dict[str, str] | None = None,
     ) -> str:
         return f"https://provider.example.com/auth?state={state}"
+
+    async def exchange_code(
+        self,
+        *,
+        code: str,
+        redirect_uri: str,
+        code_verifier: str | None = None,
+    ) -> tuple[str, str, int, str | None, int | None]:
+        """Exchange code for token - returns mock data."""
+        return (
+            "test-access-token",
+            "test-account-id",
+            3600,
+            "test-refresh-token",
+            7200,
+        )
+
+    async def insert(self, enrollment: OAuth2Enrollment) -> int:
+        """Insert an OAuth2 enrollment into the database."""
+        result = await self.connection.execute(
+            insert(oauth2_enrollment_table)
+            .values(**dataclasses.asdict(enrollment))
+            .returning(oauth2_enrollment_table.c.id)
+        )
+        return result.scalar_one()
+
+    async def update(self, enrollment: OAuth2Enrollment) -> None:
+        """Update an OAuth2 enrollment in the database."""
+        await self.connection.execute(
+            update(oauth2_enrollment_table)
+            .where(oauth2_enrollment_table.c.id == enrollment.id)
+            .values(**dataclasses.asdict(enrollment))
+        )
+
+    async def get_enrollment_by_provider_and_account(
+        self,
+        provider: str,
+        account_id: str,
+    ) -> OAuth2Enrollment | None:
+        """Get enrollment by provider and account_id."""
+        result = await self.connection.execute(
+            select(oauth2_enrollment_table).where(
+                oauth2_enrollment_table.c.provider == provider,
+                oauth2_enrollment_table.c.account_id == account_id,
+            )
+        )
+        row = result.fetchone()
+        if row is None:
+            return None
+        return OAuth2Enrollment(**row._asdict())
 
 
 @pytest.fixture
@@ -122,20 +229,22 @@ def oauth2_state_service(
 
 @pytest.fixture
 def oauth2_factor(
-    oauth2_state_service: SQLAlchemyOAuth2StateService,
-) -> ConcreteOAuth2Factor:
-    """Fixture providing a concrete OAuth2 factor for testing."""
-    return ConcreteOAuth2Factor(
+    sqlalchemy_connection: AsyncConnection,
+) -> SQLAlchemyOAuth2Factor:
+    """Fixture providing an OAuth2 factor for testing."""
+    return SQLAlchemyOAuth2Factor(
+        connection=sqlalchemy_connection,
         identifier="test",
         client_id="test-client-id",
-        state_service=oauth2_state_service,
+        hash_secret="test-secret",
+        lifetime=datetime.timedelta(minutes=10),
     )
 
 
 @pytest.mark.anyio
 class TestOAuth2FactorStart:
     async def test_returns_url_token_and_state(
-        self, oauth2_factor: ConcreteOAuth2Factor
+        self, oauth2_factor: SQLAlchemyOAuth2Factor
     ) -> None:
         """start() returns authorization URL, state token, and state."""
         authorization_url, state_token, oauth2_state = await oauth2_factor.start(
@@ -152,7 +261,7 @@ class TestOAuth2FactorStart:
         assert oauth2_state.provider == "google"
 
     async def test_generates_pkce_with_s256(
-        self, oauth2_factor: ConcreteOAuth2Factor
+        self, oauth2_factor: SQLAlchemyOAuth2Factor
     ) -> None:
         """start() generates PKCE code_verifier when S256 is specified."""
         _, _, oauth2_state = await oauth2_factor.start(
@@ -162,3 +271,232 @@ class TestOAuth2FactorStart:
         )
 
         assert oauth2_state.code_verifier is not None
+
+
+@pytest.mark.anyio
+class TestOAuth2FactorCallback:
+    """Test OAuth2 callback functionality."""
+
+    @pytest.mark.parametrize(
+        "error,error_description",
+        [
+            ("access_denied", None),
+            ("access_denied", "User denied access"),
+            ("invalid_request", None),
+            ("unauthorized_client", None),
+            ("unsupported_response_type", None),
+            ("invalid_scope", None),
+            ("server_error", None),
+            ("temporarily_unavailable", None),
+            ("custom_error", None),
+        ],
+    )
+    async def test_error_handling(
+        self,
+        sqlalchemy_connection: AsyncConnection,
+        error: str,
+        error_description: str | None,
+    ) -> None:
+        """Test that OAuth2 errors are properly handled."""
+        factor = SQLAlchemyOAuth2Factor(
+            connection=sqlalchemy_connection,
+            identifier="test",
+            client_id="test-client-id",
+            hash_secret="test-secret",
+            lifetime=datetime.timedelta(minutes=10),
+        )
+        with pytest.raises(Exception):
+            await factor.callback(
+                code="some-code",
+                state="invalid-state",
+                error=error,
+                error_description=error_description,
+            )
+
+    async def test_missing_code_error(
+        self, oauth2_factor: SQLAlchemyOAuth2Factor
+    ) -> None:
+        """Test that missing code raises appropriate exception."""
+        with pytest.raises(OAuth2MissingCodeException):
+            await oauth2_factor.callback(
+                code=None,
+                state="invalid-state",
+            )
+
+    async def test_invalid_state_error(
+        self, oauth2_factor: SQLAlchemyOAuth2Factor
+    ) -> None:
+        """Test that invalid state raises appropriate exception."""
+        with pytest.raises(InvalidStateException):
+            await oauth2_factor.callback(
+                code="some-code",
+                state="invalid-state-token",
+            )
+
+    async def test_expired_state_error(
+        self, sqlalchemy_connection: AsyncConnection
+    ) -> None:
+        """Test that expired state raises appropriate exception."""
+        factor = SQLAlchemyOAuth2Factor(
+            connection=sqlalchemy_connection,
+            identifier="test",
+            client_id="test-client-id",
+            hash_secret="test-secret",
+            lifetime=datetime.timedelta(seconds=0),  # Expires immediately
+        )
+        _, state_token, _ = await factor.start(
+            provider="google",
+            redirect_uri="https://example.com/callback",
+        )
+        with pytest.raises(ExpiredStateException):
+            await factor.callback(
+                code="some-code",
+                state=state_token,
+            )
+
+    async def test_creates_new_enrollment(
+        self, oauth2_factor: SQLAlchemyOAuth2Factor
+    ) -> None:
+        """Test callback creates new enrollment when no existing one."""
+        _, state_token, _ = await oauth2_factor.start(
+            provider="google",
+            redirect_uri="https://example.com/callback",
+            identity_id=123,
+            scope=["read", "write"],
+        )
+
+        enrollment = await oauth2_factor.callback(
+            code="test-code",
+            state=state_token,
+        )
+
+        assert enrollment is not None
+        assert enrollment.identity_id == 123
+        assert enrollment.provider == "google"
+        assert enrollment.account_id == "test-account-id"
+        assert enrollment.access_token == "test-access-token"
+        assert enrollment.scope == ["read", "write"]
+
+    async def test_updates_existing_enrollment(
+        self, oauth2_factor: SQLAlchemyOAuth2Factor
+    ) -> None:
+        """Test callback updates existing enrollment for same provider/account."""
+        initial = OAuth2Enrollment(
+            id=None,
+            identity_id=456,
+            provider="google",
+            account_id="test-account-id",
+            access_token="old-token",
+            expires_at=1000,
+            refresh_token=None,
+            refresh_token_expires_at=None,
+            scope=["old_scope"],
+        )
+        initial.id = await oauth2_factor.insert(initial)
+
+        _, state_token, _ = await oauth2_factor.start(
+            provider="google",
+            redirect_uri="https://example.com/callback",
+            scope=["new_scope"],
+        )
+
+        enrollment = await oauth2_factor.callback(
+            code="test-code",
+            state=state_token,
+        )
+
+        assert enrollment.id == initial.id
+        assert enrollment.identity_id == 456
+        assert enrollment.access_token == "test-access-token"
+        assert enrollment.scope == ["new_scope"]
+
+    async def test_identity_mismatch_error(
+        self, oauth2_factor: SQLAlchemyOAuth2Factor
+    ) -> None:
+        """Test callback raises error when state identity doesn't match existing enrollment."""
+        enrollment = OAuth2Enrollment(
+            id=None,
+            identity_id=789,
+            provider="google",
+            account_id="test-account-id",
+            access_token="old-token",
+            expires_at=1000,
+            refresh_token=None,
+            refresh_token_expires_at=None,
+            scope=[],
+        )
+        enrollment.id = await oauth2_factor.insert(enrollment)
+
+        _, state_token, _ = await oauth2_factor.start(
+            provider="google",
+            redirect_uri="https://example.com/callback",
+            identity_id=999,
+        )
+
+        with pytest.raises(OAuth2IdentityMismatchException):
+            await oauth2_factor.callback(
+                code="test-code",
+                state=state_token,
+            )
+
+    async def test_no_identity_error(
+        self, oauth2_factor: SQLAlchemyOAuth2Factor
+    ) -> None:
+        """Test callback raises error when no existing enrollment and no state identity."""
+        _, state_token, _ = await oauth2_factor.start(
+            provider="google",
+            redirect_uri="https://example.com/callback",
+        )
+
+        with pytest.raises(OAuth2NoIdentityException):
+            await oauth2_factor.callback(
+                code="test-code",
+                state=state_token,
+            )
+
+    async def test_uses_existing_enrollment_identity(
+        self, oauth2_factor: SQLAlchemyOAuth2Factor
+    ) -> None:
+        """Test callback uses existing enrollment's identity when state has no identity."""
+        enrollment = OAuth2Enrollment(
+            id=None,
+            identity_id=111,
+            provider="google",
+            account_id="test-account-id",
+            access_token="old-token",
+            expires_at=1000,
+            refresh_token=None,
+            refresh_token_expires_at=None,
+            scope=[],
+        )
+        enrollment.id = await oauth2_factor.insert(enrollment)
+
+        _, state_token, _ = await oauth2_factor.start(
+            provider="google",
+            redirect_uri="https://example.com/callback",
+        )
+
+        enrollment_result = await oauth2_factor.callback(
+            code="test-code",
+            state=state_token,
+        )
+
+        assert enrollment_result.identity_id == 111
+
+    async def test_uses_state_scope(
+        self, oauth2_factor: SQLAlchemyOAuth2Factor
+    ) -> None:
+        """Test callback uses scope from state, not from exchange_code."""
+        _, state_token, _ = await oauth2_factor.start(
+            provider="google",
+            redirect_uri="https://example.com/callback",
+            identity_id=222,
+            scope=["state_scope"],
+        )
+
+        enrollment = await oauth2_factor.callback(
+            code="test-code",
+            state=state_token,
+        )
+
+        assert enrollment.scope == ["state_scope"]
