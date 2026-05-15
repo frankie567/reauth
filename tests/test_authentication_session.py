@@ -41,6 +41,7 @@ authentication_session_table = Table(
     Column("identity_id", Integer, nullable=True),
     Column("amr", JSON, nullable=False),
     Column("used_factors", JSON, nullable=False),
+    Column("context", JSON, nullable=True),
     sqlite_autoincrement=True,
 )
 
@@ -191,6 +192,28 @@ class TestAuthenticationSessionStart:
         )
         assert session.token_hash == token_hash
 
+    async def test_start_with_context(
+        self, authentication_session_service: SQLAlchemyAuthenticationSession
+    ) -> None:
+        """Test that context can be passed to start() and stored in session."""
+        token, session = await authentication_session_service.start(
+            return_to="https://example.com/dashboard",
+            original_path="/protected-page",
+        )
+
+        assert session.context == {
+            "return_to": "https://example.com/dashboard",
+            "original_path": "/protected-page",
+        }
+
+    async def test_start_without_context(
+        self, authentication_session_service: SQLAlchemyAuthenticationSession
+    ) -> None:
+        """Test that context is None when no context is passed."""
+        token, session = await authentication_session_service.start()
+
+        assert session.context is None
+
 
 @pytest.mark.anyio
 class TestAuthenticationSessionGetByToken:
@@ -213,6 +236,7 @@ class TestAuthenticationSessionGetByToken:
                 token_hash=token_hash,
                 expires_at=0,
                 identity_id=None,
+                context=None,
             )
         )
 
@@ -232,6 +256,7 @@ class TestAuthenticationSessionGetByToken:
                 token_hash=token_hash,
                 expires_at=get_current_timestamp() + 3600,
                 identity_id=None,
+                context=None,
             )
         )
 
@@ -253,6 +278,7 @@ class TestGetAvailableFactors:
             token_hash=token_hash,
             expires_at=get_current_timestamp() + 3600,
             identity_id=None,
+            context=None,
         )
         session.id = await authentication_session_service.insert(session)
 
@@ -275,6 +301,7 @@ class TestGetAvailableFactors:
             identity_id=1,
             amr=[AuthenticationMethodReference.PWD],
             used_factors=["dummy_password"],
+            context=None,
         )
         session.id = await authentication_session_service.insert(session)
 
@@ -297,6 +324,7 @@ class TestGetAvailableFactors:
             identity_id=2,
             amr=[AuthenticationMethodReference.PWD],
             used_factors=["dummy_password"],
+            context=None,
         )
         session.id = await authentication_session_service.insert(session)
 
@@ -321,6 +349,7 @@ class TestAdvance:
             token_hash=token_hash,
             expires_at=get_current_timestamp() + 3600,
             identity_id=None,
+            context=None,
         )
         session.id = await authentication_session_service.insert(session)
 
@@ -348,6 +377,7 @@ class TestAdvance:
             identity_id=1,
             amr=[AuthenticationMethodReference.PWD],
             used_factors=["dummy_password"],
+            context=None,
         )
         session.id = await authentication_session_service.insert(session)
 
@@ -378,6 +408,7 @@ class TestAdvance:
             identity_id=2,
             amr=[AuthenticationMethodReference.PWD],
             used_factors=["dummy_password"],
+            context=None,
         )
         session.id = await authentication_session_service.insert(session)
 

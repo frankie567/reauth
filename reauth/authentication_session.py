@@ -21,6 +21,7 @@ class AuthenticationSession:
     identity_id: typing.Any | None
     amr: list[AuthenticationMethodReference] = dataclasses.field(default_factory=list)
     used_factors: list[str] = dataclasses.field(default_factory=list)
+    context: dict[str, typing.Any] | None = None
 
     def is_expired(self) -> bool:
         """
@@ -104,9 +105,13 @@ class AuthenticationSessionService(abc.ABC):
         self.token_prefix = token_prefix
         self.lifetime = lifetime
 
-    async def start(self) -> tuple[str, AuthenticationSession]:
+    async def start(self, **context: typing.Any) -> tuple[str, AuthenticationSession]:
         """
         Start a fresh authentication session.
+
+        Args:
+            **context: Optional keyword arguments for any additional data to store with
+                the session (e.g., return_to="https://example.com/dashboard").
 
         Returns:
             A tuple of (token, AuthenticationSession instance).
@@ -119,6 +124,7 @@ class AuthenticationSessionService(abc.ABC):
             token_hash=token_hash,
             expires_at=get_current_timestamp() + int(self.lifetime.total_seconds()),
             identity_id=None,
+            context=context if context else None,
         )
         authentication_session.id = await self.insert(authentication_session)
         logger.info(
