@@ -8,7 +8,7 @@ from reauth.logging import get_logger
 from ...amr import AuthenticationMethodReference
 from ..base import FactorBase
 from .pkce import CodeChallengeMethod, generate_code_challenge, generate_code_verifier
-from .state import OAuth2StateService
+from .state import OAuth2State, OAuth2StateService
 
 logger = get_logger(__name__)
 
@@ -158,7 +158,7 @@ class OAuth2Factor[EXTRA](FactorBase[OAuth2Enrollment], abc.ABC):
         code_challenge_method: CodeChallengeMethod | None = None,
         nonce: str | None = None,
         extra: EXTRA | None = None,
-    ) -> tuple[str, str, typing.Any]:
+    ) -> tuple[str, str, OAuth2State]:
         """Start the OAuth2 authorization flow.
 
         1. Generates PKCE code_verifier/code_challenge if method is provided.
