@@ -33,6 +33,13 @@ class OAuth2Exception(ReauthException):
 class OAuth2TokenException(OAuth2Exception):
     """Base exception for OAuth2 token endpoint errors (RFC 6749 Section 5.2)."""
 
+    def __init__(
+        self, error_description: str | None = None, error_uri: str | None = None
+    ) -> None:
+        super().__init__()
+        self.error_description = error_description
+        self.error_uri = error_uri
+
 
 class OAuth2TokenExchangeException(OAuth2TokenException):
     """Raised when token exchange fails."""
@@ -114,7 +121,7 @@ _RFC_6749_AUTH_ERROR_MAP: dict[str, type[OAuth2CallbackException]] = {
 }
 
 # RFC 6749 token endpoint error mapping (Section 5.2)
-_RFC_6749_TOKEN_ERROR_MAP: dict[str, type[OAuth2TokenException]] = {
+RFC_6749_TOKEN_ERROR_MAP: dict[str, type[OAuth2TokenException]] = {
     "invalid_client": OAuth2InvalidClientException,
     "invalid_grant": OAuth2InvalidGrantException,
     "invalid_request": OAuth2TokenInvalidRequestException,
@@ -123,7 +130,7 @@ _RFC_6749_TOKEN_ERROR_MAP: dict[str, type[OAuth2TokenException]] = {
 }
 
 
-class OAuth2Factor(FactorBase[OAuth2Enrollment], abc.ABC):
+class OAuth2Factor[EXTRA](FactorBase[OAuth2Enrollment], abc.ABC):
     AMR: typing.ClassVar[AuthenticationMethodReference] = (
         AuthenticationMethodReference.OAUTH2
     )
@@ -151,7 +158,7 @@ class OAuth2Factor(FactorBase[OAuth2Enrollment], abc.ABC):
         identity_id: typing.Any | None = None,
         code_challenge_method: CodeChallengeMethod | None = None,
         nonce: str | None = None,
-        extra: dict[str, str] | None = None,
+        extra: EXTRA | None = None,
     ) -> tuple[str, str, typing.Any]:
         """Start the OAuth2 authorization flow.
 
@@ -295,8 +302,8 @@ class OAuth2Factor(FactorBase[OAuth2Enrollment], abc.ABC):
 
         # Step 4: Exchange code for token
         (
-            access_token,
             account_id,
+            access_token,
             expires_at,
             refresh_token,
             refresh_token_expires_at,
@@ -304,6 +311,7 @@ class OAuth2Factor(FactorBase[OAuth2Enrollment], abc.ABC):
             code=code,
             redirect_uri=oauth2_state.redirect_uri,
             code_verifier=oauth2_state.code_verifier,
+            nonce=oauth2_state.nonce,
         )
 
         logger.info(
@@ -409,7 +417,7 @@ class OAuth2Factor(FactorBase[OAuth2Enrollment], abc.ABC):
         code_challenge: str | None = None,
         code_challenge_method: CodeChallengeMethod | None = None,
         nonce: str | None = None,
-        extra: dict[str, str] | None = None,
+        extra: EXTRA | None = None,
     ) -> str:
         """Generate the authorization URL for the OAuth2 provider.
 
@@ -437,6 +445,7 @@ class OAuth2Factor(FactorBase[OAuth2Enrollment], abc.ABC):
         code: str,
         redirect_uri: str,
         code_verifier: str | None = None,
+        nonce: str | None = None,
     ) -> tuple[str, str, int, str | None, int | None]:
         """Exchange authorization code for access token (RFC 6749 Section 4.1.3).
 
@@ -448,12 +457,11 @@ class OAuth2Factor(FactorBase[OAuth2Enrollment], abc.ABC):
             code: The authorization code from the callback.
             redirect_uri: The redirect URI used in the authorization request.
             code_verifier: PKCE code verifier (if PKCE was used).
+            nonce: OpenID Connect nonce for ID Token validation.
 
         Returns:
             A tuple of:
-            (access_token, account_id, expires_at, refresh_token, refresh_token_expires_at)
-
-            Note: scope is NOT returned here - use oauth2_state.scope instead.
+            (account_id, access_token, expires_at, refresh_token, refresh_token_expires_at)
 
         Raises:
             OAuth2TokenExchangeException: If token exchange fails.

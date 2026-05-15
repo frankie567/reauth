@@ -161,11 +161,12 @@ class SQLAlchemyOAuth2Factor(OAuth2Factor):
         code: str,
         redirect_uri: str,
         code_verifier: str | None = None,
+        nonce: str | None = None,
     ) -> tuple[str, str, int, str | None, int | None]:
         """Exchange code for token - returns mock data."""
         return (
-            "test-access-token",
             "test-account-id",
+            "test-access-token",
             3600,
             "test-refresh-token",
             7200,
