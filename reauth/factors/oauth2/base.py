@@ -152,7 +152,6 @@ class OAuth2Factor[EXTRA](FactorBase[OAuth2Enrollment], abc.ABC):
     async def start(
         self,
         *,
-        provider: str,
         redirect_uri: str,
         scope: list[str] | None = None,
         identity_id: typing.Any | None = None,
@@ -168,7 +167,6 @@ class OAuth2Factor[EXTRA](FactorBase[OAuth2Enrollment], abc.ABC):
         4. Returns (authorization_url, state_token, oauth2_state).
 
         Args:
-            provider: The OAuth2 provider identifier.
             redirect_uri: The callback URI.
             scope: List of requested scopes.
             identity_id: Optional identity ID to associate with the state.
@@ -193,7 +191,7 @@ class OAuth2Factor[EXTRA](FactorBase[OAuth2Enrollment], abc.ABC):
 
         # Create state
         state_token, oauth2_state = await self.state_service.create(
-            provider=provider,
+            provider=self.identifier,
             redirect_uri=redirect_uri,
             identity_id=identity_id,
             nonce=nonce,
@@ -204,7 +202,7 @@ class OAuth2Factor[EXTRA](FactorBase[OAuth2Enrollment], abc.ABC):
         logger.info(
             "OAuth2 flow started",
             extra={
-                "provider": provider,
+                "provider": self.identifier,
                 "identity_id": identity_id,
                 "code_challenge_method": code_challenge_method,
             },

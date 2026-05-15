@@ -28,7 +28,7 @@ class SQLAlchemyOAuth2Factor(OAuth2Factor):
         connection: AsyncConnection,
         state_service: SQLAlchemyOAuth2StateService,
         *,
-        identifier: str = "test",
+        identifier: str = "provider",
         client_id: str = "test-client-id",
         client_secret: str | None = None,
     ) -> None:
@@ -133,7 +133,6 @@ class TestOAuth2FactorStart:
     ) -> None:
         """start() returns authorization URL, state token, and state."""
         authorization_url, state_token, oauth2_state = await oauth2_factor.start(
-            provider="google",
             redirect_uri="https://example.com/callback",
         )
 
@@ -143,14 +142,13 @@ class TestOAuth2FactorStart:
         assert len(state_token) > 0
         assert state_token.startswith("reauth_oauth2_")
         assert isinstance(oauth2_state, OAuth2State)
-        assert oauth2_state.provider == "google"
+        assert oauth2_state.provider == "provider"
 
     async def test_generates_pkce_with_s256(
         self, oauth2_factor: SQLAlchemyOAuth2Factor
     ) -> None:
         """start() generates PKCE code_verifier when S256 is specified."""
         _, _, oauth2_state = await oauth2_factor.start(
-            provider="google",
             redirect_uri="https://example.com/callback",
             code_challenge_method="S256",
         )
@@ -216,7 +214,6 @@ class TestOAuth2FactorCallback:
     ) -> None:
         """Test callback creates new enrollment when no existing one."""
         _, state_token, _ = await oauth2_factor.start(
-            provider="google",
             redirect_uri="https://example.com/callback",
             identity_id=123,
             scope=["read", "write"],
@@ -229,7 +226,7 @@ class TestOAuth2FactorCallback:
 
         assert enrollment is not None
         assert enrollment.identity_id == 123
-        assert enrollment.provider == "google"
+        assert enrollment.provider == "provider"
         assert enrollment.account_id == "test-account-id"
         assert enrollment.access_token == "test-access-token"
         assert enrollment.scope == ["read", "write"]
@@ -241,7 +238,7 @@ class TestOAuth2FactorCallback:
         initial = OAuth2Enrollment(
             id=None,
             identity_id=456,
-            provider="google",
+            provider="provider",
             account_id="test-account-id",
             access_token="old-token",
             expires_at=1000,
@@ -252,7 +249,6 @@ class TestOAuth2FactorCallback:
         initial.id = await oauth2_factor.insert(initial)
 
         _, state_token, _ = await oauth2_factor.start(
-            provider="google",
             redirect_uri="https://example.com/callback",
             scope=["new_scope"],
         )
@@ -274,7 +270,7 @@ class TestOAuth2FactorCallback:
         enrollment = OAuth2Enrollment(
             id=None,
             identity_id=789,
-            provider="google",
+            provider="provider",
             account_id="test-account-id",
             access_token="old-token",
             expires_at=1000,
@@ -285,7 +281,6 @@ class TestOAuth2FactorCallback:
         enrollment.id = await oauth2_factor.insert(enrollment)
 
         _, state_token, _ = await oauth2_factor.start(
-            provider="google",
             redirect_uri="https://example.com/callback",
             identity_id=999,
         )
@@ -301,7 +296,6 @@ class TestOAuth2FactorCallback:
     ) -> None:
         """Test callback raises error when no existing enrollment and no state identity."""
         _, state_token, _ = await oauth2_factor.start(
-            provider="google",
             redirect_uri="https://example.com/callback",
         )
 
@@ -318,7 +312,7 @@ class TestOAuth2FactorCallback:
         enrollment = OAuth2Enrollment(
             id=None,
             identity_id=111,
-            provider="google",
+            provider="provider",
             account_id="test-account-id",
             access_token="old-token",
             expires_at=1000,
@@ -329,7 +323,6 @@ class TestOAuth2FactorCallback:
         enrollment.id = await oauth2_factor.insert(enrollment)
 
         _, state_token, _ = await oauth2_factor.start(
-            provider="google",
             redirect_uri="https://example.com/callback",
         )
 
@@ -345,7 +338,6 @@ class TestOAuth2FactorCallback:
     ) -> None:
         """Test callback uses scope from state, not from exchange_code."""
         _, state_token, _ = await oauth2_factor.start(
-            provider="google",
             redirect_uri="https://example.com/callback",
             identity_id=222,
             scope=["state_scope"],

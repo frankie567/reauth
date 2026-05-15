@@ -203,12 +203,12 @@ class SQLAlchemyOIDCFactor(OIDCFactor):
         raise NotImplementedError()
 
 
-@pytest.fixture
+@pytest.fixture(scope="module")
 def rsa_key() -> RSAPrivateKey:
     return generate_rsa_key()
 
 
-@pytest.fixture
+@pytest.fixture(scope="module")
 def jwks(rsa_key: RSAPrivateKey) -> jwt.PyJWKSet:
     return get_jwks_from_rsa_key(rsa_key, "test-key-1")
 
