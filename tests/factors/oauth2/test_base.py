@@ -113,6 +113,7 @@ class SQLAlchemyOAuth2Factor(OAuth2Factor):
         *,
         identifier: str = "test",
         client_id: str = "test-client-id",
+        client_secret: str | None = None,
         hash_secret: str = "test-secret",
         lifetime: datetime.timedelta = datetime.timedelta(minutes=10),
     ) -> None:
@@ -125,6 +126,7 @@ class SQLAlchemyOAuth2Factor(OAuth2Factor):
         super().__init__(
             identifier=identifier,
             client_id=client_id,
+            client_secret=client_secret,
             state_service=state_service,
         )
 

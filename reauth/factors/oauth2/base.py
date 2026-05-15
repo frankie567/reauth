@@ -30,12 +30,36 @@ class OAuth2Exception(ReauthException):
     """Base exception for OAuth2 errors."""
 
 
-class OAuth2CallbackException(OAuth2Exception):
-    """Base exception for OAuth2 callback errors."""
+class OAuth2TokenException(OAuth2Exception):
+    """Base exception for OAuth2 token endpoint errors (RFC 6749 Section 5.2)."""
 
 
-class OAuth2TokenExchangeException(OAuth2Exception):
+class OAuth2TokenExchangeException(OAuth2TokenException):
     """Raised when token exchange fails."""
+
+
+class OAuth2TokenInvalidRequestException(OAuth2TokenException):
+    """Raised when request is malformed (RFC 6749 token error: invalid_request)."""
+
+
+class OAuth2TokenUnauthorizedClientException(OAuth2TokenException):
+    """Raised when client is not authorized (RFC 6749 token error: unauthorized_client)."""
+
+
+class OAuth2InvalidClientException(OAuth2TokenException):
+    """Raised when client authentication fails (RFC 6749 error: invalid_client)."""
+
+
+class OAuth2InvalidGrantException(OAuth2TokenException):
+    """Raised when authorization grant is invalid/expired (RFC 6749 error: invalid_grant)."""
+
+
+class OAuth2TokenUnsupportedGrantTypeException(OAuth2TokenException):
+    """Raised when grant type is not supported (RFC 6749 token error: unsupported_grant_type)."""
+
+
+class OAuth2CallbackException(OAuth2Exception):
+    """Base exception for OAuth2 callback/authorization errors (RFC 6749 Section 4.1.2.1)."""
 
 
 class OAuth2AccessDeniedException(OAuth2CallbackException):
@@ -78,8 +102,8 @@ class OAuth2NoIdentityException(OAuth2CallbackException):
     """Raised when no existing enrollment and no identity_id in state."""
 
 
-# RFC 6749 error mapping
-_RFC_6749_ERROR_MAP: dict[str, type[OAuth2CallbackException]] = {
+# RFC 6749 authorization endpoint error mapping (Section 4.1.2.1)
+_RFC_6749_AUTH_ERROR_MAP: dict[str, type[OAuth2CallbackException]] = {
     "invalid_request": OAuth2InvalidRequestException,
     "unauthorized_client": OAuth2UnauthorizedClientException,
     "access_denied": OAuth2AccessDeniedException,
@@ -87,6 +111,15 @@ _RFC_6749_ERROR_MAP: dict[str, type[OAuth2CallbackException]] = {
     "invalid_scope": OAuth2InvalidScopeException,
     "server_error": OAuth2ServerErrorException,
     "temporarily_unavailable": OAuth2TemporarilyUnavailableException,
+}
+
+# RFC 6749 token endpoint error mapping (Section 5.2)
+_RFC_6749_TOKEN_ERROR_MAP: dict[str, type[OAuth2TokenException]] = {
+    "invalid_client": OAuth2InvalidClientException,
+    "invalid_grant": OAuth2InvalidGrantException,
+    "invalid_request": OAuth2TokenInvalidRequestException,
+    "unauthorized_client": OAuth2TokenUnauthorizedClientException,
+    "unsupported_grant_type": OAuth2TokenUnsupportedGrantTypeException,
 }
 
 
@@ -101,10 +134,12 @@ class OAuth2Factor(FactorBase[OAuth2Enrollment], abc.ABC):
         identifier: str,
         client_id: str,
         state_service: OAuth2StateService,
+        client_secret: str | None = None,
         min_prior_factors: int = 0,
     ) -> None:
         super().__init__(identifier=identifier, min_prior_factors=min_prior_factors)
         self.client_id = client_id
+        self.client_secret = client_secret
         self.state_service = state_service
 
     async def start(
@@ -192,7 +227,7 @@ class OAuth2Factor(FactorBase[OAuth2Enrollment], abc.ABC):
     ) -> OAuth2Enrollment:
         """Process OAuth2 callback and complete the authorization flow.
 
-        This is the second step of the OAuth2 authorization code flow.
+        This is the second step of the OAuth2 authorization code flow (RFC 6749 Section 4.1.2).
         It validates the callback parameters, exchanges the code for tokens,
         resolves the identity, and creates or updates the enrollment.
 
@@ -204,7 +239,7 @@ class OAuth2Factor(FactorBase[OAuth2Enrollment], abc.ABC):
         Args:
             code: The authorization code from the callback.
             state: The state token from the callback (must match start() state).
-            error: OAuth2 error code if the request was denied.
+            error: OAuth2 error code if the request was denied (RFC 6749 Section 4.1.2.1).
             error_description: Human-readable error description.
             error_uri: URI for more information about the error.
 
@@ -213,16 +248,18 @@ class OAuth2Factor(FactorBase[OAuth2Enrollment], abc.ABC):
 
         Raises:
             InvalidStateException: If the state token is invalid or expired.
-            OAuth2AccessDeniedException: If user denied authorization.
+            ExpiredStateException: If the state token has expired.
+            OAuth2AccessDeniedException: RFC 6749 auth error: access_denied.
             OAuth2MissingCodeException: If authorization code is missing.
-            OAuth2CallbackException: If callback processing fails.
-            OAuth2TokenExchangeException: If token exchange fails.
-            OAuth2InvalidRequestException: RFC error: invalid_request.
-            OAuth2UnauthorizedClientException: RFC error: unauthorized_client.
-            OAuth2UnsupportedResponseTypeException: RFC error: unsupported_response_type.
-            OAuth2InvalidScopeException: RFC error: invalid_scope.
-            OAuth2ServerErrorException: RFC error: server_error.
-            OAuth2TemporarilyUnavailableException: RFC error: temporarily_unavailable.
+            OAuth2InvalidRequestException: RFC 6749 auth error: invalid_request.
+            OAuth2UnauthorizedClientException: RFC 6749 auth error: unauthorized_client.
+            OAuth2UnsupportedResponseTypeException: RFC 6749 auth error: unsupported_response_type.
+            OAuth2InvalidScopeException: RFC 6749 auth error: invalid_scope.
+            OAuth2ServerErrorException: RFC 6749 auth error: server_error.
+            OAuth2TemporarilyUnavailableException: RFC 6749 auth error: temporarily_unavailable.
+            OAuth2TokenExchangeException: If token exchange fails (see exchange_code).
+            OAuth2IdentityMismatchException: If state identity does not match existing enrollment.
+            OAuth2NoIdentityException: If no existing enrollment and no identity_id in state.
         """
         # Step 1: Handle OAuth2 error response (RFC 6749 Section 4.1.2.1)
         if error is not None:
@@ -234,7 +271,7 @@ class OAuth2Factor(FactorBase[OAuth2Enrollment], abc.ABC):
                     "error_uri": error_uri,
                 },
             )
-            exception_class = _RFC_6749_ERROR_MAP.get(error)
+            exception_class = _RFC_6749_AUTH_ERROR_MAP.get(error)
             if exception_class is not None:
                 raise exception_class(error_description or error)
             raise OAuth2CallbackException(error)
@@ -401,10 +438,11 @@ class OAuth2Factor(FactorBase[OAuth2Enrollment], abc.ABC):
         redirect_uri: str,
         code_verifier: str | None = None,
     ) -> tuple[str, str, int, str | None, int | None]:
-        """Exchange authorization code for access token.
+        """Exchange authorization code for access token (RFC 6749 Section 4.1.3).
 
         Provider-specific implementations should call their token endpoint
-        and return the token response data.
+        and return the token response data. Use self.client_id and self.client_secret
+        for client authentication as required by the provider.
 
         Args:
             code: The authorization code from the callback.
@@ -419,7 +457,11 @@ class OAuth2Factor(FactorBase[OAuth2Enrollment], abc.ABC):
 
         Raises:
             OAuth2TokenExchangeException: If token exchange fails.
-            OAuth2CallbackException: For RFC-defined errors from token endpoint.
+            OAuth2InvalidClientException: RFC 6749 token error: invalid_client.
+            OAuth2InvalidGrantException: RFC 6749 token error: invalid_grant.
+            OAuth2TokenInvalidRequestException: RFC 6749 token error: invalid_request.
+            OAuth2TokenUnauthorizedClientException: RFC 6749 token error: unauthorized_client.
+            OAuth2TokenUnsupportedGrantTypeException: RFC 6749 token error: unsupported_grant_type.
         """
         ...
 
