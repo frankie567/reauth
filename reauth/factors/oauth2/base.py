@@ -17,21 +17,9 @@ logger = get_logger(__name__)
 
 
 @dataclasses.dataclass
-class OAuth2Enrollment:
-    id: typing.Any | None
-    identity_id: typing.Any
-    provider: str
-    account_id: str
-    access_token: str
-    expires_at: int | None
-    refresh_token: str | None
-    refresh_token_expires_at: int | None
-    scope: list[str]
-
-
-@dataclasses.dataclass
 class OAuth2Account:
-    """Authenticated OAuth2 account from callback for new account signup flows.
+    """
+    Authenticated OAuth2 account from callback for new account signup flows.
 
     Contains all data needed for the application to create an identity and enrollment.
     The application MUST create an identity and call insert() to create the enrollment.
@@ -44,6 +32,36 @@ class OAuth2Account:
     refresh_token: str | None
     refresh_token_expires_at: int | None
     scope: list[str]
+
+
+@dataclasses.dataclass
+class OAuth2Enrollment:
+    id: typing.Any | None
+    identity_id: typing.Any
+    provider: str
+    account_id: str
+    access_token: str
+    expires_at: int | None
+    refresh_token: str | None
+    refresh_token_expires_at: int | None
+    scope: list[str]
+
+    @classmethod
+    def from_account(
+        cls, identity_id: typing.Any, account: OAuth2Account
+    ) -> typing.Self:
+        """Create an OAuth2Enrollment from an OAuth2Account."""
+        return cls(
+            id=None,
+            identity_id=identity_id,
+            provider=account.provider,
+            account_id=account.account_id,
+            access_token=account.access_token,
+            expires_at=account.expires_at,
+            refresh_token=account.refresh_token,
+            refresh_token_expires_at=account.refresh_token_expires_at,
+            scope=account.scope,
+        )
 
 
 class OAuth2Exception(ReauthException):
@@ -447,6 +465,32 @@ class OAuth2Factor[EXTRA](FactorBase[OAuth2Enrollment], abc.ABC):
                 scope=oauth2_state.scope or [],
             ),
         )
+
+    async def enroll(
+        self, identity_id: typing.Any, oauth2_account: OAuth2Account
+    ) -> OAuth2Enrollment:
+        """
+        Enroll a new OAuth2 factor for a given identity using an OAuth2Account.
+
+        This is used for signup flows where the callback wasn't able to directly return
+        an enrollment because there was no pre-existing identity.
+
+        Args:
+            identity_id: The ID of the identity to enroll the factor for.
+            oauth2_account: The OAuth2Account data returned from callback().
+        """
+        logger.debug("OAuth2 enroll attempted", extra={"identity_id": identity_id})
+        enrollment = OAuth2Enrollment.from_account(identity_id, oauth2_account)
+        enrollment.id = await self.insert(enrollment)
+        logger.info(
+            "OAuth2 enrollment created",
+            extra={
+                "enrollment_id": enrollment.id,
+                "provider": enrollment.provider,
+                "identity_id": enrollment.identity_id,
+            },
+        )
+        return enrollment
 
     @abc.abstractmethod
     async def get_authorization_url(

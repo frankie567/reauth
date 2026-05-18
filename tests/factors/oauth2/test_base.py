@@ -369,3 +369,38 @@ class TestOAuth2FactorCallback:
         assert enrollment is not None
         assert account is None
         assert enrollment.scope == ["state_scope"]
+
+
+@pytest.mark.anyio
+class TestOAuth2FactorEnroll:
+    """Test OAuth2 enroll functionality for signup flows."""
+
+    async def test_enroll_creates_enrollment(
+        self, oauth2_factor: SQLAlchemyOAuth2Factor
+    ) -> None:
+        """Test enroll creates a new enrollment from OAuth2Account."""
+        oauth2_account = OAuth2Account(
+            provider="provider",
+            account_id="test-account-id",
+            access_token="test-access-token",
+            expires_at=3600,
+            refresh_token="test-refresh-token",
+            refresh_token_expires_at=7200,
+            scope=["read", "write"],
+        )
+
+        enrollment = await oauth2_factor.enroll(
+            identity_id=123,
+            oauth2_account=oauth2_account,
+        )
+
+        assert isinstance(enrollment, OAuth2Enrollment)
+        assert enrollment.id is not None
+        assert enrollment.identity_id == 123
+        assert enrollment.provider == "provider"
+        assert enrollment.account_id == "test-account-id"
+        assert enrollment.access_token == "test-access-token"
+        assert enrollment.expires_at == 3600
+        assert enrollment.refresh_token == "test-refresh-token"
+        assert enrollment.refresh_token_expires_at == 7200
+        assert enrollment.scope == ["read", "write"]
