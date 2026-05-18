@@ -4,13 +4,12 @@ import datetime
 import hashlib
 import typing
 
+from reauth.amr import AuthenticationMethodReference
+from reauth.crypto import generate_code_hash_pair, get_token_hash
 from reauth.exceptions import ReauthException
-
-from ..amr import AuthenticationMethodReference
-from ..crypto import generate_code_hash_pair, get_token_hash
-from ..logging import get_logger
-from ..timestamp import get_current_timestamp
-from .base import FactorBase
+from reauth.factors.base import FactorBase
+from reauth.logging import get_logger
+from reauth.timestamp import get_current_timestamp
 
 logger = get_logger(__name__)
 
@@ -103,6 +102,9 @@ class EmailOTPFactor(FactorBase[EmailOTPEnrollment], abc.ABC):
         Returns:
             A tuple of (OTP code, EmailOTP instance).
         """
+        logger.debug(
+            "Email OTP send attempted", extra={"email_hash": _hash_email(email)}
+        )
         await self.delete_by_authentication_session_id(authentication_session_id)
 
         code, code_hash = generate_code_hash_pair(

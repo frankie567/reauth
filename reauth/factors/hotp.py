@@ -9,11 +9,10 @@ from cryptography.hazmat.primitives.hashes import SHA1
 from cryptography.hazmat.primitives.twofactor import InvalidToken
 from cryptography.hazmat.primitives.twofactor.hotp import HOTP as CryptoHOTP
 
+from reauth.amr import AuthenticationMethodReference
 from reauth.exceptions import ReauthException
-
-from ..amr import AuthenticationMethodReference
-from ..logging import get_logger
-from .base import FactorBase
+from reauth.factors.base import FactorBase
+from reauth.logging import get_logger
 
 logger = get_logger(__name__)
 
@@ -131,14 +130,7 @@ class HOTPFactor(FactorBase[HOTPEnrollment], abc.ABC):
         Raises:
             AlreadyEnrolledHOTPException: If the identity already has an HOTP enrollment.
         """
-        logger.info(
-            "HOTP enrollment created",
-            extra={
-                "identity_id": identity_id,
-                "code_length": self.code_length,
-                "algorithm": self.algorithm,
-            },
-        )
+        logger.debug("HOTP enroll attempted", extra={"identity_id": identity_id})
         existing = await self.get_enrollment(identity_id)
         if existing is not None:
             raise AlreadyEnrolledHOTPException()
@@ -154,6 +146,14 @@ class HOTPFactor(FactorBase[HOTPEnrollment], abc.ABC):
             identity_id=identity_id,
         )
         hotp.id = await self.insert(hotp)
+        logger.info(
+            "HOTP enrollment created",
+            extra={
+                "identity_id": identity_id,
+                "code_length": self.code_length,
+                "algorithm": self.algorithm,
+            },
+        )
         return hotp
 
     async def enable(self, identity_id: typing.Any, code: str) -> HOTPEnrollment:
@@ -174,7 +174,7 @@ class HOTPFactor(FactorBase[HOTPEnrollment], abc.ABC):
             AlreadyEnabledHOTPException: If the HOTP factor is already enabled.
             InvalidHOTPCodeException: If the provided code is invalid.
         """
-        logger.info("HOTP enable attempted", extra={"identity_id": identity_id})
+        logger.debug("HOTP enable attempted", extra={"identity_id": identity_id})
         hotp = await self.get_enrollment(identity_id)
         if hotp is None:
             logger.warning(

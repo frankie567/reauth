@@ -1,8 +1,8 @@
 import abc
 import typing
 
-from ..amr import AuthenticationMethodReference
-from ..logging import get_logger
+from reauth.amr import AuthenticationMethodReference
+from reauth.logging import get_logger
 
 logger = get_logger(__name__)
 

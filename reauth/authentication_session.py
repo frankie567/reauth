@@ -3,12 +3,12 @@ import dataclasses
 import datetime
 import typing
 
-from .amr import AuthenticationMethodReference
-from .crypto import TokenHash, generate_token_hash_pair, get_token_hash
-from .exceptions import ReauthException
-from .factors import FactorBase
-from .logging import get_logger
-from .timestamp import get_current_timestamp
+from reauth.amr import AuthenticationMethodReference
+from reauth.crypto import TokenHash, generate_token_hash_pair, get_token_hash
+from reauth.exceptions import ReauthException
+from reauth.factors import FactorBase
+from reauth.logging import get_logger
+from reauth.timestamp import get_current_timestamp
 
 logger = get_logger(__name__)
 
@@ -116,6 +116,7 @@ class AuthenticationSessionService(abc.ABC):
         Returns:
             A tuple of (token, AuthenticationSession instance).
         """
+        logger.debug("Authentication session start attempted")
         token, token_hash = generate_token_hash_pair(
             secret=self.hash_secret, prefix=self.token_prefix
         )
@@ -252,6 +253,10 @@ class AuthenticationSessionService(abc.ABC):
             IdentityNotAttachedException: If no identity_id is attached to the session.
             FactorsRemainingException: If there are still available factors.
         """
+        logger.debug(
+            "Session completion attempted",
+            extra={"session_id": authentication_session.id},
+        )
         if authentication_session.identity_id is None:
             logger.warning(
                 "Session completion failed: no identity",

@@ -464,13 +464,13 @@ class TestOIDCFactorGetAuthorizationURL:
         url = await oidc_factor.get_authorization_url(
             redirect_uri="https://example.com/callback",
             state="test-state",
-            extra={"prompt": "login", "login_hint": "user@example.com"},
+            extra={"prompt": "login", "login_hint": "reauth@example.com"},
         )
         parsed = urllib.parse.urlparse(url)
         params = urllib.parse.parse_qs(parsed.query)
 
         assert params["prompt"] == ["login"]
-        assert params["login_hint"] == ["user@example.com"]
+        assert params["login_hint"] == ["reauth@example.com"]
 
 
 @pytest.mark.anyio

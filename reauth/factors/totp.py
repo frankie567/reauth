@@ -10,11 +10,10 @@ from cryptography.hazmat.primitives.hashes import SHA1
 from cryptography.hazmat.primitives.twofactor import InvalidToken
 from cryptography.hazmat.primitives.twofactor.totp import TOTP as CryptoTOTP
 
+from reauth.amr import AuthenticationMethodReference
 from reauth.exceptions import ReauthException
-
-from ..amr import AuthenticationMethodReference
-from ..logging import get_logger
-from .base import FactorBase
+from reauth.factors.base import FactorBase
+from reauth.logging import get_logger
 
 logger = get_logger(__name__)
 
@@ -144,14 +143,7 @@ class TOTPFactor(FactorBase[TOTPEnrollment], abc.ABC):
         Raises:
             AlreadyEnrolledTOTPException: If the identity already has a TOTP enrollment.
         """
-        logger.info(
-            "TOTP enrollment created",
-            extra={
-                "identity_id": identity_id,
-                "code_length": self.code_length,
-                "algorithm": self.algorithm,
-            },
-        )
+        logger.debug("TOTP enroll attempted", extra={"identity_id": identity_id})
         existing = await self.get_enrollment(identity_id)
         if existing is not None:
             raise AlreadyEnrolledTOTPException()
@@ -168,6 +160,14 @@ class TOTPFactor(FactorBase[TOTPEnrollment], abc.ABC):
             last_verified_time_step=None,
         )
         totp.id = await self.insert(totp)
+        logger.info(
+            "TOTP enrollment created",
+            extra={
+                "identity_id": identity_id,
+                "code_length": self.code_length,
+                "algorithm": self.algorithm,
+            },
+        )
         return totp
 
     async def enable(self, identity_id: typing.Any, code: str) -> TOTPEnrollment:
@@ -188,7 +188,7 @@ class TOTPFactor(FactorBase[TOTPEnrollment], abc.ABC):
             AlreadyEnabledTOTPException: If the TOTP factor is already enabled.
             InvalidTOTPCodeException: If the provided code is invalid.
         """
-        logger.info("TOTP enable attempted", extra={"identity_id": identity_id})
+        logger.debug("TOTP enable attempted", extra={"identity_id": identity_id})
         totp = await self.get_enrollment(identity_id)
         if totp is None:
             logger.warning(

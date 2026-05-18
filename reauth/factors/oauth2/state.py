@@ -3,11 +3,10 @@ import dataclasses
 import datetime
 import typing
 
+from reauth.crypto import TokenHash, generate_token_hash_pair, get_token_hash
 from reauth.exceptions import ReauthException
-
-from ...crypto import TokenHash, generate_token_hash_pair, get_token_hash
-from ...logging import get_logger
-from ...timestamp import get_current_timestamp
+from reauth.logging import get_logger
+from reauth.timestamp import get_current_timestamp
 
 logger = get_logger(__name__)
 
@@ -72,6 +71,7 @@ class OAuth2StateService(abc.ABC):
             A tuple of (state_token, OAuth2State).
             The caller MUST bind state_token to the user agent context.
         """
+        logger.debug("OAuth2 state creation attempted", extra={"provider": provider})
         token, token_hash = generate_token_hash_pair(
             secret=self.hash_secret, prefix=self.token_prefix
         )

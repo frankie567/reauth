@@ -7,16 +7,19 @@ import urllib.parse
 import httpx
 import jwt
 
-from ...timestamp import get_current_timestamp
-from .base import (
+from reauth.factors.oauth2.base import (
     RFC_6749_TOKEN_ERROR_MAP,
     OAuth2Exception,
     OAuth2Factor,
     OAuth2GetProfileException,
     OAuth2TokenExchangeException,
 )
-from .pkce import CodeChallengeMethod
-from .state import OAuth2StateService
+from reauth.factors.oauth2.pkce import CodeChallengeMethod
+from reauth.factors.oauth2.state import OAuth2StateService
+from reauth.logging import get_logger
+from reauth.timestamp import get_current_timestamp
+
+logger = get_logger(__name__)
 
 
 class OIDCException(OAuth2Exception):
@@ -266,6 +269,9 @@ class OIDCFactor(OAuth2Factor[OIDCExtraParams], abc.ABC):
         nonce: str | None = None,
         extra: OIDCExtraParams | None = None,
     ) -> str:
+        logger.debug(
+            "OIDC get_authorization_url called", extra={"provider": self.identifier}
+        )
         scope = scope or []
         if "openid" not in scope:
             scope.append("openid")
@@ -304,6 +310,7 @@ class OIDCFactor(OAuth2Factor[OIDCExtraParams], abc.ABC):
         code_verifier: str | None = None,
         nonce: str | None = None,
     ) -> tuple[str, str, int, str | None, int | None]:
+        logger.debug("OIDC exchange_code called", extra={"provider": self.identifier})
         discovery_document = await self._get_discovery_document()
         token_endpoint = discovery_document["token_endpoint"]
         token_endpoint_auth_methods_supported = discovery_document.get(
@@ -384,6 +391,7 @@ class OIDCFactor(OAuth2Factor[OIDCExtraParams], abc.ABC):
         raise OAuth2TokenExchangeException()
 
     async def get_profile(self, access_token: str) -> dict[str, typing.Any]:
+        logger.debug("OIDC get_profile called", extra={"provider": self.identifier})
         discovery_document = await self._get_discovery_document()
         userinfo_endpoint = discovery_document.get("userinfo_endpoint")
 

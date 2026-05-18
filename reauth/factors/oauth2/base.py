@@ -2,13 +2,16 @@ import abc
 import dataclasses
 import typing
 
+from reauth.amr import AuthenticationMethodReference
 from reauth.exceptions import ReauthException
+from reauth.factors.base import FactorBase
+from reauth.factors.oauth2.pkce import (
+    CodeChallengeMethod,
+    generate_code_challenge,
+    generate_code_verifier,
+)
+from reauth.factors.oauth2.state import OAuth2State, OAuth2StateService
 from reauth.logging import get_logger
-
-from ...amr import AuthenticationMethodReference
-from ..base import FactorBase
-from .pkce import CodeChallengeMethod, generate_code_challenge, generate_code_verifier
-from .state import OAuth2State, OAuth2StateService
 
 logger = get_logger(__name__)
 
@@ -197,6 +200,7 @@ class OAuth2Factor[EXTRA](FactorBase[OAuth2Enrollment], abc.ABC):
             The state_token must be stored by the caller and presented
             during the callback phase.
         """
+        logger.debug("OAuth2 start attempted", extra={"provider": self.identifier})
         # Generate PKCE values if enabled
         code_verifier: str | None = None
         code_challenge: str | None = None
@@ -288,6 +292,7 @@ class OAuth2Factor[EXTRA](FactorBase[OAuth2Enrollment], abc.ABC):
             OAuth2TokenExchangeException: If token exchange fails (see exchange_code).
             OAuth2IdentityMismatchException: If state identity does not match existing enrollment.
         """
+        logger.debug("OAuth2 callback attempted", extra={"provider": self.identifier})
         # Step 1: Handle OAuth2 error response (RFC 6749 Section 4.1.2.1)
         if error is not None:
             logger.warning(

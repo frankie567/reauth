@@ -1,6 +1,6 @@
 """The authentication toolkit for Python"""
 
-from .logging import configure_logger, get_logger
+from reauth.logging import configure_logger, get_logger
 
 __version__ = "0.1.2"
 

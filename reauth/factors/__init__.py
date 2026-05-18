@@ -1,3 +1,3 @@
-from .base import FactorBase
+from reauth.factors.base import FactorBase
 
 __all__ = ["FactorBase"]
