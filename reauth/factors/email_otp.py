@@ -30,7 +30,7 @@ class EmailOTPEnrollment:
 @dataclasses.dataclass
 class EmailOTP:
     id: typing.Any | None
-    identity_id: typing.Any
+    identity_id: typing.Any | None
     email: str
     code_hash: str
     expires_at: int
@@ -85,9 +85,9 @@ class EmailOTPFactor(FactorBase[EmailOTPEnrollment], abc.ABC):
 
     async def create(
         self,
-        identity_id: typing.Any,
         email: str,
         authentication_session_id: typing.Any,
+        identity_id: typing.Any | None = None,
     ) -> tuple[str, EmailOTP]:
         """
         Create a new OTP for the given identity.
@@ -96,9 +96,9 @@ class EmailOTPFactor(FactorBase[EmailOTPEnrollment], abc.ABC):
         it's deleted and replaced with the new one.
 
         Args:
-            identity_id: The ID of the identity to create the OTP for.
             email: The email address this OTP is sent to.
             authentication_session_id: The ID of the authentication session this OTP is associated with.
+            identity_id: Optional ID of the identity to create the OTP for. Can be None for signup flows.
 
         Returns:
             A tuple of (OTP code, EmailOTP instance).
@@ -130,7 +130,7 @@ class EmailOTPFactor(FactorBase[EmailOTPEnrollment], abc.ABC):
 
     async def consume(
         self, code: str, authentication_session_id: typing.Any
-    ) -> tuple[typing.Any, str]:
+    ) -> tuple[typing.Any | None, str]:
         """
         Consume an OTP code, deleting it from the persistent store if valid.
 
@@ -139,7 +139,9 @@ class EmailOTPFactor(FactorBase[EmailOTPEnrollment], abc.ABC):
             authentication_session_id: The ID of the authentication session this OTP is associated with.
 
         Returns:
-            A tuple of (identity_id, email) for the consumed OTP.
+            A tuple of (identity_id, email). identity_id is None for new users (signup flow).
+            For signup flows where identity_id is None, the application MUST create an
+            identity and EmailOTPEnrollment after successful OTP verification.
 
         Raises:
             InvalidOTPException: If the code is invalid or does not correspond to any OTP.

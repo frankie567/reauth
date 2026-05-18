@@ -130,9 +130,9 @@ class TestEmailOTPCreate:
         identity_id = 123
         authentication_session_id = 456
         code, otp = await email_otp_factor.create(
-            identity_id,
             "reauth@example.com",
             authentication_session_id,
+            identity_id=identity_id,
         )
 
         assert isinstance(code, str)
@@ -153,15 +153,15 @@ class TestEmailOTPCreate:
         identity_id = 123
         authentication_session_id = 456
         first_code, first_otp = await email_otp_factor.create(
-            identity_id,
             "reauth@example.com",
             authentication_session_id,
+            identity_id=identity_id,
         )
 
         second_code, second_otp = await email_otp_factor.create(
-            identity_id,
             "reauth@example.com",
             authentication_session_id,
+            identity_id=identity_id,
         )
 
         assert second_otp.id != first_otp.id
@@ -180,9 +180,9 @@ class TestEmailOTPCreate:
         identity_id = 123
         authentication_session_id = 456
         _, otp = await email_otp_factor.create(
-            identity_id,
             "reauth@example.com",
             authentication_session_id,
+            identity_id=identity_id,
         )
         assert not otp.is_expired()
 
@@ -192,9 +192,9 @@ class TestEmailOTPCreate:
         identity_id = 123
         authentication_session_id = 456
         code, _ = await email_otp_factor.create(
-            identity_id,
             "reauth@example.com",
             authentication_session_id,
+            identity_id=identity_id,
         )
         valid_chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
         assert all(c in valid_chars for c in code)

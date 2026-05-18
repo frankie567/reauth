@@ -5,12 +5,12 @@ from sqlalchemy import insert, select, update
 from sqlalchemy.ext.asyncio import AsyncConnection
 
 from reauth.factors.oauth2.base import (
+    OAuth2Account,
     OAuth2CallbackException,
     OAuth2Enrollment,
     OAuth2Factor,
     OAuth2IdentityMismatchException,
     OAuth2MissingCodeException,
-    OAuth2NoIdentityException,
 )
 from reauth.factors.oauth2.state import (
     InvalidStateException,
@@ -219,12 +219,13 @@ class TestOAuth2FactorCallback:
             scope=["read", "write"],
         )
 
-        enrollment = await oauth2_factor.callback(
+        enrollment, account = await oauth2_factor.callback(
             code="test-code",
             state=state_token,
         )
 
         assert enrollment is not None
+        assert account is None
         assert enrollment.identity_id == 123
         assert enrollment.provider == "provider"
         assert enrollment.account_id == "test-account-id"
@@ -253,11 +254,13 @@ class TestOAuth2FactorCallback:
             scope=["new_scope"],
         )
 
-        enrollment = await oauth2_factor.callback(
+        enrollment, account = await oauth2_factor.callback(
             code="test-code",
             state=state_token,
         )
 
+        assert enrollment is not None
+        assert account is None
         assert enrollment.id == initial.id
         assert enrollment.identity_id == 456
         assert enrollment.access_token == "test-access-token"
@@ -291,19 +294,24 @@ class TestOAuth2FactorCallback:
                 state=state_token,
             )
 
-    async def test_no_identity_error(
+    async def test_no_identity_returns_account(
         self, oauth2_factor: SQLAlchemyOAuth2Factor
     ) -> None:
-        """Test callback raises error when no existing enrollment and no state identity."""
+        """Test callback returns (None, OAuth2Account) when no existing enrollment and no state identity."""
         _, state_token, _ = await oauth2_factor.start(
             redirect_uri="https://example.com/callback",
         )
 
-        with pytest.raises(OAuth2NoIdentityException):
-            await oauth2_factor.callback(
-                code="test-code",
-                state=state_token,
-            )
+        enrollment, account = await oauth2_factor.callback(
+            code="test-code",
+            state=state_token,
+        )
+
+        assert enrollment is None
+        assert isinstance(account, OAuth2Account)
+        assert account.provider == "provider"
+        assert account.account_id == "test-account-id"
+        assert account.access_token == "test-access-token"
 
     async def test_uses_existing_enrollment_identity(
         self, oauth2_factor: SQLAlchemyOAuth2Factor
@@ -326,12 +334,14 @@ class TestOAuth2FactorCallback:
             redirect_uri="https://example.com/callback",
         )
 
-        enrollment_result = await oauth2_factor.callback(
+        enrollment, account = await oauth2_factor.callback(
             code="test-code",
             state=state_token,
         )
 
-        assert enrollment_result.identity_id == 111
+        assert enrollment is not None
+        assert account is None
+        assert enrollment.identity_id == 111
 
     async def test_uses_state_scope(
         self, oauth2_factor: SQLAlchemyOAuth2Factor
@@ -343,9 +353,11 @@ class TestOAuth2FactorCallback:
             scope=["state_scope"],
         )
 
-        enrollment = await oauth2_factor.callback(
+        enrollment, account = await oauth2_factor.callback(
             code="test-code",
             state=state_token,
         )
 
+        assert enrollment is not None
+        assert account is None
         assert enrollment.scope == ["state_scope"]

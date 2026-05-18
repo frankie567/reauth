@@ -26,6 +26,24 @@ class OAuth2Enrollment:
     scope: list[str]
 
 
+@dataclasses.dataclass
+class OAuth2Account:
+    """Authenticated OAuth2 account from callback for new account signup flows.
+
+    Contains all data needed for the application to create an identity and enrollment.
+    The application MUST create an identity and call insert() to create the enrollment.
+    """
+
+    provider: str
+    account_id: str
+    access_token: str
+    expires_at: int | None
+    refresh_token: str | None
+    refresh_token_expires_at: int | None
+    scope: list[str]
+    email: str | None = None
+
+
 class OAuth2Exception(ReauthException):
     """Base exception for OAuth2 errors."""
 
@@ -103,10 +121,6 @@ class OAuth2MissingCodeException(OAuth2CallbackException):
 
 class OAuth2IdentityMismatchException(OAuth2CallbackException):
     """Raised when state identity does not match existing enrollment."""
-
-
-class OAuth2NoIdentityException(OAuth2CallbackException):
-    """Raised when no existing enrollment and no identity_id in state."""
 
 
 # RFC 6749 authorization endpoint error mapping (Section 4.1.2.1)
@@ -229,7 +243,7 @@ class OAuth2Factor[EXTRA](FactorBase[OAuth2Enrollment], abc.ABC):
         error: str | None = None,
         error_description: str | None = None,
         error_uri: str | None = None,
-    ) -> OAuth2Enrollment:
+    ) -> tuple[OAuth2Enrollment, None] | tuple[None, OAuth2Account]:
         """Process OAuth2 callback and complete the authorization flow.
 
         This is the second step of the OAuth2 authorization code flow (RFC 6749 Section 4.1.2).
@@ -238,8 +252,13 @@ class OAuth2Factor[EXTRA](FactorBase[OAuth2Enrollment], abc.ABC):
 
         Identity resolution priority:
         1. If existing enrollment found for (provider, account_id), use its identity_id
-        2. If state has identity_id, it must match existing enrollment's identity_id
-        3. If no existing enrollment, state.identity_id is required
+        2. If state has identity_id, use it (associate flow with pre-provisioned identity)
+        3. If no existing enrollment and no state.identity_id, return (None, OAuth2Account)
+           for signup flow
+
+        For signup flows (case 3), the application MUST create an identity and enrollment
+        using the returned OAuth2Account. The factor does NOT create an enrollment
+        automatically to avoid dangling enrollments without identities.
 
         Args:
             code: The authorization code from the callback.
@@ -249,7 +268,8 @@ class OAuth2Factor[EXTRA](FactorBase[OAuth2Enrollment], abc.ABC):
             error_uri: URI for more information about the error.
 
         Returns:
-            The OAuth2Enrollment instance (created or updated).
+            A tuple of (enrollment, None) for existing users, or (None, account) for new
+            accounts without a pre-existing identity.
 
         Raises:
             InvalidStateException: If the state token is invalid or expired.
@@ -264,7 +284,6 @@ class OAuth2Factor[EXTRA](FactorBase[OAuth2Enrollment], abc.ABC):
             OAuth2TemporarilyUnavailableException: RFC 6749 auth error: temporarily_unavailable.
             OAuth2TokenExchangeException: If token exchange fails (see exchange_code).
             OAuth2IdentityMismatchException: If state identity does not match existing enrollment.
-            OAuth2NoIdentityException: If no existing enrollment and no identity_id in state.
         """
         # Step 1: Handle OAuth2 error response (RFC 6749 Section 4.1.2.1)
         if error is not None:
@@ -311,6 +330,7 @@ class OAuth2Factor[EXTRA](FactorBase[OAuth2Enrollment], abc.ABC):
             code_verifier=oauth2_state.code_verifier,
             nonce=oauth2_state.nonce,
         )
+        scope = oauth2_state.scope or []
 
         logger.info(
             "OAuth2 token exchange successful",
@@ -327,6 +347,7 @@ class OAuth2Factor[EXTRA](FactorBase[OAuth2Enrollment], abc.ABC):
             account_id=account_id,
         )
 
+        # Existing enrollment flow
         if enrollment is not None:
             # Use identity from existing enrollment
             identity_id = enrollment.identity_id
@@ -346,26 +367,34 @@ class OAuth2Factor[EXTRA](FactorBase[OAuth2Enrollment], abc.ABC):
                     },
                 )
                 raise OAuth2IdentityMismatchException()
-            is_new_enrollment = False
-        else:
-            # No existing enrollment - must have identity_id from state
-            if oauth2_state.identity_id is None:
-                logger.warning(
-                    "OAuth2 callback with new account but no identity_id in state",
-                    extra={
-                        "provider": oauth2_state.provider,
-                        "account_id": account_id,
-                    },
-                )
-                raise OAuth2NoIdentityException()
+
+            # Step 6: Update existing enrollment
+            assert enrollment is not None
+            enrollment.access_token = access_token
+            enrollment.expires_at = expires_at
+            enrollment.refresh_token = refresh_token
+            enrollment.refresh_token_expires_at = refresh_token_expires_at
+            enrollment.scope = scope
+            await self.update(enrollment)
+            logger.info(
+                "OAuth2 enrollment updated",
+                extra={
+                    "enrollment_id": enrollment.id,
+                    "provider": enrollment.provider,
+                    "identity_id": enrollment.identity_id,
+                },
+            )
+
+            return (enrollment, None)
+
+        # Associate flow with pre-provisioned identity_id
+        if oauth2_state.identity_id is not None:
             identity_id = oauth2_state.identity_id
-            is_new_enrollment = True
 
-        # Step 6: Use scope from state (not from token response)
-        final_scope = oauth2_state.scope or []
+            # Step 6: Use scope from state (not from token response)
+            final_scope = oauth2_state.scope or []
 
-        # Step 7: Create or update enrollment
-        if is_new_enrollment:
+            # Step 7: Create new enrollment
             enrollment = OAuth2Enrollment(
                 id=None,
                 identity_id=identity_id,
@@ -386,24 +415,31 @@ class OAuth2Factor[EXTRA](FactorBase[OAuth2Enrollment], abc.ABC):
                     "identity_id": enrollment.identity_id,
                 },
             )
-        else:
-            assert enrollment is not None
-            enrollment.access_token = access_token
-            enrollment.expires_at = expires_at
-            enrollment.refresh_token = refresh_token
-            enrollment.refresh_token_expires_at = refresh_token_expires_at
-            enrollment.scope = final_scope
-            await self.update(enrollment)
-            logger.info(
-                "OAuth2 enrollment updated",
-                extra={
-                    "enrollment_id": enrollment.id,
-                    "provider": enrollment.provider,
-                    "identity_id": enrollment.identity_id,
-                },
-            )
 
-        return enrollment
+            return (enrollment, None)
+
+        # Signup flow - no existing enrollment, no identity_id in state
+        # Return account WITHOUT creating enrollment
+        logger.info(
+            "OAuth2 callback: new account, awaiting identity creation",
+            extra={
+                "provider": oauth2_state.provider,
+                "account_id": account_id,
+            },
+        )
+        return (
+            None,
+            OAuth2Account(
+                provider=oauth2_state.provider,
+                account_id=account_id,
+                access_token=access_token,
+                expires_at=expires_at,
+                refresh_token=refresh_token,
+                refresh_token_expires_at=refresh_token_expires_at,
+                scope=oauth2_state.scope or [],
+                email=None,
+            ),
+        )
 
     @abc.abstractmethod
     async def get_authorization_url(
