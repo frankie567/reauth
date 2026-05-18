@@ -116,6 +116,14 @@ class SQLAlchemyOAuth2Factor(OAuth2Factor):
             return None
         return OAuth2Enrollment(**row._asdict())
 
+    async def get_profile(self, access_token: str) -> dict[str, object]:
+        """Mock get_profile for testing - returns mock profile data."""
+        return {
+            "sub": "test-sub",
+            "email": "reauth@example.com",
+            "name": "Test User",
+        }
+
 
 @pytest.fixture
 def oauth2_factor(

@@ -12,6 +12,7 @@ from .base import (
     RFC_6749_TOKEN_ERROR_MAP,
     OAuth2Exception,
     OAuth2Factor,
+    OAuth2GetProfileException,
     OAuth2TokenExchangeException,
 )
 from .pkce import CodeChallengeMethod
@@ -381,6 +382,24 @@ class OIDCFactor(OAuth2Factor[OIDCExtraParams], abc.ABC):
             )
 
         raise OAuth2TokenExchangeException()
+
+    async def get_profile(self, access_token: str) -> dict[str, typing.Any]:
+        discovery_document = await self._get_discovery_document()
+        userinfo_endpoint = discovery_document.get("userinfo_endpoint")
+
+        if userinfo_endpoint is None:
+            return {}
+
+        try:
+            client = self._get_client()
+            response = await client.get(
+                userinfo_endpoint,
+                headers={"Authorization": f"Bearer {access_token}"},
+            )
+            response.raise_for_status()
+            return response.json()
+        except httpx.HTTPError as e:
+            raise OAuth2GetProfileException() from e
 
     async def _validate_id_token(
         self,

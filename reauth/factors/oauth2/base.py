@@ -41,7 +41,6 @@ class OAuth2Account:
     refresh_token: str | None
     refresh_token_expires_at: int | None
     scope: list[str]
-    email: str | None = None
 
 
 class OAuth2Exception(ReauthException):
@@ -121,6 +120,10 @@ class OAuth2MissingCodeException(OAuth2CallbackException):
 
 class OAuth2IdentityMismatchException(OAuth2CallbackException):
     """Raised when state identity does not match existing enrollment."""
+
+
+class OAuth2GetProfileException(OAuth2Exception):
+    """Raised when fetching the identity profile from the provider fails."""
 
 
 # RFC 6749 authorization endpoint error mapping (Section 4.1.2.1)
@@ -437,7 +440,6 @@ class OAuth2Factor[EXTRA](FactorBase[OAuth2Enrollment], abc.ABC):
                 refresh_token=refresh_token,
                 refresh_token_expires_at=refresh_token_expires_at,
                 scope=oauth2_state.scope or [],
-                email=None,
             ),
         )
 
@@ -542,5 +544,30 @@ class OAuth2Factor[EXTRA](FactorBase[OAuth2Enrollment], abc.ABC):
 
         Returns:
             The OAuth2Enrollment instance, or None if not found.
+        """
+        ...
+
+    @abc.abstractmethod
+    async def get_profile(self, access_token: str) -> dict[str, typing.Any]:
+        """Fetch user profile from the provider using the access token.
+
+        Common claim keys (not exhaustive):
+        - sub (str): Unique user identifier at the provider
+        - email (str | None): User's email address
+        - email_verified (bool | None): Whether email is verified
+        - name (str | None): User's display name
+        - given_name (str | None): First name
+        - family_name (str | None): Last name
+        - picture (str | None): Profile picture URL
+        - locale (str | None): User's locale
+
+        Args:
+            access_token: The OAuth2 access token for making authenticated requests.
+
+        Returns:
+            dict[str, Any]: Provider-specific profile claims.
+
+        Raises:
+            OAuth2GetProfileException: If fetching the profile fails.
         """
         ...
