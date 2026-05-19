@@ -39,6 +39,7 @@ authentication_session_table = Table(
     Column("token_hash", String(64), nullable=False),
     Column("expires_at", Integer, nullable=False),
     Column("identity_id", Integer, nullable=True),
+    Column("step", Integer, nullable=False, default=0),
     Column("amr", JSON, nullable=False),
     Column("used_factors", JSON, nullable=False),
     Column("context", JSON, nullable=True),
@@ -58,7 +59,7 @@ class DummyPasswordFactor(FactorBase[DummyPasswordFactorEnrollment]):
     AMR = AuthenticationMethodReference.PWD
 
     def __init__(self) -> None:
-        super().__init__(identifier="dummy_password", min_prior_factors=0)
+        super().__init__(identifier="dummy_password", step=0)
 
     async def get_enrollment(
         self, identity_id: int
@@ -80,7 +81,7 @@ class DummyMFAFactor(FactorBase[DummyMFAFactorEnrollment]):
     AMR = AuthenticationMethodReference.MFA
 
     def __init__(self) -> None:
-        super().__init__(identifier="dummy_mfa", min_prior_factors=1)
+        super().__init__(identifier="dummy_mfa", step=1)
 
     async def get_enrollment(self, identity_id: int) -> DummyMFAFactorEnrollment | None:
         if identity_id != 1:
@@ -302,6 +303,7 @@ class TestGetAvailableFactors:
             amr=[AuthenticationMethodReference.PWD],
             used_factors=["dummy_password"],
             context=None,
+            step=1,
         )
         session.id = await authentication_session_service.insert(session)
 
@@ -325,6 +327,7 @@ class TestGetAvailableFactors:
             amr=[AuthenticationMethodReference.PWD],
             used_factors=["dummy_password"],
             context=None,
+            step=1,
         )
         session.id = await authentication_session_service.insert(session)
 
@@ -378,6 +381,7 @@ class TestAdvance:
             amr=[AuthenticationMethodReference.PWD],
             used_factors=["dummy_password"],
             context=None,
+            step=1,
         )
         session.id = await authentication_session_service.insert(session)
 
@@ -409,6 +413,7 @@ class TestAdvance:
             amr=[AuthenticationMethodReference.PWD],
             used_factors=["dummy_password"],
             context=None,
+            step=1,
         )
         session.id = await authentication_session_service.insert(session)
 

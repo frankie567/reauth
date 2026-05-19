@@ -19,6 +19,7 @@ class AuthenticationSession:
     token_hash: TokenHash
     expires_at: int
     identity_id: typing.Any | None
+    step: int = 0
     amr: list[AuthenticationMethodReference] = dataclasses.field(default_factory=list)
     used_factors: list[str] = dataclasses.field(default_factory=list)
     context: dict[str, typing.Any] | None = None
@@ -181,8 +182,8 @@ class AuthenticationSessionService(abc.ABC):
             # Already used?
             if factor.AMR in authentication_session.amr:
                 continue
-            # Meets min_prior_factors?
-            if len(authentication_session.amr) < factor.min_prior_factors:
+            # At current step?
+            if factor.step != authentication_session.step:
                 continue
             # Enrolled for the identity in the session (if any)?
             if authentication_session.identity_id is not None:
@@ -221,6 +222,7 @@ class AuthenticationSessionService(abc.ABC):
         authentication_session.identity_id = identity_id
         authentication_session.amr.append(factor.AMR)
         authentication_session.used_factors.append(factor.identifier)
+        authentication_session.step += 1
         await self.update(authentication_session)
 
         logger.info(
@@ -230,6 +232,7 @@ class AuthenticationSessionService(abc.ABC):
                 "identity_id": identity_id,
                 "factor_identifier": factor.identifier,
                 "factor_amr": str(factor.AMR),
+                "step": authentication_session.step,
             },
         )
         return authentication_session

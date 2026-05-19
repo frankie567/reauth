@@ -245,11 +245,11 @@ class OIDCFactor(OAuth2Factor[OIDCExtraParams], abc.ABC):
         client_id: str,
         state_service: OAuth2StateService,
         client_secret: str | None = None,
-        min_prior_factors: int = 0,
+        step: int = 0,
     ) -> None:
         super().__init__(
             identifier=identifier,
-            min_prior_factors=min_prior_factors,
+            step=step,
             client_id=client_id,
             client_secret=client_secret,
             state_service=state_service,

@@ -22,26 +22,27 @@ class FactorBase[ENROLLMENT: FactorEnrollment](abc.ABC):
 
     AMR: typing.ClassVar[AuthenticationMethodReference]
 
-    def __init__(self, *, identifier: str, min_prior_factors: int = 0) -> None:
+    def __init__(self, *, identifier: str, step: int = 0) -> None:
         """
         Initialize the factor base.
 
         Args:
             identifier: A unique identifier for the factor,
                 used for logging and API purposes.
-            min_prior_factors: Minimum number of prior factors that must complete
-                before this factor can be used. Defaults to 0 (can be first factor).
+            step: The authentication step at which this factor can be used.
+                Factors are only available when the session's current step matches this value.
+                Defaults to 0 (can be first factor).
         """
         logger.debug(
             "Factor initialized",
             extra={
                 "identifier": identifier,
-                "min_prior_factors": min_prior_factors,
+                "step": step,
                 "amr": str(self.AMR),
             },
         )
         self.identifier = identifier
-        self.min_prior_factors = min_prior_factors
+        self.step = step
 
     @abc.abstractmethod
     async def get_enrollment(self, identity_id: typing.Any) -> ENROLLMENT | None:

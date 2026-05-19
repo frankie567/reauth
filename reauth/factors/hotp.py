@@ -107,9 +107,9 @@ class HOTPFactor(FactorBase[HOTPEnrollment], abc.ABC):
         algorithm: HOTPAlgorithm = "sha1",
         look_ahead: int = 5,
         identifier: str = "hotp",
-        min_prior_factors: int = 1,
+        step: int = 1,
     ) -> None:
-        super().__init__(identifier=identifier, min_prior_factors=min_prior_factors)
+        super().__init__(identifier=identifier, step=step)
         self.code_length = code_length
         self.algorithm: HOTPAlgorithm = algorithm
         self.look_ahead = look_ahead
