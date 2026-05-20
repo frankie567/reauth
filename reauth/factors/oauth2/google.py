@@ -19,8 +19,8 @@ class GoogleOAuth2Factor(OIDCFactor, abc.ABC):
         *,
         identifier: str = "google",
         client_id: str,
+        client_secret: str,
         state_service: OAuth2StateService,
-        client_secret: str | None = None,
         step: int = 0,
     ) -> None:
         super().__init__(

@@ -179,12 +179,10 @@ class OAuth2Factor[EXTRA](FactorBase[OAuth2Enrollment], abc.ABC):
         identifier: str,
         client_id: str,
         state_service: OAuth2StateService,
-        client_secret: str | None = None,
         step: int = 0,
     ) -> None:
         super().__init__(identifier=identifier, step=step)
         self.client_id = client_id
-        self.client_secret = client_secret
         self.state_service = state_service
 
     async def start(
@@ -493,6 +491,21 @@ class OAuth2Factor[EXTRA](FactorBase[OAuth2Enrollment], abc.ABC):
         return enrollment
 
     @abc.abstractmethod
+    async def get_client_secret(self) -> str:
+        """Get the client secret for token exchange.
+
+        This method retrieves the client secret used for client authentication
+        during the OAuth 2.0 token exchange (RFC 6749 Section 4.1.3).
+        Implementations may return a static secret, fetch it from a secure vault,
+        or generate it dynamically (e.g., for providers like Apple that require
+        JWT-based client secrets).
+
+        Returns:
+            The client secret string.
+        """
+        ...
+
+    @abc.abstractmethod
     async def get_authorization_url(
         self,
         *,
@@ -535,7 +548,7 @@ class OAuth2Factor[EXTRA](FactorBase[OAuth2Enrollment], abc.ABC):
         """Exchange authorization code for access token (RFC 6749 Section 4.1.3).
 
         Provider-specific implementations should call their token endpoint
-        and return the token response data. Use self.client_id and self.client_secret
+        and return the token response data. Use self.client_id and get_client_secret()
         for client authentication as required by the provider.
 
         Args:

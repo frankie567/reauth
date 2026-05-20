@@ -30,13 +30,11 @@ class SQLAlchemyOAuth2Factor(OAuth2Factor):
         *,
         identifier: str = "provider",
         client_id: str = "test-client-id",
-        client_secret: str | None = None,
     ) -> None:
         self.connection = connection
         super().__init__(
             identifier=identifier,
             client_id=client_id,
-            client_secret=client_secret,
             state_service=state_service,
         )
 
@@ -51,6 +49,10 @@ class SQLAlchemyOAuth2Factor(OAuth2Factor):
         if row is None:
             return None
         return OAuth2Enrollment(**row._asdict())
+
+    async def get_client_secret(self) -> str:
+        """Return a dummy client secret for testing purposes."""
+        return "test-client-secret"
 
     async def get_authorization_url(
         self,

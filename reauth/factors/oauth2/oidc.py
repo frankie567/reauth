@@ -229,8 +229,16 @@ class OIDCExtraParams(typing.TypedDict, total=False):
     response_mode: typing.Literal["query", "fragment", "form_post"]
 
 
-class OIDCFactor(OAuth2Factor[OIDCExtraParams], abc.ABC):
-    """OpenID Connect factor implementation.
+class OIDCFactorBase(OAuth2Factor[OIDCExtraParams], abc.ABC):
+    """Base OpenID Connect factor implementation.
+
+    This class implements the core OIDC flow using the discovery document
+    and JWKS for ID Token validation.
+
+    Subclasses must implement `get_client_secret()` to provide the client secret
+    for token exchange. For cases where the client secret is static and known
+    at instantiation, use the `OIDCFactor` subclass which provides a default
+    implementation.
 
     References:
         - OpenID Connect Core 1.0: https://openid.net/specs/openid-connect-core-1_0.html
@@ -244,14 +252,12 @@ class OIDCFactor(OAuth2Factor[OIDCExtraParams], abc.ABC):
         identifier: str,
         client_id: str,
         state_service: OAuth2StateService,
-        client_secret: str | None = None,
         step: int = 0,
     ) -> None:
         super().__init__(
             identifier=identifier,
             step=step,
             client_id=client_id,
-            client_secret=client_secret,
             state_service=state_service,
         )
         self._discovery_document: dict[str, typing.Any] | None = None
@@ -323,14 +329,15 @@ class OIDCFactor(OAuth2Factor[OIDCExtraParams], abc.ABC):
             "code": code,
             "redirect_uri": redirect_uri,
         }
+        client_secret = await self.get_client_secret()
         if "client_secret_post" in token_endpoint_auth_methods_supported:
             data = {
                 **data,
                 "client_id": self.client_id,
-                "client_secret": self.client_secret,
+                "client_secret": client_secret,
             }
         elif "client_secret_basic" in token_endpoint_auth_methods_supported:
-            auth = httpx.BasicAuth(self.client_id, self.client_secret or "")
+            auth = httpx.BasicAuth(self.client_id, client_secret)
 
         client = self._get_client()
         if code_verifier is not None:
@@ -489,3 +496,34 @@ class OIDCFactor(OAuth2Factor[OIDCExtraParams], abc.ABC):
 
     def _get_client(self) -> httpx.AsyncClient:  # pragma: no cover
         return self._client
+
+
+class OIDCFactor(OIDCFactorBase):
+    """OpenID Connect factor implementation with a static client secret.
+
+    This class provides a default implementation of `get_client_secret()` that returns
+    a fixed client secret provided at instantiation. Use this for most OAuth providers.
+
+    For providers requiring dynamic client secrets (e.g., Apple Sign In),
+    subclass `OIDCFactorBase` directly and override `get_client_secret()`.
+    """
+
+    def __init__(
+        self,
+        *,
+        identifier: str,
+        client_id: str,
+        client_secret: str,
+        state_service: OAuth2StateService,
+        step: int = 0,
+    ) -> None:
+        super().__init__(
+            identifier=identifier,
+            client_id=client_id,
+            state_service=state_service,
+            step=step,
+        )
+        self._client_secret = client_secret
+
+    async def get_client_secret(self) -> str:
+        return self._client_secret
