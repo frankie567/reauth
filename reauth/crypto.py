@@ -105,8 +105,8 @@ def generate_code_hash_pair(*, secret: str, length: int = 6) -> tuple[str, Token
 
 __all__ = [
     "TokenHash",
-    "get_token_hash",
     "generate_code_hash_pair",
     "generate_token",
     "generate_token_hash_pair",
+    "get_token_hash",
 ]

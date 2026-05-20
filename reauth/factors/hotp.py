@@ -62,37 +62,25 @@ class HOTPEnrollment:
 class HOTPException(ReauthException):
     """Base exception for HOTP errors."""
 
-    pass
-
 
 class AlreadyEnabledHOTPException(HOTPException):
     """Raised when trying to enable an already enabled HOTP factor."""
-
-    pass
 
 
 class NotEnabledHOTPException(HOTPException):
     """Raised when trying to verify an HOTP factor that is not enabled."""
 
-    pass
-
 
 class InvalidHOTPCodeException(HOTPException):
     """Raised when an HOTP code is invalid."""
-
-    pass
 
 
 class AlreadyEnrolledHOTPException(HOTPException):
     """Raised when trying to enroll an identity that already has an HOTP enrollment."""
 
-    pass
-
 
 class NotEnrolledHOTPException(HOTPException):
     """Raised when trying to enable or verify an HOTP factor for an identity with no enrollment."""
-
-    pass
 
 
 class HOTPFactor(FactorBase[HOTPEnrollment], abc.ABC):

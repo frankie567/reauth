@@ -197,7 +197,7 @@ class TestAuthenticationSessionStart:
         self, authentication_session_service: SQLAlchemyAuthenticationSession
     ) -> None:
         """Test that context can be passed to start() and stored in session."""
-        token, session = await authentication_session_service.start(
+        _token, session = await authentication_session_service.start(
             return_to="https://example.com/dashboard",
             original_path="/protected-page",
         )
@@ -211,7 +211,7 @@ class TestAuthenticationSessionStart:
         self, authentication_session_service: SQLAlchemyAuthenticationSession
     ) -> None:
         """Test that context is None when no context is passed."""
-        token, session = await authentication_session_service.start()
+        _token, session = await authentication_session_service.start()
 
         assert session.context is None
 
@@ -270,7 +270,7 @@ class TestGetAvailableFactors:
     async def test_no_identity_zero_factor(
         self, authentication_session_service: SQLAlchemyAuthenticationSession
     ) -> None:
-        token, token_hash = generate_token_hash_pair(
+        _token, token_hash = generate_token_hash_pair(
             secret=authentication_session_service.hash_secret,
             prefix=authentication_session_service.token_prefix,
         )
@@ -291,7 +291,7 @@ class TestGetAvailableFactors:
     async def test_identity_one_factor_enrolled(
         self, authentication_session_service: SQLAlchemyAuthenticationSession
     ) -> None:
-        token, token_hash = generate_token_hash_pair(
+        _token, token_hash = generate_token_hash_pair(
             secret=authentication_session_service.hash_secret,
             prefix=authentication_session_service.token_prefix,
         )
@@ -315,7 +315,7 @@ class TestGetAvailableFactors:
     async def test_identity_one_factor_not_enrolled(
         self, authentication_session_service: SQLAlchemyAuthenticationSession
     ) -> None:
-        token, token_hash = generate_token_hash_pair(
+        _token, token_hash = generate_token_hash_pair(
             secret=authentication_session_service.hash_secret,
             prefix=authentication_session_service.token_prefix,
         )
@@ -343,7 +343,7 @@ class TestAdvance:
         authentication_session_service: SQLAlchemyAuthenticationSession,
         password_factor: DummyPasswordFactor,
     ) -> None:
-        token, token_hash = generate_token_hash_pair(
+        _token, token_hash = generate_token_hash_pair(
             secret=authentication_session_service.hash_secret,
             prefix=authentication_session_service.token_prefix,
         )
@@ -369,7 +369,7 @@ class TestAdvance:
         authentication_session_service: SQLAlchemyAuthenticationSession,
         mfa_factor: DummyMFAFactor,
     ) -> None:
-        token, token_hash = generate_token_hash_pair(
+        _token, token_hash = generate_token_hash_pair(
             secret=authentication_session_service.hash_secret,
             prefix=authentication_session_service.token_prefix,
         )
@@ -401,7 +401,7 @@ class TestAdvance:
         authentication_session_service: SQLAlchemyAuthenticationSession,
         mfa_factor: DummyMFAFactor,
     ) -> None:
-        token, token_hash = generate_token_hash_pair(
+        _token, token_hash = generate_token_hash_pair(
             secret=authentication_session_service.hash_secret,
             prefix=authentication_session_service.token_prefix,
         )
@@ -429,7 +429,7 @@ class TestComplete:
         password_factor: DummyPasswordFactor,
         mfa_factor: DummyMFAFactor,
     ) -> None:
-        token, session = await authentication_session_service.start()
+        _token, session = await authentication_session_service.start()
         session = await authentication_session_service.advance(
             session, 1, password_factor
         )
@@ -452,7 +452,7 @@ class TestComplete:
     async def test_raises_identity_not_attached(
         self, authentication_session_service: SQLAlchemyAuthenticationSession
     ) -> None:
-        token, session = await authentication_session_service.start()
+        _token, session = await authentication_session_service.start()
 
         with pytest.raises(IdentityNotAttachedException):
             await authentication_session_service.complete(session)
@@ -462,7 +462,7 @@ class TestComplete:
         authentication_session_service: SQLAlchemyAuthenticationSession,
         password_factor: DummyPasswordFactor,
     ) -> None:
-        token, session = await authentication_session_service.start()
+        _token, session = await authentication_session_service.start()
         session = await authentication_session_service.advance(
             session, 1, password_factor
         )

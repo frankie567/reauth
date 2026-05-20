@@ -1,9 +1,7 @@
 
 [project]
 name = "reauth"
-authors = [
-  { name = "reauth", email = "hello@fvoron.com" }
-]
+authors = [{ name = "reauth", email = "hello@fvoron.com" }]
 description = "The authentication toolkit for Python"
 readme = "README.md"
 dynamic = ["version"]
@@ -12,12 +10,7 @@ classifiers = [
     "Programming Language :: Python :: 3.14",
 ]
 requires-python = ">=3.14"
-dependencies = [
-    "anyio",
-    "cryptography>=48.0.0,<49.0.0",
-    "httpx>=0.28.1",
-    "pyjwt>=2.12.1",
-]
+dependencies = ["anyio", "cryptography>=48.0.0,<49.0.0", "httpx>=0.28.1", "pyjwt>=2.12.1"]
 
 [project.urls]
 Documentation = "https://frankie567.github.io/reauth/"
@@ -48,7 +41,9 @@ dev = [
 target-version = "py314"
 
 [tool.ruff.lint]
-extend-select = ["I", "TRY", "UP"]
+preview = true
+extend-select = ["I", "TRY", "UP", "DOC"]
+per-file-ignores = { "tests/**" = ["DOC"] }
 
 [tool.pytest.ini_options]
 addopts = "--cov=reauth/ --cov-report=term-missing"

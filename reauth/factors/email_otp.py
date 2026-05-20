@@ -15,7 +15,14 @@ logger = get_logger(__name__)
 
 
 def _hash_email(email: str) -> str:
-    """Hash email for logging correlation without exposing PII."""
+    """Hash email for logging correlation without exposing PII.
+
+    Args:
+        email: The email address to hash.
+
+    Returns:
+        The SHA-256 hash of the email as a hexadecimal string.
+    """
     return hashlib.sha256(email.encode()).hexdigest()
 
 
@@ -48,19 +55,13 @@ class EmailOTP:
 class EmailOTPException(ReauthException):
     """Base exception for email OTP errors."""
 
-    pass
-
 
 class InvalidOTPException(EmailOTPException):
     """Raised when an OTP code is invalid."""
 
-    pass
-
 
 class ExpiredOTPException(EmailOTPException):
     """Raised when an OTP code has expired."""
-
-    pass
 
 
 class EmailOTPFactor(FactorBase[EmailOTPEnrollment], abc.ABC):

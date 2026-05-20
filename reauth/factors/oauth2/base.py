@@ -50,7 +50,15 @@ class OAuth2Enrollment:
     def from_account(
         cls, identity_id: typing.Any, account: OAuth2Account
     ) -> typing.Self:
-        """Create an OAuth2Enrollment from an OAuth2Account."""
+        """Create an OAuth2Enrollment from an OAuth2Account.
+
+        Args:
+            identity_id: The identity ID to associate with the enrollment.
+            account: The OAuth2Account containing the provider account data.
+
+        Returns:
+            A new OAuth2Enrollment instance initialized with the account data.
+        """
         return cls(
             id=None,
             identity_id=identity_id,
@@ -297,6 +305,7 @@ class OAuth2Factor[EXTRA](FactorBase[OAuth2Enrollment], abc.ABC):
         Raises:
             InvalidStateException: If the state token is invalid or expired.
             ExpiredStateException: If the state token has expired.
+            OAuth2CallbackException: RFC 6749 auth error or unsupported error code.
             OAuth2AccessDeniedException: RFC 6749 auth error: access_denied.
             OAuth2MissingCodeException: If authorization code is missing.
             OAuth2InvalidRequestException: RFC 6749 auth error: invalid_request.
@@ -307,7 +316,7 @@ class OAuth2Factor[EXTRA](FactorBase[OAuth2Enrollment], abc.ABC):
             OAuth2TemporarilyUnavailableException: RFC 6749 auth error: temporarily_unavailable.
             OAuth2TokenExchangeException: If token exchange fails (see exchange_code).
             OAuth2IdentityMismatchException: If state identity does not match existing enrollment.
-        """
+        """  # noqa: DOC502
         logger.debug("OAuth2 callback attempted", extra={"provider": self.identifier})
         # Step 1: Handle OAuth2 error response (RFC 6749 Section 4.1.2.1)
         if error is not None:
@@ -476,6 +485,9 @@ class OAuth2Factor[EXTRA](FactorBase[OAuth2Enrollment], abc.ABC):
         Args:
             identity_id: The ID of the identity to enroll the factor for.
             oauth2_account: The OAuth2Account data returned from callback().
+
+        Returns:
+            The newly created OAuth2Enrollment instance.
         """
         logger.debug("OAuth2 enroll attempted", extra={"identity_id": identity_id})
         enrollment = OAuth2Enrollment.from_account(identity_id, oauth2_account)

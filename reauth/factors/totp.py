@@ -73,37 +73,25 @@ class TOTPEnrollment:
 class TOTPException(ReauthException):
     """Base exception for TOTP errors."""
 
-    pass
-
 
 class InvalidTOTPCodeException(TOTPException):
     """Raised when a TOTP code is invalid."""
-
-    pass
 
 
 class AlreadyEnabledTOTPException(TOTPException):
     """Raised when trying to enable an already enabled TOTP factor."""
 
-    pass
-
 
 class NotEnabledTOTPException(TOTPException):
     """Raised when trying to verify a TOTP factor that is not enabled."""
-
-    pass
 
 
 class AlreadyEnrolledTOTPException(TOTPException):
     """Raised when trying to enroll an identity that already has a TOTP enrollment."""
 
-    pass
-
 
 class NotEnrolledTOTPException(TOTPException):
     """Raised when trying to enable or verify a TOTP factor for an identity with no enrollment."""
-
-    pass
 
 
 class TOTPFactor(FactorBase[TOTPEnrollment], abc.ABC):

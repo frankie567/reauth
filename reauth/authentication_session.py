@@ -37,31 +37,21 @@ class AuthenticationSession:
 class AuthenticationSessionException(ReauthException):
     """Base exception for authentication session errors."""
 
-    pass
-
 
 class InvalidSessionTokenException(AuthenticationSessionException):
     """Raised when a token is invalid or does not correspond to any session."""
-
-    pass
 
 
 class ExpiredSessionException(AuthenticationSessionException):
     """Raised when a session has expired."""
 
-    pass
-
 
 class UnavailableFactorException(AuthenticationSessionException):
     """Raised when trying to advance a session with a factor that is not available for the session."""
 
-    pass
-
 
 class IdentityNotAttachedException(AuthenticationSessionException):
     """Raised when trying to complete a session without an identity_id."""
-
-    pass
 
 
 class FactorsRemainingException(AuthenticationSessionException):
@@ -149,7 +139,7 @@ class AuthenticationSessionService(abc.ABC):
             The corresponding AuthenticationSession instance.
 
         Raises:
-            InvalidTokenException: If the token is invalid or does not correspond to any session.
+            InvalidSessionTokenException: If the token is invalid or does not correspond to any session.
             ExpiredSessionException: If the session corresponding to the token has expired.
         """
         logger.debug("Token validation attempted")
