@@ -50,6 +50,7 @@ oauth2_enrollment_table = Table(
     Column("refresh_token", String(512), nullable=True),
     Column("refresh_token_expires_at", BigInteger, nullable=True),
     Column("scope", JSON, nullable=True),
+    Column("id_token", String(1024), nullable=True),
 )
 
 

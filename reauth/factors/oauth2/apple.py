@@ -1,5 +1,6 @@
 import abc
 import time
+import typing
 
 import jwt
 
@@ -13,6 +14,9 @@ class AppleOAuth2Factor(OIDCFactorBase, abc.ABC):
     Unlike most OAuth providers, Apple requires a dynamic client secret generated
     as a JWT and signed with your private key for each authorization request.
     This implementation generates the client secret on-demand using ES256.
+
+    Note: Apple does NOT support a userinfo endpoint. Profile data must be
+    extracted from the id_token using get_id_token_claims().
 
     References:
         - Apple: https://developer.apple.com/documentation/accountorganizationaldatasharing/creating-a-client-secret
@@ -67,3 +71,15 @@ class AppleOAuth2Factor(OIDCFactorBase, abc.ABC):
             },
         )
         return client_secret
+
+    async def get_profile(self, access_token: str) -> dict[str, typing.Any]:
+        """Apple does not support userinfo endpoint.
+
+        Use get_id_token_claims(id_token) instead to extract profile from id_token.
+
+        Raises:
+            NotImplementedError: Always, since Apple has no userinfo endpoint.
+        """
+        raise NotImplementedError(
+            "Apple requires id_token, does not support userinfo endpoint"
+        )

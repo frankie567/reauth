@@ -17,6 +17,22 @@ logger = get_logger(__name__)
 
 
 @dataclasses.dataclass
+class TokenResponse:
+    """Result from exchanging authorization code for tokens (RFC 6749 Section 5.1).
+
+    All OAuth2 providers return access_token and related tokens.
+    OIDC providers additionally populate id_token.
+    """
+
+    account_id: str
+    access_token: str
+    expires_at: int
+    refresh_token: str | None
+    refresh_token_expires_at: int | None
+    id_token: str | None = None
+
+
+@dataclasses.dataclass
 class OAuth2Account:
     """
     Authenticated OAuth2 account from callback for new account signup flows.
@@ -32,6 +48,7 @@ class OAuth2Account:
     refresh_token: str | None
     refresh_token_expires_at: int | None
     scope: list[str]
+    id_token: str | None = None
 
 
 @dataclasses.dataclass
@@ -45,6 +62,7 @@ class OAuth2Enrollment:
     refresh_token: str | None
     refresh_token_expires_at: int | None
     scope: list[str]
+    id_token: str | None = None
 
     @classmethod
     def from_account(
@@ -69,6 +87,7 @@ class OAuth2Enrollment:
             refresh_token=account.refresh_token,
             refresh_token_expires_at=account.refresh_token_expires_at,
             scope=account.scope,
+            id_token=account.id_token,
         )
 
 
@@ -351,13 +370,7 @@ class OAuth2Factor[EXTRA](FactorBase[OAuth2Enrollment], abc.ABC):
         )
 
         # Step 4: Exchange code for token
-        (
-            account_id,
-            access_token,
-            expires_at,
-            refresh_token,
-            refresh_token_expires_at,
-        ) = await self.exchange_code(
+        result = await self.exchange_code(
             code=code,
             redirect_uri=oauth2_state.redirect_uri,
             code_verifier=oauth2_state.code_verifier,
@@ -369,7 +382,7 @@ class OAuth2Factor[EXTRA](FactorBase[OAuth2Enrollment], abc.ABC):
             "OAuth2 token exchange successful",
             extra={
                 "provider": oauth2_state.provider,
-                "account_id": account_id,
+                "account_id": result.account_id,
             },
         )
 
@@ -377,7 +390,7 @@ class OAuth2Factor[EXTRA](FactorBase[OAuth2Enrollment], abc.ABC):
         # Check for existing enrollment by (provider, account_id)
         enrollment = await self.get_enrollment_by_provider_and_account(
             provider=oauth2_state.provider,
-            account_id=account_id,
+            account_id=result.account_id,
         )
 
         # Existing enrollment flow
@@ -396,18 +409,19 @@ class OAuth2Factor[EXTRA](FactorBase[OAuth2Enrollment], abc.ABC):
                         "state_identity_id": oauth2_state.identity_id,
                         "enrollment_identity_id": identity_id,
                         "provider": oauth2_state.provider,
-                        "account_id": account_id,
+                        "account_id": result.account_id,
                     },
                 )
                 raise OAuth2IdentityMismatchException()
 
             # Step 6: Update existing enrollment
             assert enrollment is not None
-            enrollment.access_token = access_token
-            enrollment.expires_at = expires_at
-            enrollment.refresh_token = refresh_token
-            enrollment.refresh_token_expires_at = refresh_token_expires_at
+            enrollment.access_token = result.access_token
+            enrollment.expires_at = result.expires_at
+            enrollment.refresh_token = result.refresh_token
+            enrollment.refresh_token_expires_at = result.refresh_token_expires_at
             enrollment.scope = scope
+            enrollment.id_token = result.id_token
             await self.update(enrollment)
             logger.info(
                 "OAuth2 enrollment updated",
@@ -432,12 +446,13 @@ class OAuth2Factor[EXTRA](FactorBase[OAuth2Enrollment], abc.ABC):
                 id=None,
                 identity_id=identity_id,
                 provider=oauth2_state.provider,
-                account_id=account_id,
-                access_token=access_token,
-                expires_at=expires_at,
-                refresh_token=refresh_token,
-                refresh_token_expires_at=refresh_token_expires_at,
+                account_id=result.account_id,
+                access_token=result.access_token,
+                expires_at=result.expires_at,
+                refresh_token=result.refresh_token,
+                refresh_token_expires_at=result.refresh_token_expires_at,
                 scope=final_scope,
+                id_token=result.id_token,
             )
             enrollment.id = await self.insert(enrollment)
             logger.info(
@@ -457,19 +472,20 @@ class OAuth2Factor[EXTRA](FactorBase[OAuth2Enrollment], abc.ABC):
             "OAuth2 callback: new account, awaiting identity creation",
             extra={
                 "provider": oauth2_state.provider,
-                "account_id": account_id,
+                "account_id": result.account_id,
             },
         )
         return (
             None,
             OAuth2Account(
                 provider=oauth2_state.provider,
-                account_id=account_id,
-                access_token=access_token,
-                expires_at=expires_at,
-                refresh_token=refresh_token,
-                refresh_token_expires_at=refresh_token_expires_at,
+                account_id=result.account_id,
+                access_token=result.access_token,
+                expires_at=result.expires_at,
+                refresh_token=result.refresh_token,
+                refresh_token_expires_at=result.refresh_token_expires_at,
                 scope=oauth2_state.scope or [],
+                id_token=result.id_token,
             ),
         )
 
@@ -556,7 +572,7 @@ class OAuth2Factor[EXTRA](FactorBase[OAuth2Enrollment], abc.ABC):
         redirect_uri: str,
         code_verifier: str | None = None,
         nonce: str | None = None,
-    ) -> tuple[str, str, int, str | None, int | None]:
+    ) -> TokenResponse:
         """Exchange authorization code for access token (RFC 6749 Section 4.1.3).
 
         Provider-specific implementations should call their token endpoint
@@ -570,8 +586,8 @@ class OAuth2Factor[EXTRA](FactorBase[OAuth2Enrollment], abc.ABC):
             nonce: OpenID Connect nonce for ID Token validation.
 
         Returns:
-            A tuple of:
-            (account_id, access_token, expires_at, refresh_token, refresh_token_expires_at)
+            TokenResponse with account_id, access_token, expires_at, refresh_token,
+            refresh_token_expires_at, and optionally id_token for OIDC providers.
 
         Raises:
             OAuth2TokenExchangeException: If token exchange fails.
@@ -623,7 +639,13 @@ class OAuth2Factor[EXTRA](FactorBase[OAuth2Enrollment], abc.ABC):
 
     @abc.abstractmethod
     async def get_profile(self, access_token: str) -> dict[str, typing.Any]:
-        """Fetch user profile from the provider using the access token.
+        """Fetch user profile from the provider.
+
+        OAuth2 providers must implement this to fetch profile data using the
+        access_token at the provider's userinfo endpoint or equivalent.
+
+        For providers that don't support fetching profile data (e.g., Apple),
+        implementations should raise NotImplementedError.
 
         Common claim keys (not exhaustive):
         - sub (str): Unique user identifier at the provider
@@ -642,6 +664,7 @@ class OAuth2Factor[EXTRA](FactorBase[OAuth2Enrollment], abc.ABC):
             dict[str, Any]: Provider-specific profile claims.
 
         Raises:
+            NotImplementedError: If the provider doesn't support profile fetching.
             OAuth2GetProfileException: If fetching the profile fails.
         """
         ...

@@ -13,6 +13,7 @@ from reauth.factors.oauth2.base import (
     OAuth2Factor,
     OAuth2GetProfileException,
     OAuth2TokenExchangeException,
+    TokenResponse,
 )
 from reauth.factors.oauth2.pkce import CodeChallengeMethod
 from reauth.factors.oauth2.state import OAuth2StateService
@@ -315,7 +316,7 @@ class OIDCFactorBase(OAuth2Factor[OIDCExtraParams], abc.ABC):
         redirect_uri: str,
         code_verifier: str | None = None,
         nonce: str | None = None,
-    ) -> tuple[str, str, int, str | None, int | None]:
+    ) -> TokenResponse:
         logger.debug("OIDC exchange_code called", extra={"provider": self.identifier})
         discovery_document = await self._get_discovery_document()
         token_endpoint = discovery_document["token_endpoint"]
@@ -387,23 +388,56 @@ class OIDCFactorBase(OAuth2Factor[OIDCExtraParams], abc.ABC):
             )
             account_id = id_token_payload["sub"]
 
-            return (
-                account_id,
-                access_token,
-                expires_at,
-                refresh_token,
-                refresh_token_expires_at,
+            return TokenResponse(
+                account_id=account_id,
+                access_token=access_token,
+                expires_at=expires_at,
+                refresh_token=refresh_token,
+                refresh_token_expires_at=refresh_token_expires_at,
+                id_token=id_token,
             )
 
         raise OAuth2TokenExchangeException()
 
+    async def get_id_token_claims(self, id_token: str) -> dict[str, typing.Any]:
+        """Decode and return claims from an ID Token JWT.
+
+        This method validates and decodes the id_token JWT, returning the claims.
+        It's intended for providers like Apple that don't support userinfo endpoint.
+
+        Args:
+            id_token: The OIDC ID Token JWT string.
+
+        Returns:
+            dict[str, Any]: The decoded JWT claims/payload.
+        """
+        logger.debug(
+            "OIDC get_id_token_claims called", extra={"provider": self.identifier}
+        )
+        return await self._validate_id_token(id_token)
+
     async def get_profile(self, access_token: str) -> dict[str, typing.Any]:
+        """Get identity claims from provider via userinfo endpoint.
+
+        For OIDC providers that support the userinfo endpoint.
+
+        Args:
+            access_token: The OAuth2 access token for making authenticated requests.
+
+        Returns:
+            dict[str, Any]: Provider-specific profile claims.
+
+        Raises:
+            NotImplementedError: If provider has no userinfo endpoint.
+            OAuth2GetProfileException: If fetching the profile fails.
+        """
         logger.debug("OIDC get_profile called", extra={"provider": self.identifier})
+
         discovery_document = await self._get_discovery_document()
         userinfo_endpoint = discovery_document.get("userinfo_endpoint")
 
         if userinfo_endpoint is None:
-            return {}
+            raise NotImplementedError("Provider has no userinfo endpoint")
 
         try:
             client = self._get_client()
@@ -413,8 +447,8 @@ class OIDCFactorBase(OAuth2Factor[OIDCExtraParams], abc.ABC):
             )
             response.raise_for_status()
             return response.json()
-        except httpx.HTTPError as e:
-            raise OAuth2GetProfileException() from e
+        except httpx.HTTPError:
+            raise OAuth2GetProfileException()
 
     async def _validate_id_token(
         self,

@@ -11,6 +11,7 @@ from reauth.factors.oauth2.base import (
     OAuth2Factor,
     OAuth2IdentityMismatchException,
     OAuth2MissingCodeException,
+    TokenResponse,
 )
 from reauth.factors.oauth2.state import (
     InvalidStateException,
@@ -74,14 +75,14 @@ class SQLAlchemyOAuth2Factor(OAuth2Factor):
         redirect_uri: str,
         code_verifier: str | None = None,
         nonce: str | None = None,
-    ) -> tuple[str, str, int, str | None, int | None]:
+    ) -> TokenResponse:
         """Exchange code for token - returns mock data."""
-        return (
-            "test-account-id",
-            "test-access-token",
-            3600,
-            "test-refresh-token",
-            7200,
+        return TokenResponse(
+            account_id="test-account-id",
+            access_token="test-access-token",
+            expires_at=3600,
+            refresh_token="test-refresh-token",
+            refresh_token_expires_at=7200,
         )
 
     async def insert(self, enrollment: OAuth2Enrollment) -> int:

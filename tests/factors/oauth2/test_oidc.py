@@ -202,6 +202,11 @@ class SQLAlchemyOIDCFactor(OIDCFactor):
     ) -> OAuth2Enrollment | None:
         raise NotImplementedError()
 
+    async def get_id_token_claims(self, id_token: str) -> dict[str, typing.Any]:
+        """Mock get_id_token_claims for testing - decodes without verification."""
+        unverified = jwt.decode_complete(id_token, options={"verify_signature": False})
+        return unverified["payload"]
+
 
 @pytest.fixture(scope="module")
 def rsa_key() -> RSAPrivateKey:
@@ -479,23 +484,18 @@ class TestOIDCFactorExchangeCode:
 
     async def test_successful_exchange(self, oidc_factor: SQLAlchemyOIDCFactor) -> None:
         """Test successful token exchange returns correct data."""
-        (
-            account_id,
-            access_token,
-            expires_at,
-            refresh_token,
-            refresh_token_expires_at,
-        ) = await oidc_factor.exchange_code(
+        result = await oidc_factor.exchange_code(
             code="test-code",
             redirect_uri="https://example.com/callback",
         )
 
-        assert account_id == "test-user-id"
-        assert access_token == "test-access-token"
-        assert expires_at > 0
-        assert refresh_token == "test-refresh-token"
-        assert refresh_token_expires_at is not None
-        assert refresh_token_expires_at > 0
+        assert result.account_id == "test-user-id"
+        assert result.access_token == "test-access-token"
+        assert result.expires_at > 0
+        assert result.refresh_token == "test-refresh-token"
+        assert result.refresh_token_expires_at is not None
+        assert result.refresh_token_expires_at > 0
+        assert result.id_token is not None
 
     async def test_discovery_document_error(
         self, oidc_factor: SQLAlchemyOIDCFactor
