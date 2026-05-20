@@ -42,7 +42,7 @@ target-version = "py314"
 
 [tool.ruff.lint]
 preview = true
-extend-select = ["I", "TRY", "UP", "DOC"]
+extend-select = ["I", "TRY", "UP", "DOC", "B904", "TRY003"]
 per-file-ignores = { "tests/**" = ["DOC"] }
 
 [tool.pytest.ini_options]

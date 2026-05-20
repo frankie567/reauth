@@ -447,8 +447,8 @@ class OIDCFactorBase(OAuth2Factor[OIDCExtraParams], abc.ABC):
             )
             response.raise_for_status()
             return response.json()
-        except httpx.HTTPError:
-            raise OAuth2GetProfileException()
+        except httpx.HTTPError as e:
+            raise OAuth2GetProfileException() from e
 
     async def _validate_id_token(
         self,
