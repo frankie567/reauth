@@ -661,7 +661,7 @@ class OAuth2Factor[EXTRA](FactorBase[OAuth2Enrollment], abc.ABC):
             access_token: The OAuth2 access token for making authenticated requests.
 
         Returns:
-            dict[str, Any]: Provider-specific profile claims.
+            Provider-specific profile claims.
 
         Raises:
             NotImplementedError: If the provider doesn't support profile fetching.
