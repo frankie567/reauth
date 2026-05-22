@@ -31,6 +31,10 @@ class TokenResponse:
     refresh_token_expires_at: int | None
     id_token: str | None = None
 
+    def __post_init__(self) -> None:
+        if not isinstance(self.account_id, str):
+            self.account_id = str(self.account_id)
+
 
 @dataclasses.dataclass
 class OAuth2Account:

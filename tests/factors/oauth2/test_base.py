@@ -437,3 +437,33 @@ class TestOAuth2FactorEnroll:
         assert enrollment.refresh_token == "test-refresh-token"
         assert enrollment.refresh_token_expires_at == 7200
         assert enrollment.scope == ["read", "write"]
+
+
+class TestTokenResponse:
+    """Test TokenResponse dataclass functionality."""
+
+    def test_account_id_string_unchanged(self) -> None:
+        """Test that string account_id remains unchanged."""
+        response = TokenResponse(
+            account_id="test-account-id",
+            access_token="test-token",
+            expires_at=3600,
+            refresh_token=None,
+            refresh_token_expires_at=None,
+        )
+        assert response.account_id == "test-account-id"
+
+    def test_account_id_integer_converted_to_string(self) -> None:
+        """Test that integer account_id is converted to string."""
+        import typing
+
+        account_id_int: int = 12345
+        response = TokenResponse(
+            account_id=typing.cast(str, account_id_int),
+            access_token="test-token",
+            expires_at=3600,
+            refresh_token=None,
+            refresh_token_expires_at=None,
+        )
+        assert response.account_id == "12345"
+        assert isinstance(response.account_id, str)
