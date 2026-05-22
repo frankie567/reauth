@@ -221,6 +221,7 @@ class OAuth2Factor[EXTRA](FactorBase[OAuth2Enrollment], abc.ABC):
         code_challenge_method: CodeChallengeMethod | None = None,
         nonce: str | None = None,
         extra: EXTRA | None = None,
+        **context: typing.Any,
     ) -> tuple[str, str, OAuth2State]:
         """Start the OAuth2 authorization flow.
 
@@ -237,6 +238,8 @@ class OAuth2Factor[EXTRA](FactorBase[OAuth2Enrollment], abc.ABC):
                 None to disable PKCE.
             nonce: OpenID Connect nonce for CSRF protection.
             extra: Additional provider-specific parameters.
+            **context: Optional keyword arguments for any additional data to store with
+                the state.
 
         Returns:
             A tuple of (authorization_url, state_token, oauth2_state).
@@ -261,6 +264,7 @@ class OAuth2Factor[EXTRA](FactorBase[OAuth2Enrollment], abc.ABC):
             nonce=nonce,
             code_verifier=code_verifier,
             scope=scope,
+            **context,
         )
 
         logger.info(

@@ -35,6 +35,7 @@ oauth2_state_table = Table(
     Column("identity_id", BigInteger, nullable=True),
     Column("scope", JSON, nullable=True),
     Column("expires_at", BigInteger, nullable=False),
+    Column("context", JSON, nullable=True),
 )
 
 # Enrollment table for testing

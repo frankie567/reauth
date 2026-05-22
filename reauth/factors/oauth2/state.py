@@ -22,6 +22,7 @@ class OAuth2State:
     identity_id: typing.Any | None
     scope: list[str] | None
     expires_at: int
+    context: dict[str, typing.Any] | None = None
 
 
 class OAuth2StateException(ReauthException):
@@ -63,6 +64,7 @@ class OAuth2StateService(abc.ABC):
         nonce: str | None = None,
         code_verifier: str | None = None,
         scope: list[str] | None = None,
+        **context: typing.Any,
     ) -> tuple[str, OAuth2State]:
         """
         Create a new OAuth2 state and store it.
@@ -85,6 +87,7 @@ class OAuth2StateService(abc.ABC):
             identity_id=identity_id,
             scope=scope,
             expires_at=get_current_timestamp() + int(self.lifetime.total_seconds()),
+            context=context or None,
         )
         oauth2_state.id = await self.insert(oauth2_state)
         logger.info(

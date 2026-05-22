@@ -166,6 +166,31 @@ class TestOAuth2FactorStart:
 
         assert oauth2_state.code_verifier is not None
 
+    async def test_start_with_context(
+        self, oauth2_factor: SQLAlchemyOAuth2Factor
+    ) -> None:
+        """start() stores context keyword arguments in state."""
+        _, _, oauth2_state = await oauth2_factor.start(
+            redirect_uri="https://example.com/callback",
+            auth_session_id=123,
+            return_to="/dashboard",
+        )
+
+        assert oauth2_state.context == {
+            "auth_session_id": 123,
+            "return_to": "/dashboard",
+        }
+
+    async def test_start_without_context(
+        self, oauth2_factor: SQLAlchemyOAuth2Factor
+    ) -> None:
+        """start() sets context to None when no keyword arguments are passed."""
+        _, _, oauth2_state = await oauth2_factor.start(
+            redirect_uri="https://example.com/callback",
+        )
+
+        assert oauth2_state.context is None
+
 
 @pytest.mark.anyio
 class TestOAuth2FactorCallback:

@@ -97,6 +97,31 @@ class TestOAuth2StateCreate:
 
         assert oauth2_state.scope is None
 
+    async def test_with_context(
+        self, oauth2_state_service: SQLAlchemyOAuth2StateService
+    ) -> None:
+        _, oauth2_state = await oauth2_state_service.create(
+            provider="google",
+            redirect_uri="https://example.com/callback",
+            auth_session_id=456,
+            original_url="/dashboard",
+        )
+
+        assert oauth2_state.context == {
+            "auth_session_id": 456,
+            "original_url": "/dashboard",
+        }
+
+    async def test_without_context(
+        self, oauth2_state_service: SQLAlchemyOAuth2StateService
+    ) -> None:
+        _, oauth2_state = await oauth2_state_service.create(
+            provider="google",
+            redirect_uri="https://example.com/callback",
+        )
+
+        assert oauth2_state.context is None
+
 
 @pytest.mark.anyio
 class TestOAuth2StateConsume:
@@ -153,3 +178,16 @@ class TestOAuth2StateConsume:
 
         with pytest.raises(ExpiredStateException):
             await service.consume(state_token)
+
+    async def test_consume_preserves_context(
+        self, oauth2_state_service: SQLAlchemyOAuth2StateService
+    ) -> None:
+        state_token, _ = await oauth2_state_service.create(
+            provider="google",
+            redirect_uri="https://example.com/callback",
+            auth_session_id=789,
+            custom_data="test",
+        )
+
+        oauth2_state = await oauth2_state_service.consume(state_token)
+        assert oauth2_state.context == {"auth_session_id": 789, "custom_data": "test"}
