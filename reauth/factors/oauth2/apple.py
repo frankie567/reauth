@@ -4,7 +4,8 @@ import typing
 
 import jwt
 
-from reauth.factors.oauth2.oidc import OIDCFactorBase
+from reauth.factors.oauth2.oidc import OIDCExtraParams, OIDCFactorBase
+from reauth.factors.oauth2.pkce import CodeChallengeMethod
 from reauth.factors.oauth2.state import OAuth2StateService
 
 
@@ -44,6 +45,32 @@ class AppleOAuth2Factor(OIDCFactorBase, abc.ABC):
         self.team_id = team_id
         self.key_id = key_id
         self.key_value = key_value
+
+    async def get_authorization_url(
+        self,
+        *,
+        redirect_uri: str,
+        scope: list[str] | None = None,
+        state: str,
+        code_challenge: str | None = None,
+        code_challenge_method: CodeChallengeMethod | None = None,
+        nonce: str | None = None,
+        extra: OIDCExtraParams | None = None,
+    ) -> str:
+        scope = scope or []
+        extra = extra or {}
+        # Apple forces the use of form_post response mode when requesting name or email scopes.
+        if "name" in scope or "email" in scope:
+            extra["response_mode"] = "form_post"
+        return await super().get_authorization_url(
+            redirect_uri=redirect_uri,
+            scope=scope,
+            state=state,
+            code_challenge=code_challenge,
+            code_challenge_method=code_challenge_method,
+            nonce=nonce,
+            extra=extra,
+        )
 
     async def get_client_secret(self) -> str:
         """Generate a JWT client secret for Apple's OAuth2 token exchange.
