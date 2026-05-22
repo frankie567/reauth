@@ -9,6 +9,7 @@ This document provides essential guidance for AI agents contributing to Reauth. 
 - Follow good practices and code conventions.
 - Make sure that all the new code is maintainable and follows the SOLID principles.
 - Do not modify unrelated code to the task or issue you are working on.
+- The library is not yet stable and not widely used in production, so breaking changes are encouraged if they are justified by a significant improvement in design, security, or maintainability. Always favor the best design and security practices, even if it means introducing breaking changes.
 
 ### Linting and testing
 

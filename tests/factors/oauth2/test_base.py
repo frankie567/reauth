@@ -255,13 +255,14 @@ class TestOAuth2FactorCallback:
             scope=["read", "write"],
         )
 
-        enrollment, account = await oauth2_factor.callback(
+        enrollment, account, returned_state = await oauth2_factor.callback(
             code="test-code",
             state=state_token,
         )
 
         assert enrollment is not None
         assert account is None
+        assert isinstance(returned_state, OAuth2State)
         assert enrollment.identity_id == 123
         assert enrollment.provider == "provider"
         assert enrollment.account_id == "test-account-id"
@@ -290,13 +291,14 @@ class TestOAuth2FactorCallback:
             scope=["new_scope"],
         )
 
-        enrollment, account = await oauth2_factor.callback(
+        enrollment, account, returned_state = await oauth2_factor.callback(
             code="test-code",
             state=state_token,
         )
 
         assert enrollment is not None
         assert account is None
+        assert isinstance(returned_state, OAuth2State)
         assert enrollment.id == initial.id
         assert enrollment.identity_id == 456
         assert enrollment.access_token == "test-access-token"
@@ -338,13 +340,14 @@ class TestOAuth2FactorCallback:
             redirect_uri="https://example.com/callback",
         )
 
-        enrollment, account = await oauth2_factor.callback(
+        enrollment, account, returned_state = await oauth2_factor.callback(
             code="test-code",
             state=state_token,
         )
 
         assert enrollment is None
         assert isinstance(account, OAuth2Account)
+        assert isinstance(returned_state, OAuth2State)
         assert account.provider == "provider"
         assert account.account_id == "test-account-id"
         assert account.access_token == "test-access-token"
@@ -370,13 +373,14 @@ class TestOAuth2FactorCallback:
             redirect_uri="https://example.com/callback",
         )
 
-        enrollment, account = await oauth2_factor.callback(
+        enrollment, account, returned_state = await oauth2_factor.callback(
             code="test-code",
             state=state_token,
         )
 
         assert enrollment is not None
         assert account is None
+        assert isinstance(returned_state, OAuth2State)
         assert enrollment.identity_id == 111
 
     async def test_uses_state_scope(
@@ -389,13 +393,14 @@ class TestOAuth2FactorCallback:
             scope=["state_scope"],
         )
 
-        enrollment, account = await oauth2_factor.callback(
+        enrollment, account, returned_state = await oauth2_factor.callback(
             code="test-code",
             state=state_token,
         )
 
         assert enrollment is not None
         assert account is None
+        assert isinstance(returned_state, OAuth2State)
         assert enrollment.scope == ["state_scope"]
 
 

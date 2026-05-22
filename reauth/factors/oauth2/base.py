@@ -297,7 +297,10 @@ class OAuth2Factor[EXTRA](FactorBase[OAuth2Enrollment], abc.ABC):
         error: str | None = None,
         error_description: str | None = None,
         error_uri: str | None = None,
-    ) -> tuple[OAuth2Enrollment, None] | tuple[None, OAuth2Account]:
+    ) -> (
+        tuple[OAuth2Enrollment, None, OAuth2State]
+        | tuple[None, OAuth2Account, OAuth2State]
+    ):
         """Process OAuth2 callback and complete the authorization flow.
 
         This is the second step of the OAuth2 authorization code flow (RFC 6749 Section 4.1.2).
@@ -322,8 +325,9 @@ class OAuth2Factor[EXTRA](FactorBase[OAuth2Enrollment], abc.ABC):
             error_uri: URI for more information about the error.
 
         Returns:
-            A tuple of (enrollment, None) for existing users, or (None, account) for new
-            accounts without a pre-existing identity.
+            A tuple of (enrollment, None, state) for existing users, or (None, account, state)
+            for new accounts without a pre-existing identity. The OAuth2State is always
+            returned as the third element, containing the original context passed to start().
 
         Raises:
             InvalidStateException: If the state token is invalid or expired.
@@ -436,7 +440,7 @@ class OAuth2Factor[EXTRA](FactorBase[OAuth2Enrollment], abc.ABC):
                 },
             )
 
-            return (enrollment, None)
+            return (enrollment, None, oauth2_state)
 
         # Associate flow with pre-provisioned identity_id
         if oauth2_state.identity_id is not None:
@@ -468,7 +472,7 @@ class OAuth2Factor[EXTRA](FactorBase[OAuth2Enrollment], abc.ABC):
                 },
             )
 
-            return (enrollment, None)
+            return (enrollment, None, oauth2_state)
 
         # Signup flow - no existing enrollment, no identity_id in state
         # Return account WITHOUT creating enrollment
@@ -491,6 +495,7 @@ class OAuth2Factor[EXTRA](FactorBase[OAuth2Enrollment], abc.ABC):
                 scope=oauth2_state.scope or [],
                 id_token=result.id_token,
             ),
+            oauth2_state,
         )
 
     async def enroll(
