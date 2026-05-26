@@ -104,6 +104,9 @@ class AppleOAuth2Factor(OIDCFactorBase, abc.ABC):
 
         Use get_id_token_claims(id_token) instead to extract profile from id_token.
 
+        Args:
+            access_token: The OAuth2 access token (unused for Apple).
+
         Raises:
             NotImplementedError: Always, since Apple has no userinfo endpoint.
         """

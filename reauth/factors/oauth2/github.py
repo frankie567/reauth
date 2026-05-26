@@ -13,7 +13,7 @@ from reauth.factors.oauth2.base import (
     TokenResponse,
 )
 from reauth.factors.oauth2.pkce import CodeChallengeMethod
-from reauth.factors.oauth2.state import OAuth2StateService
+from reauth.factors.oauth2.state import OAuth2State, OAuth2StateService
 from reauth.logging import get_logger
 from reauth.timestamp import get_current_timestamp
 
@@ -145,6 +145,7 @@ class GitHubOAuth2Factor(OAuth2Factor[GitHubOAuth2Extra], abc.ABC):
         redirect_uri: str,
         code_verifier: str | None = None,
         nonce: str | None = None,
+        state: OAuth2State,
     ) -> TokenResponse:
         logger.debug("GitHub exchange_code called", extra={"provider": self.identifier})
         client_secret = await self.get_client_secret()
@@ -166,10 +167,10 @@ class GitHubOAuth2Factor(OAuth2Factor[GitHubOAuth2Extra], abc.ABC):
                 data=data,
             )
         except httpx.RequestError as e:
-            raise OAuth2TokenExchangeException() from e
+            raise OAuth2TokenExchangeException(state=state) from e
 
         if response.is_server_error:
-            raise OAuth2TokenExchangeException()
+            raise OAuth2TokenExchangeException(state=state)
 
         if response.is_client_error:
             json = response.json()
@@ -179,9 +180,10 @@ class GitHubOAuth2Factor(OAuth2Factor[GitHubOAuth2Extra], abc.ABC):
                 raise error_type(
                     error_description=json.get("error_description"),
                     error_uri=json.get("error_uri"),
+                    state=state,
                 )
             except KeyError as e:
-                raise OAuth2TokenExchangeException() from e
+                raise OAuth2TokenExchangeException(state=state) from e
 
         if response.is_success:
             json = response.json()
@@ -197,7 +199,10 @@ class GitHubOAuth2Factor(OAuth2Factor[GitHubOAuth2Extra], abc.ABC):
                     get_current_timestamp() + json["refresh_token_expires_in"]
                 )
 
-            profile = await self.get_profile(access_token)
+            try:
+                profile = await self.get_profile(access_token)
+            except OAuth2GetProfileException as e:
+                raise OAuth2TokenExchangeException(state=state) from e
             account_id = profile["id"]
 
             return TokenResponse(
@@ -208,7 +213,7 @@ class GitHubOAuth2Factor(OAuth2Factor[GitHubOAuth2Extra], abc.ABC):
                 refresh_token_expires_at=refresh_token_expires_at,
             )
 
-        raise OAuth2TokenExchangeException()
+        raise OAuth2TokenExchangeException(state=state)
 
     async def get_profile(self, access_token: str) -> dict[str, typing.Any]:
         client = self._get_client()

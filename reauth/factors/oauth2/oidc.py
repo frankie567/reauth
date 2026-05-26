@@ -16,7 +16,7 @@ from reauth.factors.oauth2.base import (
     TokenResponse,
 )
 from reauth.factors.oauth2.pkce import CodeChallengeMethod
-from reauth.factors.oauth2.state import OAuth2StateService
+from reauth.factors.oauth2.state import OAuth2State, OAuth2StateService
 from reauth.logging import get_logger
 from reauth.timestamp import get_current_timestamp
 
@@ -316,6 +316,7 @@ class OIDCFactorBase(OAuth2Factor[OIDCExtraParams], abc.ABC):
         redirect_uri: str,
         code_verifier: str | None = None,
         nonce: str | None = None,
+        state: OAuth2State,
     ) -> TokenResponse:
         logger.debug("OIDC exchange_code called", extra={"provider": self.identifier})
         discovery_document = await self._get_discovery_document()
@@ -351,10 +352,10 @@ class OIDCFactorBase(OAuth2Factor[OIDCExtraParams], abc.ABC):
                 auth=auth if auth else httpx.USE_CLIENT_DEFAULT,
             )
         except httpx.RequestError as e:
-            raise OAuth2TokenExchangeException() from e
+            raise OAuth2TokenExchangeException(state=state) from e
 
         if response.is_server_error:
-            raise OAuth2TokenExchangeException()
+            raise OAuth2TokenExchangeException(state=state)
 
         if response.is_client_error:
             json = response.json()
@@ -364,9 +365,10 @@ class OIDCFactorBase(OAuth2Factor[OIDCExtraParams], abc.ABC):
                 raise error_type(
                     error_description=json.get("error_description"),
                     error_uri=json.get("error_uri"),
+                    state=state,
                 )
             except KeyError as e:
-                raise OAuth2TokenExchangeException() from e
+                raise OAuth2TokenExchangeException(state=state) from e
 
         if response.is_success:
             json = response.json()
@@ -383,9 +385,12 @@ class OIDCFactorBase(OAuth2Factor[OIDCExtraParams], abc.ABC):
                 )
 
             id_token = json["id_token"]
-            id_token_payload = await self._validate_id_token(
-                id_token, nonce=nonce, access_token=access_token
-            )
+            try:
+                id_token_payload = await self._validate_id_token(
+                    id_token, nonce=nonce, access_token=access_token
+                )
+            except InvalidIDTokenException as e:
+                raise OAuth2TokenExchangeException(state=state) from e
             account_id = id_token_payload["sub"]
 
             return TokenResponse(
@@ -397,7 +402,7 @@ class OIDCFactorBase(OAuth2Factor[OIDCExtraParams], abc.ABC):
                 id_token=id_token,
             )
 
-        raise OAuth2TokenExchangeException()
+        raise OAuth2TokenExchangeException(state=state)
 
     async def get_id_token_claims(self, id_token: str) -> dict[str, typing.Any]:
         """Decode and return claims from an ID Token JWT.

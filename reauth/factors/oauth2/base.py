@@ -103,11 +103,16 @@ class OAuth2TokenException(OAuth2Exception):
     """Base exception for OAuth2 token endpoint errors (RFC 6749 Section 5.2)."""
 
     def __init__(
-        self, error_description: str | None = None, error_uri: str | None = None
+        self,
+        error_description: str | None = None,
+        error_uri: str | None = None,
+        *,
+        state: OAuth2State,
     ) -> None:
-        super().__init__()
+        super().__init__(error_description)
         self.error_description = error_description
         self.error_uri = error_uri
+        self.state = state
 
 
 class OAuth2TokenExchangeException(OAuth2TokenException):
@@ -136,6 +141,10 @@ class OAuth2TokenUnsupportedGrantTypeException(OAuth2TokenException):
 
 class OAuth2CallbackException(OAuth2Exception):
     """Base exception for OAuth2 callback/authorization errors (RFC 6749 Section 4.1.2.1)."""
+
+    def __init__(self, message: str | None = None, *, state: OAuth2State) -> None:
+        super().__init__(message)
+        self.state = state
 
 
 class OAuth2AccessDeniedException(OAuth2CallbackException):
@@ -349,7 +358,10 @@ class OAuth2Factor[EXTRA](FactorBase[OAuth2Enrollment], abc.ABC):
             OAuth2IdentityMismatchException: If state identity does not match existing enrollment.
         """  # noqa: DOC502
         logger.debug("OAuth2 callback attempted", extra={"provider": self.identifier})
-        # Step 1: Handle OAuth2 error response (RFC 6749 Section 4.1.2.1)
+        # Step 1: Consume the state first (validates and deletes atomically)
+        oauth2_state = await self.state_service.consume(state)
+
+        # Step 2: Handle OAuth2 error response (RFC 6749 Section 4.1.2.1)
         if error is not None:
             logger.warning(
                 "OAuth2 error response received",
@@ -361,16 +373,13 @@ class OAuth2Factor[EXTRA](FactorBase[OAuth2Enrollment], abc.ABC):
             )
             exception_class = _RFC_6749_AUTH_ERROR_MAP.get(error)
             if exception_class is not None:
-                raise exception_class(error_description or error)
-            raise OAuth2CallbackException(error)
+                raise exception_class(error_description or error, state=oauth2_state)
+            raise OAuth2CallbackException(error, state=oauth2_state)
 
-        # Step 2: Validate code is present
+        # Step 3: Validate code is present
         if code is None:
             logger.warning("OAuth2 callback missing code parameter")
-            raise OAuth2MissingCodeException()
-
-        # Step 3: Consume the state (validates and deletes atomically)
-        oauth2_state = await self.state_service.consume(state)
+            raise OAuth2MissingCodeException(state=oauth2_state)
 
         logger.debug(
             "OAuth2 callback processing",
@@ -387,6 +396,7 @@ class OAuth2Factor[EXTRA](FactorBase[OAuth2Enrollment], abc.ABC):
             redirect_uri=oauth2_state.redirect_uri,
             code_verifier=oauth2_state.code_verifier,
             nonce=oauth2_state.nonce,
+            state=oauth2_state,
         )
         scope = oauth2_state.scope or []
 
@@ -424,7 +434,7 @@ class OAuth2Factor[EXTRA](FactorBase[OAuth2Enrollment], abc.ABC):
                         "account_id": result.account_id,
                     },
                 )
-                raise OAuth2IdentityMismatchException()
+                raise OAuth2IdentityMismatchException(state=oauth2_state)
 
             # Step 6: Update existing enrollment
             assert enrollment is not None
@@ -585,6 +595,7 @@ class OAuth2Factor[EXTRA](FactorBase[OAuth2Enrollment], abc.ABC):
         redirect_uri: str,
         code_verifier: str | None = None,
         nonce: str | None = None,
+        state: OAuth2State,
     ) -> TokenResponse:
         """Exchange authorization code for access token (RFC 6749 Section 4.1.3).
 
@@ -597,6 +608,7 @@ class OAuth2Factor[EXTRA](FactorBase[OAuth2Enrollment], abc.ABC):
             redirect_uri: The redirect URI used in the authorization request.
             code_verifier: PKCE code verifier (if PKCE was used).
             nonce: OpenID Connect nonce for ID Token validation.
+            state: The OAuth2 state for this flow, to be passed to exceptions.
 
         Returns:
             TokenResponse with account_id, access_token, expires_at, refresh_token,

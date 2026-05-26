@@ -11,6 +11,7 @@ from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography.hazmat.primitives.asymmetric.rsa import RSAPrivateKey
 from sqlalchemy.ext.asyncio import AsyncConnection
 
+from reauth.crypto import TokenHash
 from reauth.factors.oauth2.base import (
     OAuth2Enrollment,
     OAuth2InvalidClientException,
@@ -27,6 +28,7 @@ from reauth.factors.oauth2.oidc import (
     OIDCFactor,
     validate_id_token,
 )
+from reauth.factors.oauth2.state import OAuth2State
 from reauth.timestamp import get_current_timestamp
 
 from .conftest import SQLAlchemyOAuth2StateService
@@ -206,6 +208,23 @@ class SQLAlchemyOIDCFactor(OIDCFactor):
         """Mock get_id_token_claims for testing - decodes without verification."""
         unverified = jwt.decode_complete(id_token, options={"verify_signature": False})
         return unverified["payload"]
+
+
+@pytest.fixture(scope="module")
+def oauth2_state() -> OAuth2State:
+    """Return a mock OAuth2State for testing."""
+    return OAuth2State(
+        id=None,
+        state_hash=TokenHash("test-hash"),
+        provider="test",
+        code_verifier=None,
+        nonce=None,
+        redirect_uri="https://redirect.example.com",
+        identity_id=None,
+        scope=None,
+        expires_at=9999999999,
+        context=None,
+    )
 
 
 @pytest.fixture(scope="module")
@@ -482,11 +501,14 @@ class TestOIDCFactorGetAuthorizationURL:
 class TestOIDCFactorExchangeCode:
     """Tests for OIDCFactor.exchange_code()."""
 
-    async def test_successful_exchange(self, oidc_factor: SQLAlchemyOIDCFactor) -> None:
+    async def test_successful_exchange(
+        self, oidc_factor: SQLAlchemyOIDCFactor, oauth2_state: OAuth2State
+    ) -> None:
         """Test successful token exchange returns correct data."""
         result = await oidc_factor.exchange_code(
             code="test-code",
             redirect_uri="https://example.com/callback",
+            state=oauth2_state,
         )
 
         assert result.account_id == "test-user-id"
@@ -498,7 +520,7 @@ class TestOIDCFactorExchangeCode:
         assert result.id_token is not None
 
     async def test_discovery_document_error(
-        self, oidc_factor: SQLAlchemyOIDCFactor
+        self, oidc_factor: SQLAlchemyOIDCFactor, oauth2_state: OAuth2State
     ) -> None:
         """Test DiscoveryDocumentException when discovery endpoint fails."""
         oidc_factor.response_map[DISCOVERY_ENDPOINT] = httpx.Response(
@@ -508,9 +530,12 @@ class TestOIDCFactorExchangeCode:
             await oidc_factor.exchange_code(
                 code="test-code",
                 redirect_uri="https://example.com/callback",
+                state=oauth2_state,
             )
 
-    async def test_jwks_error(self, oidc_factor: SQLAlchemyOIDCFactor) -> None:
+    async def test_jwks_error(
+        self, oidc_factor: SQLAlchemyOIDCFactor, oauth2_state: OAuth2State
+    ) -> None:
         """Test DiscoveryDocumentException when JWKS endpoint fails."""
         oidc_factor.response_map[JWKS_URI] = httpx.Response(
             500, json={"error": "Server error"}
@@ -519,10 +544,11 @@ class TestOIDCFactorExchangeCode:
             await oidc_factor.exchange_code(
                 code="test-code",
                 redirect_uri="https://example.com/callback",
+                state=oauth2_state,
             )
 
     async def test_server_error_on_token_exchange(
-        self, oidc_factor: SQLAlchemyOIDCFactor
+        self, oidc_factor: SQLAlchemyOIDCFactor, oauth2_state: OAuth2State
     ) -> None:
         """Test OAuth2TokenExchangeException on server error."""
         oidc_factor.response_map[TOKEN_ENDPOINT] = httpx.Response(
@@ -532,6 +558,7 @@ class TestOIDCFactorExchangeCode:
             await oidc_factor.exchange_code(
                 code="test-code",
                 redirect_uri="https://example.com/callback",
+                state=oauth2_state,
             )
 
     @pytest.mark.parametrize(
@@ -547,6 +574,7 @@ class TestOIDCFactorExchangeCode:
     async def test_rfc6749_token_errors(
         self,
         oidc_factor: SQLAlchemyOIDCFactor,
+        oauth2_state: OAuth2State,
         error: str,
         expected_exception: type[Exception],
     ) -> None:
@@ -558,4 +586,5 @@ class TestOIDCFactorExchangeCode:
             await oidc_factor.exchange_code(
                 code="test-code",
                 redirect_uri="https://example.com/callback",
+                state=oauth2_state,
             )

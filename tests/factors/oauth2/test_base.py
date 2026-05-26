@@ -75,6 +75,7 @@ class SQLAlchemyOAuth2Factor(OAuth2Factor):
         redirect_uri: str,
         code_verifier: str | None = None,
         nonce: str | None = None,
+        state: OAuth2State,
     ) -> TokenResponse:
         """Exchange code for token - returns mock data."""
         return TokenResponse(
@@ -217,10 +218,14 @@ class TestOAuth2FactorCallback:
         error_description: str | None,
     ) -> None:
         """Test that OAuth2 errors are properly handled."""
+        # Create a valid state first
+        _, state_token, _ = await oauth2_factor.start(
+            redirect_uri="https://example.com/callback"
+        )
         with pytest.raises(OAuth2CallbackException):
             await oauth2_factor.callback(
                 code="some-code",
-                state="invalid-state",
+                state=state_token,
                 error=error,
                 error_description=error_description,
             )
@@ -229,10 +234,14 @@ class TestOAuth2FactorCallback:
         self, oauth2_factor: SQLAlchemyOAuth2Factor
     ) -> None:
         """Test that missing code raises appropriate exception."""
+        # Create a valid state first
+        _, state_token, _ = await oauth2_factor.start(
+            redirect_uri="https://example.com/callback"
+        )
         with pytest.raises(OAuth2MissingCodeException):
             await oauth2_factor.callback(
                 code=None,
-                state="invalid-state",
+                state=state_token,
             )
 
     async def test_invalid_state_error(
