@@ -54,8 +54,8 @@ class SQLAlchemyTOTPFactor(TOTPFactor):
         self.connection = connection
         super().__init__(algorithm=algorithm)
 
-    async def get_enrollment(self, identity_id: int) -> TOTPEnrollment | None:
-        """Retrieve the TOTP enrollment for a given identity."""
+    async def get_by_identity_id(self, identity_id: int) -> TOTPEnrollment | None:
+        """Retrieve the TOTP enrollment for a given identity, regardless of enabled state."""
         result = await self.connection.execute(
             select(totp_table).where(totp_table.c.identity_id == identity_id)
         )

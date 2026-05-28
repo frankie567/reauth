@@ -115,6 +115,26 @@ class TOTPFactor(FactorBase[TOTPEnrollment], abc.ABC):
         self.time_step = time_step
         self.drift_tolerance = drift_tolerance
 
+    async def get_enrollment(self, identity_id: typing.Any) -> TOTPEnrollment | None:
+        """
+        Get the TOTP enrollment for a given identity, returning only enabled enrollments.
+
+        This method returns None for both non-existent enrollments and disabled enrollments.
+        Use `get_by_identity_id` if you need to access disabled enrollments
+        (e.g., during the enable flow).
+
+        Args:
+            identity_id: The ID of the identity to get the TOTP enrollment for.
+
+        Returns:
+            The enabled TOTP enrollment for the identity, or None if no enrollment exists
+            or the enrollment is disabled.
+        """
+        enrollment = await self.get_by_identity_id(identity_id)
+        if enrollment is None or not enrollment.enabled:
+            return None
+        return enrollment
+
     async def enroll(self, identity_id: typing.Any) -> TOTPEnrollment:
         """
         Enroll a new TOTP factor for a given identity.
@@ -132,7 +152,7 @@ class TOTPFactor(FactorBase[TOTPEnrollment], abc.ABC):
             AlreadyEnrolledTOTPException: If the identity already has a TOTP enrollment.
         """
         logger.debug("TOTP enroll attempted", extra={"identity_id": identity_id})
-        existing = await self.get_enrollment(identity_id)
+        existing = await self.get_by_identity_id(identity_id)
         if existing is not None:
             raise AlreadyEnrolledTOTPException()
 
@@ -177,7 +197,7 @@ class TOTPFactor(FactorBase[TOTPEnrollment], abc.ABC):
             InvalidTOTPCodeException: If the provided code is invalid.
         """
         logger.debug("TOTP enable attempted", extra={"identity_id": identity_id})
-        totp = await self.get_enrollment(identity_id)
+        totp = await self.get_by_identity_id(identity_id)
         if totp is None:
             logger.warning(
                 "TOTP enable failed: not enrolled",
@@ -222,7 +242,7 @@ class TOTPFactor(FactorBase[TOTPEnrollment], abc.ABC):
             InvalidTOTPCodeException: If the provided code is invalid or has already been used.
         """
         logger.debug("TOTP verification attempted", extra={"identity_id": identity_id})
-        totp = await self.get_enrollment(identity_id)
+        totp = await self.get_by_identity_id(identity_id)
         if totp is None:
             logger.warning(
                 "TOTP verify failed: not enrolled",
@@ -278,6 +298,29 @@ class TOTPFactor(FactorBase[TOTPEnrollment], abc.ABC):
                 # Update last verified time step
                 totp.last_verified_time_step = check_time_step
                 return totp
+
+    @abc.abstractmethod
+    async def get_by_identity_id(
+        self, identity_id: typing.Any
+    ) -> TOTPEnrollment | None:
+        """
+        Get the raw TOTP enrollment for a given identity, regardless of its enabled state.
+
+        This method is the primary data access point for implementers. It should retrieve
+        the enrollment record from persistent storage without any filtering based on
+        the enabled state.
+
+        The `get_enrollment` method uses this to provide a filtered view that excludes
+        disabled enrollments.
+
+        Args:
+            identity_id: The ID of the identity to get the TOTP enrollment for.
+
+        Returns:
+            The TOTP enrollment for the identity, or None if no enrollment exists.
+            This may return a disabled enrollment.
+        """
+        ...
 
     @abc.abstractmethod
     async def insert(self, totp: TOTPEnrollment) -> typing.Any:

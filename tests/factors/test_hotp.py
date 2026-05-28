@@ -49,8 +49,8 @@ class SQLAlchemyHOTPFactor(HOTPFactor):
         self.connection = connection
         super().__init__()
 
-    async def get_enrollment(self, identity_id: int) -> HOTPEnrollment | None:
-        """Retrieve the HOTP enrollment for a given identity."""
+    async def get_by_identity_id(self, identity_id: int) -> HOTPEnrollment | None:
+        """Retrieve the HOTP enrollment for a given identity, regardless of enabled state."""
         result = await self.connection.execute(
             select(hotp_table).where(hotp_table.c.identity_id == identity_id)
         )

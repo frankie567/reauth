@@ -102,6 +102,26 @@ class HOTPFactor(FactorBase[HOTPEnrollment], abc.ABC):
         self.algorithm: HOTPAlgorithm = algorithm
         self.look_ahead = look_ahead
 
+    async def get_enrollment(self, identity_id: typing.Any) -> HOTPEnrollment | None:
+        """
+        Get the HOTP enrollment for a given identity, returning only enabled enrollments.
+
+        This method returns None for both non-existent enrollments and disabled enrollments.
+        Use `get_by_identity_id` if you need to access disabled enrollments
+        (e.g., during the enable flow).
+
+        Args:
+            identity_id: The ID of the identity to get the HOTP enrollment for.
+
+        Returns:
+            The enabled HOTP enrollment for the identity, or None if no enrollment exists
+            or the enrollment is disabled.
+        """
+        enrollment = await self.get_by_identity_id(identity_id)
+        if enrollment is None or not enrollment.enabled:
+            return None
+        return enrollment
+
     async def enroll(self, identity_id: typing.Any) -> HOTPEnrollment:
         """
         Enroll a new HOTP factor for a given identity.
@@ -119,7 +139,7 @@ class HOTPFactor(FactorBase[HOTPEnrollment], abc.ABC):
             AlreadyEnrolledHOTPException: If the identity already has an HOTP enrollment.
         """
         logger.debug("HOTP enroll attempted", extra={"identity_id": identity_id})
-        existing = await self.get_enrollment(identity_id)
+        existing = await self.get_by_identity_id(identity_id)
         if existing is not None:
             raise AlreadyEnrolledHOTPException()
 
@@ -163,7 +183,7 @@ class HOTPFactor(FactorBase[HOTPEnrollment], abc.ABC):
             InvalidHOTPCodeException: If the provided code is invalid.
         """
         logger.debug("HOTP enable attempted", extra={"identity_id": identity_id})
-        hotp = await self.get_enrollment(identity_id)
+        hotp = await self.get_by_identity_id(identity_id)
         if hotp is None:
             logger.warning(
                 "HOTP enable failed: not enrolled",
@@ -210,7 +230,7 @@ class HOTPFactor(FactorBase[HOTPEnrollment], abc.ABC):
             InvalidHOTPCodeException: If the provided code is invalid.
         """
         logger.debug("HOTP verification attempted", extra={"identity_id": identity_id})
-        hotp = await self.get_enrollment(identity_id)
+        hotp = await self.get_by_identity_id(identity_id)
         if hotp is None:
             logger.warning(
                 "HOTP verify failed: not enrolled",
@@ -252,6 +272,29 @@ class HOTPFactor(FactorBase[HOTPEnrollment], abc.ABC):
 
         hotp.counter = counter + 1
         return hotp
+
+    @abc.abstractmethod
+    async def get_by_identity_id(
+        self, identity_id: typing.Any
+    ) -> HOTPEnrollment | None:
+        """
+        Get the raw HOTP enrollment for a given identity, regardless of its enabled state.
+
+        This method is the primary data access point for implementers. It should retrieve
+        the enrollment record from persistent storage without any filtering based on
+        the enabled state.
+
+        The `get_enrollment` method uses this to provide a filtered view that excludes
+        disabled enrollments.
+
+        Args:
+            identity_id: The ID of the identity to get the HOTP enrollment for.
+
+        Returns:
+            The HOTP enrollment for the identity, or None if no enrollment exists.
+            This may return a disabled enrollment.
+        """
+        ...
 
     @abc.abstractmethod
     async def insert(self, hotp: HOTPEnrollment) -> typing.Any:
