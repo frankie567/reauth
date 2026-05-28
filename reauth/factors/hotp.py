@@ -141,7 +141,14 @@ class HOTPFactor(FactorBase[HOTPEnrollment], abc.ABC):
         logger.debug("HOTP enroll attempted", extra={"identity_id": identity_id})
         existing = await self.get_by_identity_id(identity_id)
         if existing is not None:
-            raise AlreadyEnrolledHOTPException()
+            if existing.enabled:
+                raise AlreadyEnrolledHOTPException()
+            # Delete disabled enrollment to allow re-enrollment
+            logger.debug(
+                "HOTP re-enroll: deleting disabled enrollment",
+                extra={"identity_id": identity_id},
+            )
+            await self.delete(existing)
 
         secret = secrets.token_bytes(20)  # 160-bit secret key
         hotp = HOTPEnrollment(
@@ -320,5 +327,17 @@ class HOTPFactor(FactorBase[HOTPEnrollment], abc.ABC):
 
         Args:
             hotp: The HOTP factor to update.
+        """
+        ...
+
+    @abc.abstractmethod
+    async def delete(self, hotp: HOTPEnrollment) -> None:
+        """
+        Delete an HOTP factor from the persistent store.
+
+        Implementers should implement this method.
+
+        Args:
+            hotp: The HOTP factor to delete.
         """
         ...

@@ -76,6 +76,12 @@ class SQLAlchemyHOTPFactor(HOTPFactor):
             .values(**dataclasses.asdict(hotp))
         )
 
+    async def delete(self, hotp: HOTPEnrollment) -> None:
+        """Delete an HOTP from the database."""
+        await self.connection.execute(
+            hotp_table.delete().where(hotp_table.c.id == hotp.id)
+        )
+
 
 @pytest.fixture
 async def sqlalchemy_connection(
@@ -163,10 +169,24 @@ class TestHOTPEnroll:
         self, hotp_factor: SQLAlchemyHOTPFactor, make_hotp: MakeHOTPCallable
     ) -> None:
         identity_id = 123
-        await make_hotp(identity_id=identity_id)
+        # Create an ENABLED enrollment to test duplicate protection
+        await make_hotp(identity_id=identity_id, enabled=True)
 
         with pytest.raises(AlreadyEnrolledHOTPException):
             await hotp_factor.enroll(identity_id)
+
+    async def test_enroll_replaces_disabled(
+        self, hotp_factor: SQLAlchemyHOTPFactor, make_hotp: MakeHOTPCallable
+    ) -> None:
+        """Test that enrolling replaces a disabled enrollment (delete-on-re-enroll)."""
+        identity_id = 123
+        # Create a DISABLED enrollment
+        await make_hotp(identity_id=identity_id, enabled=False)
+
+        # Should succeed - disabled enrollment is deleted and replaced
+        new_enrollment = await hotp_factor.enroll(identity_id)
+        assert new_enrollment is not None
+        assert new_enrollment.enabled is False
 
 
 @pytest.mark.anyio

@@ -154,7 +154,14 @@ class TOTPFactor(FactorBase[TOTPEnrollment], abc.ABC):
         logger.debug("TOTP enroll attempted", extra={"identity_id": identity_id})
         existing = await self.get_by_identity_id(identity_id)
         if existing is not None:
-            raise AlreadyEnrolledTOTPException()
+            if existing.enabled:
+                raise AlreadyEnrolledTOTPException()
+            # Delete disabled enrollment to allow re-enrollment
+            logger.debug(
+                "TOTP re-enroll: deleting disabled enrollment",
+                extra={"identity_id": identity_id},
+            )
+            await self.delete(existing)
 
         secret = secrets.token_bytes(20)  # 160-bit secret key
         totp = TOTPEnrollment(
@@ -330,4 +337,9 @@ class TOTPFactor(FactorBase[TOTPEnrollment], abc.ABC):
     @abc.abstractmethod
     async def update(self, totp: TOTPEnrollment) -> None:
         """Update a TOTP factor in the persistent store."""
+        ...
+
+    @abc.abstractmethod
+    async def delete(self, totp: TOTPEnrollment) -> None:
+        """Delete a TOTP factor from the persistent store."""
         ...

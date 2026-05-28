@@ -81,6 +81,12 @@ class SQLAlchemyTOTPFactor(TOTPFactor):
             .values(**dataclasses.asdict(totp))
         )
 
+    async def delete(self, totp: TOTPEnrollment) -> None:
+        """Delete a TOTP from the database."""
+        await self.connection.execute(
+            totp_table.delete().where(totp_table.c.id == totp.id)
+        )
+
 
 @pytest.fixture
 async def sqlalchemy_connection(
@@ -177,10 +183,24 @@ class TestTOTPEnroll:
         self, totp_factor: SQLAlchemyTOTPFactor, make_totp: MakeTOTPCallable
     ) -> None:
         identity_id = 123
-        await make_totp(identity_id=identity_id)
+        # Create an ENABLED enrollment to test duplicate protection
+        await make_totp(identity_id=identity_id, enabled=True)
 
         with pytest.raises(AlreadyEnrolledTOTPException):
             await totp_factor.enroll(identity_id)
+
+    async def test_enroll_replaces_disabled(
+        self, totp_factor: SQLAlchemyTOTPFactor, make_totp: MakeTOTPCallable
+    ) -> None:
+        """Test that enrolling replaces a disabled enrollment (delete-on-re-enroll)."""
+        identity_id = 123
+        # Create a DISABLED enrollment
+        await make_totp(identity_id=identity_id, enabled=False)
+
+        # Should succeed - disabled enrollment is deleted and replaced
+        new_enrollment = await totp_factor.enroll(identity_id)
+        assert new_enrollment is not None
+        assert new_enrollment.enabled is False
 
 
 @pytest.mark.anyio
