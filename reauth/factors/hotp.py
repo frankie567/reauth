@@ -4,6 +4,7 @@ import dataclasses
 import functools
 import secrets
 import typing
+import unicodedata
 
 from cryptography.hazmat.primitives.hashes import SHA1
 from cryptography.hazmat.primitives.twofactor import InvalidToken
@@ -265,6 +266,7 @@ class HOTPFactor(FactorBase[HOTPEnrollment], abc.ABC):
         return hotp
 
     def _verify(self, hotp: HOTPEnrollment, code: str) -> HOTPEnrollment:
+        code = unicodedata.normalize("NFKC", code)
         encoded_code = code.encode("ascii")
         counter = hotp.counter
 

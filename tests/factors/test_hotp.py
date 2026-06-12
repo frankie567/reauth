@@ -278,3 +278,49 @@ class TestHOTPVerify:
         updated_hotp = await hotp_factor.verify(hotp.identity_id, expected_code)
 
         assert updated_hotp.counter == 5
+
+
+@pytest.mark.anyio
+class TestHOTPUnicodeNormalization:
+    """Tests for Unicode normalization of HOTP codes (e.g., fullwidth digits)."""
+
+    @staticmethod
+    def _to_fullwidth(code: str) -> str:
+        """Convert ASCII digits to fullwidth Unicode digits (U+FF10-U+FF19)."""
+        return "".join(chr(ord(c) + 0xFEE0) for c in code)
+
+    async def test_fullwidth_valid_code(
+        self, hotp_factor: SQLAlchemyHOTPFactor, make_hotp: MakeHOTPCallable
+    ) -> None:
+        """Test that fullwidth Unicode digits are normalized and accepted."""
+        hotp = await make_hotp(enabled=True)
+
+        expected_code = hotp._impl.generate(hotp.counter).decode("ascii")
+        fullwidth_code = self._to_fullwidth(expected_code)
+
+        updated_hotp = await hotp_factor.verify(hotp.identity_id, fullwidth_code)
+        assert updated_hotp.counter == 1
+
+    async def test_fullwidth_invalid_code(
+        self, hotp_factor: SQLAlchemyHOTPFactor, make_hotp: MakeHOTPCallable
+    ) -> None:
+        """Test that invalid fullwidth Unicode code raises InvalidHOTPCodeException."""
+        hotp = await make_hotp(enabled=True)
+
+        fullwidth_invalid_code = self._to_fullwidth("000000")
+
+        with pytest.raises(InvalidHOTPCodeException):
+            await hotp_factor.verify(hotp.identity_id, fullwidth_invalid_code)
+
+    async def test_fullwidth_enable_valid_code(
+        self, hotp_factor: SQLAlchemyHOTPFactor, make_hotp: MakeHOTPCallable
+    ) -> None:
+        """Test that fullwidth Unicode digits work during enable."""
+        hotp = await make_hotp(enabled=False)
+
+        expected_code = hotp._impl.generate(hotp.counter).decode("ascii")
+        fullwidth_code = self._to_fullwidth(expected_code)
+
+        updated_hotp = await hotp_factor.enable(hotp.identity_id, fullwidth_code)
+        assert updated_hotp.enabled is True
+        assert updated_hotp.counter == 1

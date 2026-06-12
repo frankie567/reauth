@@ -5,6 +5,7 @@ import functools
 import secrets
 import time
 import typing
+import unicodedata
 
 from cryptography.hazmat.primitives.hashes import SHA1
 from cryptography.hazmat.primitives.twofactor import InvalidToken
@@ -277,6 +278,7 @@ class TOTPFactor(FactorBase[TOTPEnrollment], abc.ABC):
         return totp
 
     def _verify(self, totp: TOTPEnrollment, code: str) -> TOTPEnrollment:
+        code = unicodedata.normalize("NFKC", code)
         encoded_code = code.encode("ascii")
         current_time = int(time.time())
         drift = -self.drift_tolerance

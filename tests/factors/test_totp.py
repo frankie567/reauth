@@ -342,3 +342,52 @@ class TestTOTPVerify:
         next_code = totp._impl.generate(next_time).decode("ascii")
         updated_totp = await totp_factor.verify(totp.identity_id, next_code)
         assert updated_totp.last_verified_time_step is not None
+
+
+@pytest.mark.anyio
+class TestTOTPUnicodeNormalization:
+    """Tests for Unicode normalization of TOTP codes (e.g., fullwidth digits)."""
+
+    @staticmethod
+    def _to_fullwidth(code: str) -> str:
+        """Convert ASCII digits to fullwidth Unicode digits (U+FF10-U+FF19)."""
+        return "".join(chr(ord(c) + 0xFEE0) for c in code)
+
+    async def test_fullwidth_valid_code(
+        self, totp_factor: SQLAlchemyTOTPFactor, make_totp: MakeTOTPCallable
+    ) -> None:
+        """Test that fullwidth Unicode digits are normalized and accepted."""
+        totp = await make_totp(enabled=True)
+
+        current_time = time.time()
+        expected_code = totp._impl.generate(current_time).decode("ascii")
+        # Convert to fullwidth Unicode digits
+        fullwidth_code = self._to_fullwidth(expected_code)
+
+        updated_totp = await totp_factor.verify(totp.identity_id, fullwidth_code)
+        assert updated_totp.last_verified_time_step is not None
+
+    async def test_fullwidth_invalid_code(
+        self, totp_factor: SQLAlchemyTOTPFactor, make_totp: MakeTOTPCallable
+    ) -> None:
+        """Test that invalid fullwidth Unicode code raises InvalidTOTPCodeException."""
+        totp = await make_totp(enabled=True)
+
+        # Use an invalid fullwidth code (all zeros in fullwidth)
+        fullwidth_invalid_code = self._to_fullwidth("000000")
+
+        with pytest.raises(InvalidTOTPCodeException):
+            await totp_factor.verify(totp.identity_id, fullwidth_invalid_code)
+
+    async def test_fullwidth_enable_valid_code(
+        self, totp_factor: SQLAlchemyTOTPFactor, make_totp: MakeTOTPCallable
+    ) -> None:
+        """Test that fullwidth Unicode digits work during enable."""
+        totp = await make_totp(enabled=False)
+
+        current_time = time.time()
+        expected_code = totp._impl.generate(current_time).decode("ascii")
+        fullwidth_code = self._to_fullwidth(expected_code)
+
+        updated_totp = await totp_factor.enable(totp.identity_id, fullwidth_code)
+        assert updated_totp.enabled is True
