@@ -6,7 +6,7 @@ import urllib.parse
 import httpx
 import jwt
 import pytest
-from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography.hazmat.primitives.asymmetric.rsa import RSAPrivateKey
 from sqlalchemy.ext.asyncio import AsyncConnection
@@ -22,10 +22,13 @@ from reauth.factors.oauth2.base import (
     OAuth2TokenUnsupportedGrantTypeException,
 )
 from reauth.factors.oauth2.oidc import (
+    CLIENT_ASSERTION_TYPE,
     DiscoveryDocumentException,
     InvalidIDTokenException,
     JWKSFetchException,
     OIDCFactor,
+    PrivateKeyJWTOIDCFactor,
+    build_client_assertion,
     validate_id_token,
 )
 from reauth.factors.oauth2.state import OAuth2State
@@ -588,3 +591,199 @@ class TestOIDCFactorExchangeCode:
                 redirect_uri="https://example.com/callback",
                 state=oauth2_state,
             )
+
+
+def rsa_key_to_pem(key: RSAPrivateKey) -> str:
+    return key.private_bytes(
+        encoding=serialization.Encoding.PEM,
+        format=serialization.PrivateFormat.PKCS8,
+        encryption_algorithm=serialization.NoEncryption(),
+    ).decode()
+
+
+class SQLAlchemyPrivateKeyJWTOIDCFactor(PrivateKeyJWTOIDCFactor):
+    """Concrete PrivateKeyJWTOIDCFactor for testing, with a mocked provider."""
+
+    DISCOVERY_ENDPOINT = DISCOVERY_ENDPOINT
+
+    def __init__(
+        self,
+        connection: AsyncConnection,
+        state_service: SQLAlchemyOAuth2StateService,
+        idp_key: RSAPrivateKey,
+        signing_key: RSAPrivateKey,
+    ) -> None:
+        super().__init__(
+            identifier="oidc",
+            client_id="test-client-id",
+            signing_key=rsa_key_to_pem(signing_key),
+            state_service=state_service,
+            kid="signing-key-1",
+        )
+        self.connection = connection
+        self.requests: list[httpx.Request] = []
+        algorithm = jwt.get_algorithm_by_name("RS256")
+        jwk = {
+            **algorithm.to_jwk(idp_key.public_key(), as_dict=True),
+            "kid": "test-key-1",
+        }
+        self.response_map = {
+            DISCOVERY_ENDPOINT: httpx.Response(
+                200,
+                json={
+                    "authorization_endpoint": AUTHORIZATION_ENDPOINT,
+                    "token_endpoint": TOKEN_ENDPOINT,
+                    "jwks_uri": JWKS_URI,
+                    "issuer": ISSUER,
+                    "id_token_signing_alg_values_supported": ["RS256"],
+                    "token_endpoint_auth_methods_supported": ["private_key_jwt"],
+                },
+            ),
+            JWKS_URI: httpx.Response(200, json={"keys": [jwk]}),
+            TOKEN_ENDPOINT: httpx.Response(
+                200,
+                json={
+                    "access_token": "test-access-token",
+                    "expires_in": 3600,
+                    "id_token": create_id_token(
+                        idp_key,
+                        issuer=ISSUER,
+                        audience=self.client_id,
+                        access_token="test-access-token",
+                    ),
+                },
+            ),
+        }
+
+    def _get_client(self) -> httpx.AsyncClient:
+        def handle_request(request: httpx.Request) -> httpx.Response:
+            self.requests.append(request)
+            return self.response_map.get(
+                str(request.url), httpx.Response(404, json={"error": "Not found"})
+            )
+
+        return httpx.AsyncClient(transport=httpx.MockTransport(handle_request))
+
+    async def insert(self, enrollment: OAuth2Enrollment) -> int:
+        raise NotImplementedError()
+
+    async def update(self, enrollment: OAuth2Enrollment) -> None:
+        raise NotImplementedError()
+
+    async def get_enrollment(self, identity_id: int) -> OAuth2Enrollment | None:
+        raise NotImplementedError()
+
+    async def get_enrollment_by_provider_and_account(
+        self, provider: str, account_id: str
+    ) -> OAuth2Enrollment | None:
+        raise NotImplementedError()
+
+
+@pytest.fixture
+def signing_key() -> RSAPrivateKey:
+    return generate_rsa_key()
+
+
+@pytest.fixture
+def private_key_jwt_factor(
+    sqlalchemy_connection: AsyncConnection,
+    oauth2_state_service: SQLAlchemyOAuth2StateService,
+    rsa_key: RSAPrivateKey,
+    signing_key: RSAPrivateKey,
+) -> SQLAlchemyPrivateKeyJWTOIDCFactor:
+    return SQLAlchemyPrivateKeyJWTOIDCFactor(
+        sqlalchemy_connection, oauth2_state_service, rsa_key, signing_key
+    )
+
+
+def parse_token_request(factor: SQLAlchemyPrivateKeyJWTOIDCFactor) -> dict[str, str]:
+    token_request = next(
+        request for request in factor.requests if str(request.url) == TOKEN_ENDPOINT
+    )
+    return dict(urllib.parse.parse_qsl(token_request.content.decode()))
+
+
+class TestBuildClientAssertion:
+    def test_claims_and_header(self, signing_key: RSAPrivateKey) -> None:
+        assertion = build_client_assertion(
+            client_id="test-client-id",
+            token_endpoint=TOKEN_ENDPOINT,
+            key=rsa_key_to_pem(signing_key),
+            kid="signing-key-1",
+        )
+
+        assert jwt.get_unverified_header(assertion)["kid"] == "signing-key-1"
+        claims = jwt.decode(
+            assertion,
+            signing_key.public_key(),
+            algorithms=["RS256"],
+            audience=TOKEN_ENDPOINT,
+        )
+        assert claims["iss"] == "test-client-id"
+        assert claims["sub"] == "test-client-id"
+        assert claims["aud"] == TOKEN_ENDPOINT
+        assert claims["exp"] > claims["iat"]
+        assert "jti" in claims
+
+    def test_unique_jti(self, signing_key: RSAPrivateKey) -> None:
+        pem = rsa_key_to_pem(signing_key)
+        first = build_client_assertion(
+            client_id="c", token_endpoint=TOKEN_ENDPOINT, key=pem
+        )
+        second = build_client_assertion(
+            client_id="c", token_endpoint=TOKEN_ENDPOINT, key=pem
+        )
+        first_jti = jwt.decode(first, options={"verify_signature": False})["jti"]
+        second_jti = jwt.decode(second, options={"verify_signature": False})["jti"]
+        assert first_jti != second_jti
+
+
+@pytest.mark.anyio
+class TestPrivateKeyJWTExchangeCode:
+    """Tests for private_key_jwt client authentication in exchange_code()."""
+
+    async def test_successful_exchange(
+        self,
+        private_key_jwt_factor: SQLAlchemyPrivateKeyJWTOIDCFactor,
+        oauth2_state: OAuth2State,
+    ) -> None:
+        result = await private_key_jwt_factor.exchange_code(
+            code="test-code",
+            redirect_uri="https://example.com/callback",
+            state=oauth2_state,
+        )
+
+        assert result.account_id == "test-user-id"
+        assert result.access_token == "test-access-token"
+
+    async def test_sends_client_assertion_not_secret(
+        self,
+        private_key_jwt_factor: SQLAlchemyPrivateKeyJWTOIDCFactor,
+        signing_key: RSAPrivateKey,
+        oauth2_state: OAuth2State,
+    ) -> None:
+        await private_key_jwt_factor.exchange_code(
+            code="test-code",
+            redirect_uri="https://example.com/callback",
+            state=oauth2_state,
+        )
+
+        body = parse_token_request(private_key_jwt_factor)
+        assert body["client_id"] == "test-client-id"
+        assert body["client_assertion_type"] == CLIENT_ASSERTION_TYPE
+        assert "client_secret" not in body
+
+        claims = jwt.decode(
+            body["client_assertion"],
+            signing_key.public_key(),
+            algorithms=["RS256"],
+            audience=TOKEN_ENDPOINT,
+        )
+        assert claims["iss"] == "test-client-id"
+        assert claims["sub"] == "test-client-id"
+
+    async def test_get_client_secret_not_supported(
+        self, private_key_jwt_factor: SQLAlchemyPrivateKeyJWTOIDCFactor
+    ) -> None:
+        with pytest.raises(NotImplementedError):
+            await private_key_jwt_factor.get_client_secret()
