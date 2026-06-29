@@ -6,7 +6,7 @@ import urllib.parse
 import httpx
 import jwt
 import pytest
-from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography.hazmat.primitives.asymmetric.rsa import RSAPrivateKey
 from sqlalchemy.ext.asyncio import AsyncConnection
@@ -22,10 +22,12 @@ from reauth.factors.oauth2.base import (
     OAuth2TokenUnsupportedGrantTypeException,
 )
 from reauth.factors.oauth2.oidc import (
+    CLIENT_ASSERTION_TYPE,
     DiscoveryDocumentException,
     InvalidIDTokenException,
     JWKSFetchException,
     OIDCFactor,
+    PrivateKeyJWTOIDCFactor,
     validate_id_token,
 )
 from reauth.factors.oauth2.state import OAuth2State
@@ -639,3 +641,60 @@ class TestOIDCFactorExchangeCode:
                 redirect_uri="https://example.com/callback",
                 state=oauth2_state,
             )
+
+
+class _PrivateKeyJWTFactor(PrivateKeyJWTOIDCFactor):
+    DISCOVERY_ENDPOINT = DISCOVERY_ENDPOINT
+
+    async def insert(self, enrollment: OAuth2Enrollment) -> int:
+        raise NotImplementedError()
+
+    async def update(self, enrollment: OAuth2Enrollment) -> None:
+        raise NotImplementedError()
+
+    async def get_enrollment(self, identity_id: int) -> OAuth2Enrollment | None:
+        raise NotImplementedError()
+
+    async def get_enrollment_by_provider_and_account(
+        self, provider: str, account_id: str
+    ) -> OAuth2Enrollment | None:
+        raise NotImplementedError()
+
+
+@pytest.mark.anyio
+class TestPrivateKeyJWTOIDCFactorGetRequestAuthentication:
+    """Tests for PrivateKeyJWTOIDCFactor.get_request_authentication()."""
+
+    async def test_returns_signed_client_assertion_in_body(
+        self,
+        oauth2_state_service: SQLAlchemyOAuth2StateService,
+        rsa_key: RSAPrivateKey,
+    ) -> None:
+        """private_key_jwt sends a signed JWT assertion in the request body."""
+        signing_key = rsa_key.private_bytes(
+            encoding=serialization.Encoding.PEM,
+            format=serialization.PrivateFormat.PKCS8,
+            encryption_algorithm=serialization.NoEncryption(),
+        ).decode()
+        factor = _PrivateKeyJWTFactor(
+            identifier="oidc",
+            client_id="test-client-id",
+            signing_key=signing_key,
+            state_service=oauth2_state_service,
+        )
+
+        headers, body = await factor.get_request_authentication(
+            token_endpoint=TOKEN_ENDPOINT
+        )
+
+        assert headers == {}
+        assert body["client_id"] == "test-client-id"
+        assert body["client_assertion_type"] == CLIENT_ASSERTION_TYPE
+        claims = jwt.decode(
+            body["client_assertion"],
+            rsa_key.public_key(),
+            algorithms=["RS256"],
+            audience=TOKEN_ENDPOINT,
+        )
+        assert claims["iss"] == "test-client-id"
+        assert claims["sub"] == "test-client-id"
