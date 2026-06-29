@@ -1,6 +1,7 @@
 import abc
 import base64
 import hmac
+import secrets
 import typing
 import urllib.parse
 
@@ -21,6 +22,50 @@ from reauth.logging import get_logger
 from reauth.timestamp import get_current_timestamp
 
 logger = get_logger(__name__)
+
+CLIENT_ASSERTION_TYPE = "urn:ietf:params:oauth:client-assertion-type:jwt-bearer"
+
+
+def build_client_assertion(
+    *,
+    client_id: str,
+    token_endpoint: str,
+    key: str,
+    algorithm: str = "RS256",
+    kid: str | None = None,
+    lifetime: int = 60,
+) -> str:
+    """Build a signed client assertion JWT for `private_key_jwt` authentication.
+
+    Implements the JWT profile for OAuth2 client authentication (RFC 7523): the
+    client proves its identity to the token endpoint with a short-lived JWT signed
+    by its private key, instead of sending a shared secret.
+
+    Args:
+        client_id: The OAuth2 client identifier, used as both `iss` and `sub`.
+        token_endpoint: The token endpoint URL, used as the `aud`.
+        key: The private key to sign with (PEM), as accepted by `jwt.encode`.
+        algorithm: The signing algorithm (e.g. `RS256`, `ES256`).
+        kid: The key ID to advertise in the JWT header, matching the public JWKS.
+        lifetime: The assertion validity in seconds.
+
+    Returns:
+        The signed client assertion JWT.
+    """
+    issued_at = get_current_timestamp()
+    return jwt.encode(
+        {
+            "iss": client_id,
+            "sub": client_id,
+            "aud": token_endpoint,
+            "jti": secrets.token_urlsafe(32),
+            "iat": issued_at,
+            "exp": issued_at + lifetime,
+        },
+        key,
+        algorithm=algorithm,
+        headers={"kid": kid} if kid is not None else None,
+    )
 
 
 class OIDCException(OAuth2Exception):
@@ -571,3 +616,55 @@ class OIDCFactor(OIDCFactorBase):
             f"{self.client_id}:{self._client_secret}".encode()
         ).decode()
         return {"Authorization": f"Basic {credentials}"}, {}
+
+
+class PrivateKeyJWTOIDCFactor(OIDCFactorBase):
+    """OpenID Connect factor authenticating with `private_key_jwt` (RFC 7523).
+
+    Signs a short-lived client assertion JWT with the provided private key for
+    each token exchange, instead of sending a shared client secret. The matching
+    public key must be registered with the provider (usually via a JWKS URL).
+
+    The provider must advertise `private_key_jwt` in its
+    `token_endpoint_auth_methods_supported`.
+    """
+
+    def __init__(
+        self,
+        *,
+        identifier: str,
+        client_id: str,
+        signing_key: str,
+        state_service: OAuth2StateService,
+        algorithm: str = "RS256",
+        kid: str | None = None,
+        assertion_lifetime: int = 60,
+        step: int = 0,
+    ) -> None:
+        super().__init__(
+            identifier=identifier,
+            client_id=client_id,
+            state_service=state_service,
+            step=step,
+        )
+        self._signing_key = signing_key
+        self._algorithm = algorithm
+        self._kid = kid
+        self._assertion_lifetime = assertion_lifetime
+
+    async def get_request_authentication(
+        self, *, token_endpoint: str
+    ) -> tuple[dict[str, str], dict[str, str]]:
+        assertion = build_client_assertion(
+            client_id=self.client_id,
+            token_endpoint=token_endpoint,
+            key=self._signing_key,
+            algorithm=self._algorithm,
+            kid=self._kid,
+            lifetime=self._assertion_lifetime,
+        )
+        return {}, {
+            "client_id": self.client_id,
+            "client_assertion_type": CLIENT_ASSERTION_TYPE,
+            "client_assertion": assertion,
+        }
