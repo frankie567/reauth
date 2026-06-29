@@ -498,6 +498,57 @@ class TestOIDCFactorGetAuthorizationURL:
 
 
 @pytest.mark.anyio
+class TestOIDCFactorGetRequestAuthentication:
+    """Tests for OIDCFactor.get_request_authentication()."""
+
+    async def test_client_secret_post(
+        self,
+        sqlalchemy_connection: AsyncConnection,
+        oauth2_state_service: SQLAlchemyOAuth2StateService,
+        rsa_key: RSAPrivateKey,
+    ) -> None:
+        """client_secret_post returns the credentials in the request body."""
+        factor = SQLAlchemyOIDCFactor(
+            sqlalchemy_connection,
+            oauth2_state_service,
+            rsa_key,
+            ["client_secret_post"],
+        )
+
+        headers, body = await factor.get_request_authentication(
+            token_endpoint=TOKEN_ENDPOINT
+        )
+
+        assert headers == {}
+        assert body == {
+            "client_id": "test-client-id",
+            "client_secret": "test-client-secret",
+        }
+
+    async def test_client_secret_basic(
+        self,
+        sqlalchemy_connection: AsyncConnection,
+        oauth2_state_service: SQLAlchemyOAuth2StateService,
+        rsa_key: RSAPrivateKey,
+    ) -> None:
+        """client_secret_basic returns the credentials in an Authorization header."""
+        factor = SQLAlchemyOIDCFactor(
+            sqlalchemy_connection,
+            oauth2_state_service,
+            rsa_key,
+            ["client_secret_basic"],
+        )
+
+        headers, body = await factor.get_request_authentication(
+            token_endpoint=TOKEN_ENDPOINT
+        )
+
+        expected = base64.b64encode(b"test-client-id:test-client-secret").decode()
+        assert headers == {"Authorization": f"Basic {expected}"}
+        assert body == {}
+
+
+@pytest.mark.anyio
 class TestOIDCFactorExchangeCode:
     """Tests for OIDCFactor.exchange_code()."""
 
