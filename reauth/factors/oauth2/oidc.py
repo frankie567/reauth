@@ -236,10 +236,9 @@ class OIDCFactorBase(OAuth2Factor[OIDCExtraParams], abc.ABC):
     This class implements the core OIDC flow using the discovery document
     and JWKS for ID Token validation.
 
-    Subclasses must implement `get_client_secret()` to provide the client secret
-    for token exchange. For cases where the client secret is static and known
-    at instantiation, use the `OIDCFactor` subclass which provides a default
-    implementation.
+    Subclasses must implement `get_request_authentication()` to authenticate the
+    token request. For the common static `client_secret` case, use the
+    `OIDCFactor` subclass, which handles `client_secret_basic`/`client_secret_post`.
 
     References:
         - OpenID Connect Core 1.0: https://openid.net/specs/openid-connect-core-1_0.html
@@ -321,35 +320,26 @@ class OIDCFactorBase(OAuth2Factor[OIDCExtraParams], abc.ABC):
         logger.debug("OIDC exchange_code called", extra={"provider": self.identifier})
         discovery_document = await self._get_discovery_document()
         token_endpoint = discovery_document["token_endpoint"]
-        token_endpoint_auth_methods_supported = discovery_document.get(
-            "token_endpoint_auth_methods_supported", ["client_secret_basic"]
-        )
 
-        auth: httpx.BasicAuth | None = None
         data = {
             "grant_type": "authorization_code",
             "code": code,
             "redirect_uri": redirect_uri,
         }
-        client_secret = await self.get_client_secret()
-        if "client_secret_post" in token_endpoint_auth_methods_supported:
-            data = {
-                **data,
-                "client_id": self.client_id,
-                "client_secret": client_secret,
-            }
-        elif "client_secret_basic" in token_endpoint_auth_methods_supported:
-            auth = httpx.BasicAuth(self.client_id, client_secret)
-
-        client = self._get_client()
         if code_verifier is not None:
             data["code_verifier"] = code_verifier
 
+        headers, auth_body = await self.get_request_authentication(
+            token_endpoint=token_endpoint
+        )
+        data = {**data, **auth_body}
+
+        client = self._get_client()
         try:
             response = await client.post(
                 token_endpoint,
                 data=data,
-                auth=auth if auth else httpx.USE_CLIENT_DEFAULT,
+                headers=headers or None,
             )
         except httpx.RequestError as e:
             raise OAuth2TokenExchangeException(state=state) from e
@@ -540,11 +530,12 @@ class OIDCFactorBase(OAuth2Factor[OIDCExtraParams], abc.ABC):
 class OIDCFactor(OIDCFactorBase):
     """OpenID Connect factor implementation with a static client secret.
 
-    This class provides a default implementation of `get_client_secret()` that returns
-    a fixed client secret provided at instantiation. Use this for most OAuth providers.
+    Authenticates with a fixed client secret provided at instantiation, using
+    `client_secret_post` or `client_secret_basic` depending on what the provider
+    advertises in its discovery document. Use this for most OAuth providers.
 
-    For providers requiring dynamic client secrets (e.g., Apple Sign In),
-    subclass `OIDCFactorBase` directly and override `get_client_secret()`.
+    For providers requiring dynamic credentials (e.g., Apple Sign In), subclass
+    `OIDCFactorBase` directly and override `get_request_authentication()`.
     """
 
     def __init__(
@@ -564,5 +555,19 @@ class OIDCFactor(OIDCFactorBase):
         )
         self._client_secret = client_secret
 
-    async def get_client_secret(self) -> str:
-        return self._client_secret
+    async def get_request_authentication(
+        self, *, token_endpoint: str
+    ) -> tuple[dict[str, str], dict[str, str]]:
+        discovery_document = await self._get_discovery_document()
+        auth_methods = discovery_document.get(
+            "token_endpoint_auth_methods_supported", ["client_secret_basic"]
+        )
+        if "client_secret_post" in auth_methods:
+            return {}, {
+                "client_id": self.client_id,
+                "client_secret": self._client_secret,
+            }
+        credentials = base64.b64encode(
+            f"{self.client_id}:{self._client_secret}".encode()
+        ).decode()
+        return {"Authorization": f"Basic {credentials}"}, {}

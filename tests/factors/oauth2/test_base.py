@@ -51,9 +51,11 @@ class SQLAlchemyOAuth2Factor(OAuth2Factor):
             return None
         return OAuth2Enrollment(**row._asdict())
 
-    async def get_client_secret(self) -> str:
-        """Return a dummy client secret for testing purposes."""
-        return "test-client-secret"
+    async def get_request_authentication(
+        self, *, token_endpoint: str
+    ) -> tuple[dict[str, str], dict[str, str]]:
+        """Return dummy client authentication for testing purposes."""
+        return {}, {"client_id": self.client_id, "client_secret": "test-client-secret"}
 
     async def get_authorization_url(
         self,
