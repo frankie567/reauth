@@ -72,15 +72,16 @@ class AppleOAuth2Factor(OIDCFactorBase, abc.ABC):
             extra=extra,
         )
 
-    async def get_client_secret(self) -> str:
-        """Generate a JWT client secret for Apple's OAuth2 token exchange.
+    async def get_request_authentication(
+        self, *, token_endpoint: str
+    ) -> tuple[dict[str, str], dict[str, str]]:
+        """Authenticate with a per-request JWT client secret (Apple Sign In).
 
-        Creates a signed JWT containing the team ID, client ID, and expiration time.
-        The JWT is signed with the ES256 algorithm using the private key provided
-        during initialization.
+        Apple requires a short-lived ES256-signed JWT as the client secret,
+        sent as a `client_secret_post` body parameter.
 
         Returns:
-            A JWT string to be used as the client secret.
+            A tuple of (no extra headers, body with the client_id and JWT secret).
         """
         iat = int(time.time())
         client_secret = jwt.encode(
@@ -97,7 +98,7 @@ class AppleOAuth2Factor(OIDCFactorBase, abc.ABC):
                 "kid": self.key_id,
             },
         )
-        return client_secret
+        return {}, {"client_id": self.client_id, "client_secret": client_secret}
 
     async def get_profile(self, access_token: str) -> dict[str, typing.Any]:
         """Apple does not support userinfo endpoint.

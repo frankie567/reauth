@@ -98,8 +98,10 @@ class GitHubOAuth2Factor(OAuth2Factor[GitHubOAuth2Extra], abc.ABC):
         self._client_secret = client_secret
         self._client = httpx.AsyncClient()
 
-    async def get_client_secret(self) -> str:
-        return self._client_secret
+    async def get_request_authentication(
+        self, *, token_endpoint: str
+    ) -> tuple[dict[str, str], dict[str, str]]:
+        return {}, {"client_id": self.client_id, "client_secret": self._client_secret}
 
     async def get_authorization_url(
         self,
@@ -148,13 +150,14 @@ class GitHubOAuth2Factor(OAuth2Factor[GitHubOAuth2Extra], abc.ABC):
         state: OAuth2State,
     ) -> TokenResponse:
         logger.debug("GitHub exchange_code called", extra={"provider": self.identifier})
-        client_secret = await self.get_client_secret()
+        headers, auth_body = await self.get_request_authentication(
+            token_endpoint=self.TOKEN_ENDPOINT
+        )
         data = {
             "grant_type": "authorization_code",
             "code": code,
             "redirect_uri": redirect_uri,
-            "client_id": self.client_id,
-            "client_secret": client_secret,
+            **auth_body,
         }
         if code_verifier is not None:
             data["code_verifier"] = code_verifier
@@ -163,7 +166,7 @@ class GitHubOAuth2Factor(OAuth2Factor[GitHubOAuth2Extra], abc.ABC):
         try:
             response = await client.post(
                 self.TOKEN_ENDPOINT,
-                headers={"Accept": "application/json"},
+                headers={"Accept": "application/json", **headers},
                 data=data,
             )
         except httpx.RequestError as e:
