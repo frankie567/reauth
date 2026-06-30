@@ -290,6 +290,7 @@ class OIDCExtraParams(typing.TypedDict, total=False):
     ui_locales: str
     id_token_hint: str
     login_hint: str
+    domain_hint: str
     acr_values: str
     response_mode: typing.Literal["query", "fragment", "form_post"]
 
@@ -443,9 +444,9 @@ class OIDCFactorBase(OAuth2Factor[OIDCExtraParams], abc.ABC):
                 id_token_payload = await self._validate_id_token(
                     id_token, nonce=nonce, access_token=access_token
                 )
+                account_id = self._get_account_id(id_token_payload)
             except InvalidIDTokenException as e:
                 raise OAuth2TokenExchangeException(state=state) from e
-            account_id = id_token_payload["sub"]
 
             return TokenResponse(
                 account_id=account_id,
@@ -457,6 +458,11 @@ class OIDCFactorBase(OAuth2Factor[OIDCExtraParams], abc.ABC):
             )
 
         raise OAuth2TokenExchangeException(state=state)
+
+    def _get_account_id(self, id_token_payload: dict[str, typing.Any]) -> str:
+        if not isinstance(account_id := id_token_payload.get("sub"), str):
+            raise InvalidIDTokenException()
+        return account_id
 
     async def get_id_token_claims(self, id_token: str) -> dict[str, typing.Any]:
         """Decode and return claims from an ID Token JWT.
@@ -561,7 +567,7 @@ class OIDCFactorBase(OAuth2Factor[OIDCExtraParams], abc.ABC):
 
         client = self._get_client()
         try:
-            response = await client.get(self.DISCOVERY_ENDPOINT)
+            response = await client.get(self._get_discovery_endpoint())
             response.raise_for_status()
         except httpx.HTTPError as e:
             raise DiscoveryDocumentException() from e
@@ -586,6 +592,9 @@ class OIDCFactorBase(OAuth2Factor[OIDCExtraParams], abc.ABC):
             jwks = jwt.PyJWKSet.from_dict(jwks_data)
             self._jwks = jwks
             return jwks
+
+    def _get_discovery_endpoint(self) -> str:
+        return self.DISCOVERY_ENDPOINT
 
     def _get_client(self) -> httpx.AsyncClient:  # pragma: no cover
         return self._client
