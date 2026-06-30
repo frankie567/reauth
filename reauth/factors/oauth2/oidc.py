@@ -30,9 +30,8 @@ def build_client_assertion(
     *,
     client_id: str,
     token_endpoint: str,
-    key: str,
-    algorithm: str = "RS256",
-    kid: str | None = None,
+    jwks: jwt.PyJWKSet,
+    kid: str,
     lifetime: int = 60,
 ) -> str:
     """Build a signed client assertion JWT for `private_key_jwt` authentication.
@@ -41,17 +40,29 @@ def build_client_assertion(
     client proves its identity to the token endpoint with a short-lived JWT signed
     by its private key, instead of sending a shared secret.
 
+    The signing key is selected from `jwks` by `kid` and advertised in the JOSE
+    header, as required for verification against a multi-key JWKS (OIDC Core
+    §10.1). The signing algorithm is taken from the key itself.
+
     Args:
         client_id: The OAuth2 client identifier, used as both `iss` and `sub`.
         token_endpoint: The token endpoint URL, used as the `aud`.
-        key: The private key to sign with (PEM), as accepted by `jwt.encode`.
-        algorithm: The signing algorithm (e.g. `RS256`, `ES256`).
-        kid: The key ID to advertise in the JWT header, matching the public JWKS.
+        jwks: The client's private JWK Set; the counterpart of the public keys
+            published at its `jwks_uri`.
+        kid: The ID of the key in `jwks` to sign with.
         lifetime: The assertion validity in seconds.
 
     Returns:
         The signed client assertion JWT.
+
+    Raises:
+        SigningKeyNotFoundException: If `kid` is not present in `jwks`.
     """
+    try:
+        signing_key = jwks[kid]
+    except KeyError as e:
+        raise SigningKeyNotFoundException(kid) from e
+
     issued_at = get_current_timestamp()
     return jwt.encode(
         {
@@ -62,9 +73,9 @@ def build_client_assertion(
             "iat": issued_at,
             "exp": issued_at + lifetime,
         },
-        key,
-        algorithm=algorithm,
-        headers={"kid": kid} if kid is not None else None,
+        signing_key.key,
+        algorithm=signing_key.algorithm_name,
+        headers={"kid": signing_key.key_id},
     )
 
 
@@ -82,6 +93,14 @@ class JWKSFetchException(OIDCException):
 
 class InvalidIDTokenException(OIDCException):
     """Raised when an ID Token fails validation."""
+
+
+class SigningKeyNotFoundException(OIDCException):
+    """Raised when the configured signing key ID is not present in the JWKS."""
+
+    def __init__(self, kid: str) -> None:
+        self.kid = kid
+        super().__init__(f"No key with kid '{kid}' in the provided JWKS.")
 
 
 def _validate_id_token_signature(
@@ -621,9 +640,11 @@ class OIDCFactor(OIDCFactorBase):
 class PrivateKeyJWTOIDCFactor(OIDCFactorBase):
     """OpenID Connect factor authenticating with `private_key_jwt` (RFC 7523).
 
-    Signs a short-lived client assertion JWT with the provided private key for
-    each token exchange, instead of sending a shared client secret. The matching
-    public key must be registered with the provider (usually via a JWKS URL).
+    Signs a short-lived client assertion JWT for each token exchange with the key
+    selected from `jwks` by `kid`, instead of sending a shared client secret. The
+    matching public key must be registered with the provider (usually via a JWKS
+    URL). Rotating keys is a matter of adding the new key to `jwks` and pointing
+    `kid` at it (OIDC Core §10.1.1).
 
     The provider must advertise `private_key_jwt` in its
     `token_endpoint_auth_methods_supported`.
@@ -634,10 +655,9 @@ class PrivateKeyJWTOIDCFactor(OIDCFactorBase):
         *,
         identifier: str,
         client_id: str,
-        signing_key: str,
+        jwks: jwt.PyJWKSet,
+        kid: str,
         state_service: OAuth2StateService,
-        algorithm: str = "RS256",
-        kid: str | None = None,
         assertion_lifetime: int = 60,
         step: int = 0,
     ) -> None:
@@ -647,8 +667,7 @@ class PrivateKeyJWTOIDCFactor(OIDCFactorBase):
             state_service=state_service,
             step=step,
         )
-        self._signing_key = signing_key
-        self._algorithm = algorithm
+        self._signing_jwks = jwks
         self._kid = kid
         self._assertion_lifetime = assertion_lifetime
 
@@ -658,8 +677,7 @@ class PrivateKeyJWTOIDCFactor(OIDCFactorBase):
         assertion = build_client_assertion(
             client_id=self.client_id,
             token_endpoint=token_endpoint,
-            key=self._signing_key,
-            algorithm=self._algorithm,
+            jwks=self._signing_jwks,
             kid=self._kid,
             lifetime=self._assertion_lifetime,
         )
