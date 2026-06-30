@@ -6,7 +6,7 @@ import urllib.parse
 import httpx
 import jwt
 import pytest
-from cryptography.hazmat.primitives import hashes, serialization
+from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography.hazmat.primitives.asymmetric.rsa import RSAPrivateKey
 from sqlalchemy.ext.asyncio import AsyncConnection
@@ -28,6 +28,7 @@ from reauth.factors.oauth2.oidc import (
     JWKSFetchException,
     OIDCFactor,
     PrivateKeyJWTOIDCFactor,
+    SigningKeyNotFoundException,
     validate_id_token,
 )
 from reauth.factors.oauth2.state import OAuth2State
@@ -47,6 +48,15 @@ def get_jwks_from_rsa_key(key: RSAPrivateKey, kid: str) -> jwt.PyJWKSet:
         "kid": kid,
     }
     return jwt.PyJWKSet.from_dict({"keys": [public_jwk]})
+
+
+def get_private_jwks_from_rsa_key(key: RSAPrivateKey, kid: str) -> jwt.PyJWKSet:
+    algorithm = jwt.get_algorithm_by_name("RS256")
+    private_jwk = {
+        **algorithm.to_jwk(key, as_dict=True),
+        "kid": kid,
+    }
+    return jwt.PyJWKSet.from_dict({"keys": [private_jwk]})
 
 
 def create_id_token(
@@ -671,15 +681,11 @@ class TestPrivateKeyJWTOIDCFactorGetRequestAuthentication:
         rsa_key: RSAPrivateKey,
     ) -> None:
         """private_key_jwt sends a signed JWT assertion in the request body."""
-        signing_key = rsa_key.private_bytes(
-            encoding=serialization.Encoding.PEM,
-            format=serialization.PrivateFormat.PKCS8,
-            encryption_algorithm=serialization.NoEncryption(),
-        ).decode()
         factor = _PrivateKeyJWTFactor(
             identifier="oidc",
             client_id="test-client-id",
-            signing_key=signing_key,
+            jwks=get_private_jwks_from_rsa_key(rsa_key, "sign-key-1"),
+            kid="sign-key-1",
             state_service=oauth2_state_service,
         )
 
@@ -690,6 +696,9 @@ class TestPrivateKeyJWTOIDCFactorGetRequestAuthentication:
         assert headers == {}
         assert body["client_id"] == "test-client-id"
         assert body["client_assertion_type"] == CLIENT_ASSERTION_TYPE
+        assert (
+            jwt.get_unverified_header(body["client_assertion"])["kid"] == "sign-key-1"
+        )
         claims = jwt.decode(
             body["client_assertion"],
             rsa_key.public_key(),
@@ -698,3 +707,20 @@ class TestPrivateKeyJWTOIDCFactorGetRequestAuthentication:
         )
         assert claims["iss"] == "test-client-id"
         assert claims["sub"] == "test-client-id"
+
+    async def test_raises_when_kid_not_in_jwks(
+        self,
+        oauth2_state_service: SQLAlchemyOAuth2StateService,
+        rsa_key: RSAPrivateKey,
+    ) -> None:
+        """An unknown signing key id is surfaced as an OIDCException."""
+        factor = _PrivateKeyJWTFactor(
+            identifier="oidc",
+            client_id="test-client-id",
+            jwks=get_private_jwks_from_rsa_key(rsa_key, "sign-key-1"),
+            kid="unknown-key",
+            state_service=oauth2_state_service,
+        )
+
+        with pytest.raises(SigningKeyNotFoundException):
+            await factor.get_request_authentication(token_endpoint=TOKEN_ENDPOINT)
