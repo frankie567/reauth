@@ -23,8 +23,6 @@ class AppleOAuth2Factor(OIDCFactorBase, abc.ABC):
         - Apple: https://developer.apple.com/documentation/accountorganizationaldatasharing/creating-a-client-secret
     """
 
-    DISCOVERY_ENDPOINT = "https://appleid.apple.com/.well-known/openid-configuration"
-
     def __init__(
         self,
         *,
@@ -40,6 +38,7 @@ class AppleOAuth2Factor(OIDCFactorBase, abc.ABC):
             identifier=identifier,
             step=step,
             client_id=client_id,
+            discovery_endpoint="https://appleid.apple.com/.well-known/openid-configuration",
             state_service=state_service,
         )
         self.team_id = team_id
