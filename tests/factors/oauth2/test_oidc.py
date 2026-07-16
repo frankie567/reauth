@@ -136,8 +136,6 @@ def _create_token_response(
 class SQLAlchemyOIDCFactor(OIDCFactor):
     """Concrete implementation of OIDCFactor using SQLAlchemy for testing."""
 
-    DISCOVERY_ENDPOINT = DISCOVERY_ENDPOINT
-
     def __init__(
         self,
         connection: AsyncConnection,
@@ -149,6 +147,7 @@ class SQLAlchemyOIDCFactor(OIDCFactor):
             identifier="oidc",
             client_id="test-client-id",
             client_secret="test-client-secret",
+            discovery_endpoint=DISCOVERY_ENDPOINT,
             state_service=state_service,
         )
 
@@ -654,8 +653,6 @@ class TestOIDCFactorExchangeCode:
 
 
 class _PrivateKeyJWTFactor(PrivateKeyJWTOIDCFactor):
-    DISCOVERY_ENDPOINT = DISCOVERY_ENDPOINT
-
     async def insert(self, enrollment: OAuth2Enrollment) -> int:
         raise NotImplementedError()
 
@@ -686,6 +683,7 @@ class TestPrivateKeyJWTOIDCFactorGetRequestAuthentication:
             client_id="test-client-id",
             jwks=get_private_jwks_from_rsa_key(rsa_key, "sign-key-1"),
             kid="sign-key-1",
+            discovery_endpoint=DISCOVERY_ENDPOINT,
             state_service=oauth2_state_service,
         )
 
@@ -719,6 +717,7 @@ class TestPrivateKeyJWTOIDCFactorGetRequestAuthentication:
             client_id="test-client-id",
             jwks=get_private_jwks_from_rsa_key(rsa_key, "sign-key-1"),
             kid="unknown-key",
+            discovery_endpoint=DISCOVERY_ENDPOINT,
             state_service=oauth2_state_service,
         )
 

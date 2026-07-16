@@ -308,13 +308,12 @@ class OIDCFactorBase(OAuth2Factor[OIDCExtraParams], abc.ABC):
         - OpenID Connect Core 1.0: https://openid.net/specs/openid-connect-core-1_0.html
     """
 
-    DISCOVERY_ENDPOINT: typing.ClassVar[str]
-
     def __init__(
         self,
         *,
         identifier: str,
         client_id: str,
+        discovery_endpoint: str,
         state_service: OAuth2StateService,
         step: int = 0,
     ) -> None:
@@ -324,6 +323,7 @@ class OIDCFactorBase(OAuth2Factor[OIDCExtraParams], abc.ABC):
             client_id=client_id,
             state_service=state_service,
         )
+        self.discovery_endpoint = discovery_endpoint
         self._discovery_document: dict[str, typing.Any] | None = None
         self._jwks: jwt.PyJWKSet | None = None
         self._client = httpx.AsyncClient()
@@ -561,7 +561,7 @@ class OIDCFactorBase(OAuth2Factor[OIDCExtraParams], abc.ABC):
 
         client = self._get_client()
         try:
-            response = await client.get(self.DISCOVERY_ENDPOINT)
+            response = await client.get(self.discovery_endpoint)
             response.raise_for_status()
         except httpx.HTTPError as e:
             raise DiscoveryDocumentException() from e
@@ -608,12 +608,14 @@ class OIDCFactor(OIDCFactorBase):
         identifier: str,
         client_id: str,
         client_secret: str,
+        discovery_endpoint: str,
         state_service: OAuth2StateService,
         step: int = 0,
     ) -> None:
         super().__init__(
             identifier=identifier,
             client_id=client_id,
+            discovery_endpoint=discovery_endpoint,
             state_service=state_service,
             step=step,
         )
@@ -657,6 +659,7 @@ class PrivateKeyJWTOIDCFactor(OIDCFactorBase):
         client_id: str,
         jwks: jwt.PyJWKSet,
         kid: str,
+        discovery_endpoint: str,
         state_service: OAuth2StateService,
         assertion_lifetime: int = 60,
         step: int = 0,
@@ -664,6 +667,7 @@ class PrivateKeyJWTOIDCFactor(OIDCFactorBase):
         super().__init__(
             identifier=identifier,
             client_id=client_id,
+            discovery_endpoint=discovery_endpoint,
             state_service=state_service,
             step=step,
         )

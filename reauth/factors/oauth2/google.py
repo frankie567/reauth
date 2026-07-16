@@ -12,8 +12,6 @@ class GoogleOAuth2Factor(OIDCFactor, abc.ABC):
         - Google: https://developers.google.com/identity/openid-connect/openid-connect
     """
 
-    DISCOVERY_ENDPOINT = "https://accounts.google.com/.well-known/openid-configuration"
-
     def __init__(
         self,
         *,
@@ -28,5 +26,6 @@ class GoogleOAuth2Factor(OIDCFactor, abc.ABC):
             step=step,
             client_id=client_id,
             client_secret=client_secret,
+            discovery_endpoint="https://accounts.google.com/.well-known/openid-configuration",
             state_service=state_service,
         )
