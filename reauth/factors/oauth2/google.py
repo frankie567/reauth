@@ -20,10 +20,12 @@ class GoogleOAuth2Factor(OIDCFactor, abc.ABC):
         client_secret: str,
         state_service: OAuth2StateService,
         step: int = 0,
+        advance_by: int = 1,
     ) -> None:
         super().__init__(
             identifier=identifier,
             step=step,
+            advance_by=advance_by,
             client_id=client_id,
             client_secret=client_secret,
             discovery_endpoint="https://accounts.google.com/.well-known/openid-configuration",

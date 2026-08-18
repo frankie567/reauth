@@ -6,6 +6,8 @@ from reauth.logging import get_logger
 
 logger = get_logger(__name__)
 
+_ADVANCE_BY_VALUE_ERROR = "advance_by must be at least 1"
+
 
 class FactorEnrollment(typing.Protocol):
     """
@@ -22,7 +24,7 @@ class FactorBase[ENROLLMENT: FactorEnrollment](abc.ABC):
 
     AMR: typing.ClassVar[AuthenticationMethodReference]
 
-    def __init__(self, *, identifier: str, step: int = 0) -> None:
+    def __init__(self, *, identifier: str, step: int = 0, advance_by: int = 1) -> None:
         """
         Initialize the factor base.
 
@@ -32,17 +34,27 @@ class FactorBase[ENROLLMENT: FactorEnrollment](abc.ABC):
             step: The authentication step at which this factor can be used.
                 Factors are only available when the session's current step matches this value.
                 Defaults to 0 (can be first factor).
+            advance_by: The number of steps to advance the authentication session after
+                this factor is successfully verified. Defaults to 1.
+
+        Raises:
+            ValueError: If advance_by is less than 1.
         """
+        if advance_by < 1:
+            raise ValueError(_ADVANCE_BY_VALUE_ERROR)
+
         logger.debug(
             "Factor initialized",
             extra={
                 "identifier": identifier,
                 "step": step,
+                "advance_by": advance_by,
                 "amr": str(self.AMR),
             },
         )
         self.identifier = identifier
         self.step = step
+        self.advance_by = advance_by
 
     @abc.abstractmethod
     async def get_enrollment(self, identity_id: typing.Any) -> ENROLLMENT | None:

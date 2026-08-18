@@ -68,6 +68,7 @@ class BackupCodesFactor(FactorBase[BackupCodesEnrollment], abc.ABC):
         chars: str = DEFAULT_CHARS,
         identifier: str = "backup_codes",
         step: int = 1,
+        advance_by: int = 1,
     ) -> None:
         """
         Initialize the backup codes factor.
@@ -79,8 +80,10 @@ class BackupCodesFactor(FactorBase[BackupCodesEnrollment], abc.ABC):
             chars: Character set for code generation (default: excludes ambiguous chars).
             identifier: Unique identifier for the factor (default: "backup_codes").
             step: Authentication step at which this factor can be used (default: 1).
+            advance_by: Number of steps to advance after successful verification
+                (default: 1).
         """
-        super().__init__(identifier=identifier, step=step)
+        super().__init__(identifier=identifier, step=step, advance_by=advance_by)
         self.hash_secret = hash_secret
         self.code_length = code_length
         self.code_count = code_count

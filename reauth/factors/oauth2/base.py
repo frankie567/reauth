@@ -220,8 +220,9 @@ class OAuth2Factor[EXTRA](FactorBase[OAuth2Enrollment], abc.ABC):
         client_id: str,
         state_service: OAuth2StateService,
         step: int = 0,
+        advance_by: int = 1,
     ) -> None:
-        super().__init__(identifier=identifier, step=step)
+        super().__init__(identifier=identifier, step=step, advance_by=advance_by)
         self.client_id = client_id
         self.state_service = state_service
 

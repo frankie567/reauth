@@ -33,10 +33,12 @@ class AppleOAuth2Factor(OIDCFactorBase, abc.ABC):
         key_value: str,
         state_service: OAuth2StateService,
         step: int = 0,
+        advance_by: int = 1,
     ) -> None:
         super().__init__(
             identifier=identifier,
             step=step,
+            advance_by=advance_by,
             client_id=client_id,
             discovery_endpoint="https://appleid.apple.com/.well-known/openid-configuration",
             state_service=state_service,

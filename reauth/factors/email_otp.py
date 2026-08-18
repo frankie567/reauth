@@ -77,8 +77,9 @@ class EmailOTPFactor(FactorBase[EmailOTPEnrollment], abc.ABC):
         lifetime: datetime.timedelta = datetime.timedelta(minutes=10),
         identifier: str = "email_otp",
         step: int = 0,
+        advance_by: int = 1,
     ) -> None:
-        super().__init__(identifier=identifier, step=step)
+        super().__init__(identifier=identifier, step=step, advance_by=advance_by)
         self.hash_secret = hash_secret
         self.code_length = code_length
         self.lifetime = lifetime

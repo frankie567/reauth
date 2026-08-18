@@ -69,6 +69,20 @@ class DummyPasswordFactor(FactorBase[DummyPasswordFactorEnrollment]):
         return DummyPasswordFactorEnrollment(id=1, identity_id=identity_id)
 
 
+class DummySSOFactor(FactorBase[DummyPasswordFactorEnrollment]):
+    AMR = AuthenticationMethodReference.OAUTH2
+
+    def __init__(self) -> None:
+        super().__init__(identifier="dummy_sso", step=0, advance_by=2)
+
+    async def get_enrollment(
+        self, identity_id: int
+    ) -> DummyPasswordFactorEnrollment | None:
+        if identity_id != 1:
+            return None
+        return DummyPasswordFactorEnrollment(id=1, identity_id=identity_id)
+
+
 @dataclasses.dataclass
 class DummyMFAFactorEnrollment:
     id: int | None
@@ -363,6 +377,30 @@ class TestAdvance:
         assert updated_session.id == session.id
         assert updated_session.amr == [AuthenticationMethodReference.PWD]
         assert updated_session.used_factors == ["dummy_password"]
+        assert updated_session.step == 1
+
+    async def test_factor_can_skip_next_step(
+        self,
+        sqlalchemy_connection: AsyncConnection,
+        mfa_factor: DummyMFAFactor,
+    ) -> None:
+        trusted_factor = DummySSOFactor()
+        authentication_session_service = SQLAlchemyAuthenticationSession(
+            connection=sqlalchemy_connection,
+            hash_secret="test_secret",
+            factors={trusted_factor, mfa_factor},
+        )
+        _token, session = await authentication_session_service.start()
+
+        updated_session = await authentication_session_service.advance(
+            session, 1, trusted_factor
+        )
+
+        assert updated_session.step == 2
+        assert (
+            await authentication_session_service.get_available_factors(updated_session)
+            == set()
+        )
 
     async def test_identity_one_factor_enrolled(
         self,

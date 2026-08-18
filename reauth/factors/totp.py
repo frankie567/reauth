@@ -109,8 +109,9 @@ class TOTPFactor(FactorBase[TOTPEnrollment], abc.ABC):
         drift_tolerance: int = 1,
         identifier: str = "totp",
         step: int = 1,
+        advance_by: int = 1,
     ) -> None:
-        super().__init__(identifier=identifier, step=step)
+        super().__init__(identifier=identifier, step=step, advance_by=advance_by)
         self.code_length = code_length
         self.algorithm: TOTPAlgorithm = algorithm
         self.time_step = time_step

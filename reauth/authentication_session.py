@@ -212,7 +212,8 @@ class AuthenticationSessionService(abc.ABC):
         authentication_session.identity_id = identity_id
         authentication_session.amr.append(factor.AMR)
         authentication_session.used_factors.append(factor.identifier)
-        authentication_session.step += 1
+        previous_step = authentication_session.step
+        authentication_session.step += factor.advance_by
         await self.update(authentication_session)
 
         logger.info(
@@ -222,6 +223,8 @@ class AuthenticationSessionService(abc.ABC):
                 "identity_id": identity_id,
                 "factor_identifier": factor.identifier,
                 "factor_amr": str(factor.AMR),
+                "previous_step": previous_step,
+                "advance_by": factor.advance_by,
                 "step": authentication_session.step,
             },
         )

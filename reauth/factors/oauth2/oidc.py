@@ -316,10 +316,12 @@ class OIDCFactorBase(OAuth2Factor[OIDCExtraParams], abc.ABC):
         discovery_endpoint: str,
         state_service: OAuth2StateService,
         step: int = 0,
+        advance_by: int = 1,
     ) -> None:
         super().__init__(
             identifier=identifier,
             step=step,
+            advance_by=advance_by,
             client_id=client_id,
             state_service=state_service,
         )
@@ -611,6 +613,7 @@ class OIDCFactor(OIDCFactorBase):
         discovery_endpoint: str,
         state_service: OAuth2StateService,
         step: int = 0,
+        advance_by: int = 1,
     ) -> None:
         super().__init__(
             identifier=identifier,
@@ -618,6 +621,7 @@ class OIDCFactor(OIDCFactorBase):
             discovery_endpoint=discovery_endpoint,
             state_service=state_service,
             step=step,
+            advance_by=advance_by,
         )
         self._client_secret = client_secret
 
@@ -663,6 +667,7 @@ class PrivateKeyJWTOIDCFactor(OIDCFactorBase):
         state_service: OAuth2StateService,
         assertion_lifetime: int = 60,
         step: int = 0,
+        advance_by: int = 1,
     ) -> None:
         super().__init__(
             identifier=identifier,
@@ -670,6 +675,7 @@ class PrivateKeyJWTOIDCFactor(OIDCFactorBase):
             discovery_endpoint=discovery_endpoint,
             state_service=state_service,
             step=step,
+            advance_by=advance_by,
         )
         self._signing_jwks = jwks
         self._kid = kid
