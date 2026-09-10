@@ -231,12 +231,12 @@ class TestAuthenticationSessionStart:
 
 
 @pytest.mark.anyio
-class TestAuthenticationSessionGetByToken:
+class TestAuthenticationSessionValidate:
     async def test_not_existing_session(
         self, authentication_session_service: SQLAlchemyAuthenticationSession
     ) -> None:
         with pytest.raises(InvalidSessionTokenException):
-            await authentication_session_service.get_by_token("token")
+            await authentication_session_service.validate("token")
 
     async def test_expired_session(
         self, authentication_session_service: SQLAlchemyAuthenticationSession
@@ -256,7 +256,7 @@ class TestAuthenticationSessionGetByToken:
         )
 
         with pytest.raises(ExpiredSessionException):
-            await authentication_session_service.get_by_token(token)
+            await authentication_session_service.validate(token)
 
     async def test_valid_session(
         self, authentication_session_service: SQLAlchemyAuthenticationSession
@@ -275,7 +275,7 @@ class TestAuthenticationSessionGetByToken:
             )
         )
 
-        session = await authentication_session_service.get_by_token(token)
+        session = await authentication_session_service.validate(token)
         assert session.id == session_id
 
 
