@@ -32,12 +32,12 @@ Our vision is to build a comprehensive, flexible authentication toolkit for Pyth
     - [ ] Passwords
     - [ ] Security keys
     - [ ] Passkeys
-    - [ ] Social Login
+    - [x] Social Login
 - [x] MFA authentication management — multi-factor authentication workflows
 
 ### Mid-term: Integration Layer
 
-- [ ] Sessions management — robust session handling
+- [x] Sessions management — robust session handling
 - [ ] ORM and web frameworks wrappers — seamless integration with popular frameworks
 
 ### Long-term: Full Platform
