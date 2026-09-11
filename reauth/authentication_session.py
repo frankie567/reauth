@@ -128,7 +128,7 @@ class AuthenticationSessionService(abc.ABC):
         )
         return token, authentication_session
 
-    async def get_by_token(self, token: str) -> AuthenticationSession:
+    async def validate(self, token: str) -> AuthenticationSession:
         """
         Validate a token and return the corresponding authentication session.
 
