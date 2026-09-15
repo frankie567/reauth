@@ -7,7 +7,7 @@ import httpx
 import jwt
 import pytest
 from cryptography.hazmat.primitives import hashes
-from cryptography.hazmat.primitives.asymmetric import rsa
+from cryptography.hazmat.primitives.asymmetric import padding, rsa
 from cryptography.hazmat.primitives.asymmetric.rsa import RSAPrivateKey
 from sqlalchemy.ext.asyncio import AsyncConnection
 
@@ -26,6 +26,7 @@ from reauth.factors.oauth2.oidc import (
     DiscoveryDocumentException,
     InvalidIDTokenException,
     JWKSFetchException,
+    JWKSSigner,
     OIDCFactor,
     PrivateKeyJWTOIDCFactor,
     SigningKeyNotFoundException,
@@ -681,8 +682,9 @@ class TestPrivateKeyJWTOIDCFactorGetRequestAuthentication:
         factor = _PrivateKeyJWTFactor(
             identifier="oidc",
             client_id="test-client-id",
-            jwks=get_private_jwks_from_rsa_key(rsa_key, "sign-key-1"),
-            kid="sign-key-1",
+            signer=JWKSSigner(
+                get_private_jwks_from_rsa_key(rsa_key, "sign-key-1"), "sign-key-1"
+            ),
             discovery_endpoint=DISCOVERY_ENDPOINT,
             state_service=oauth2_state_service,
         )
@@ -694,9 +696,11 @@ class TestPrivateKeyJWTOIDCFactorGetRequestAuthentication:
         assert headers == {}
         assert body["client_id"] == "test-client-id"
         assert body["client_assertion_type"] == CLIENT_ASSERTION_TYPE
-        assert (
-            jwt.get_unverified_header(body["client_assertion"])["kid"] == "sign-key-1"
-        )
+        assert jwt.get_unverified_header(body["client_assertion"]) == {
+            "alg": "RS256",
+            "kid": "sign-key-1",
+            "typ": "JWT",
+        }
         claims = jwt.decode(
             body["client_assertion"],
             rsa_key.public_key(),
@@ -706,20 +710,63 @@ class TestPrivateKeyJWTOIDCFactorGetRequestAuthentication:
         assert claims["iss"] == "test-client-id"
         assert claims["sub"] == "test-client-id"
 
-    async def test_raises_when_kid_not_in_jwks(
+    async def test_accepts_a_signer_that_holds_no_key_material(
         self,
         oauth2_state_service: SQLAlchemyOAuth2StateService,
         rsa_key: RSAPrivateKey,
     ) -> None:
-        """An unknown signing key id is surfaced as an OIDCException."""
+        """Any Signer serves this path, including one that signs out of process."""
+
+        class _RemoteSigner:
+            kid = "remote-key"
+            algorithm = "RS256"
+
+            def sign(self, signing_input: bytes) -> bytes:
+                return rsa_key.sign(signing_input, padding.PKCS1v15(), hashes.SHA256())
+
         factor = _PrivateKeyJWTFactor(
             identifier="oidc",
             client_id="test-client-id",
-            jwks=get_private_jwks_from_rsa_key(rsa_key, "sign-key-1"),
-            kid="unknown-key",
+            signer=_RemoteSigner(),
             discovery_endpoint=DISCOVERY_ENDPOINT,
             state_service=oauth2_state_service,
         )
 
+        _, body = await factor.get_request_authentication(token_endpoint=TOKEN_ENDPOINT)
+
+        assert (
+            jwt.get_unverified_header(body["client_assertion"])["kid"] == "remote-key"
+        )
+        claims = jwt.decode(
+            body["client_assertion"],
+            rsa_key.public_key(),
+            algorithms=["RS256"],
+            audience=TOKEN_ENDPOINT,
+        )
+        assert claims["iss"] == "test-client-id"
+
+
+class TestJWKSSigner:
+    """Tests for JWKSSigner."""
+
+    def test_signs_with_the_key_selected_by_kid(self, rsa_key: RSAPrivateKey) -> None:
+        signer = JWKSSigner(
+            get_private_jwks_from_rsa_key(rsa_key, "sign-key-1"), "sign-key-1"
+        )
+
+        assert signer.kid == "sign-key-1"
+        assert signer.algorithm == "RS256"
+
+        rsa_key.public_key().verify(
+            signer.sign(b"signing-input"),
+            b"signing-input",
+            padding.PKCS1v15(),
+            hashes.SHA256(),
+        )
+
+    def test_raises_when_kid_not_in_jwks(self, rsa_key: RSAPrivateKey) -> None:
+        """The unknown key surfaces at construction, not at first exchange."""
         with pytest.raises(SigningKeyNotFoundException):
-            await factor.get_request_authentication(token_endpoint=TOKEN_ENDPOINT)
+            JWKSSigner(
+                get_private_jwks_from_rsa_key(rsa_key, "sign-key-1"), "unknown-key"
+            )
