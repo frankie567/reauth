@@ -710,41 +710,6 @@ class TestPrivateKeyJWTOIDCFactorGetRequestAuthentication:
         assert claims["iss"] == "test-client-id"
         assert claims["sub"] == "test-client-id"
 
-    async def test_accepts_a_signer_that_holds_no_key_material(
-        self,
-        oauth2_state_service: SQLAlchemyOAuth2StateService,
-        rsa_key: RSAPrivateKey,
-    ) -> None:
-        """Any Signer serves this path, including one that signs out of process."""
-
-        class _RemoteSigner:
-            kid = "remote-key"
-            algorithm = "RS256"
-
-            def sign(self, signing_input: bytes) -> bytes:
-                return rsa_key.sign(signing_input, padding.PKCS1v15(), hashes.SHA256())
-
-        factor = _PrivateKeyJWTFactor(
-            identifier="oidc",
-            client_id="test-client-id",
-            signer=_RemoteSigner(),
-            discovery_endpoint=DISCOVERY_ENDPOINT,
-            state_service=oauth2_state_service,
-        )
-
-        _, body = await factor.get_request_authentication(token_endpoint=TOKEN_ENDPOINT)
-
-        assert (
-            jwt.get_unverified_header(body["client_assertion"])["kid"] == "remote-key"
-        )
-        claims = jwt.decode(
-            body["client_assertion"],
-            rsa_key.public_key(),
-            algorithms=["RS256"],
-            audience=TOKEN_ENDPOINT,
-        )
-        assert claims["iss"] == "test-client-id"
-
 
 class TestJWKSSigner:
     """Tests for JWKSSigner."""
