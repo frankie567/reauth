@@ -1,6 +1,7 @@
 import abc
 import base64
 import hmac
+import json
 import secrets
 import typing
 import urllib.parse
@@ -26,12 +27,47 @@ logger = get_logger(__name__)
 CLIENT_ASSERTION_TYPE = "urn:ietf:params:oauth:client-assertion-type:jwt-bearer"
 
 
+def _b64url(value: bytes) -> bytes:
+    return base64.urlsafe_b64encode(value).rstrip(b"=")
+
+
+class Signer(typing.Protocol):
+    """Produces JWS signatures.
+
+    An implementation either holds the private key in process, as `JWKSSigner`
+    does, or delegates to a remote signer that never releases it, such as a
+    cloud key management service. `kid` is advertised in the JOSE header so a
+    verifier can select the matching public key from a multi-key JWKS.
+    """
+
+    kid: str
+    algorithm: str
+
+    def sign(self, signing_input: bytes) -> bytes: ...
+
+
+class JWKSSigner:
+    """Signs in process with a private key selected from a JWK set by ID."""
+
+    def __init__(self, jwks: jwt.PyJWKSet, kid: str) -> None:
+        try:
+            key = jwks[kid]
+        except KeyError as e:
+            raise SigningKeyNotFoundException(kid) from e
+        self.kid = kid
+        self.algorithm = key.algorithm_name
+        self._signer = jwt.get_algorithm_by_name(key.algorithm_name)
+        self._key = key.key
+
+    def sign(self, signing_input: bytes) -> bytes:
+        return self._signer.sign(signing_input, self._key)
+
+
 def build_client_assertion(
     *,
     client_id: str,
     token_endpoint: str,
-    jwks: jwt.PyJWKSet,
-    kid: str,
+    signer: Signer,
     lifetime: int = 60,
 ) -> str:
     """Build a signed client assertion JWT for `private_key_jwt` authentication.
@@ -40,43 +76,38 @@ def build_client_assertion(
     client proves its identity to the token endpoint with a short-lived JWT signed
     by its private key, instead of sending a shared secret.
 
-    The signing key is selected from `jwks` by `kid` and advertised in the JOSE
-    header, as required for verification against a multi-key JWKS (OIDC Core
-    §10.1). The signing algorithm is taken from the key itself.
+    The signer advertises its key ID in the JOSE header, as required for
+    verification against a multi-key JWKS (OIDC Core §10.1), and names the
+    signing algorithm. The JWS is assembled here rather than by PyJWT, so a
+    signer that never releases the private key can serve this path.
 
     Args:
         client_id: The OAuth2 client identifier, used as both `iss` and `sub`.
         token_endpoint: The token endpoint URL, used as the `aud`.
-        jwks: The client's private JWK Set; the counterpart of the public keys
-            published at its `jwks_uri`.
-        kid: The ID of the key in `jwks` to sign with.
+        signer: Signs the assertion. Its public counterpart must be published at
+            the client's `jwks_uri`.
         lifetime: The assertion validity in seconds.
 
     Returns:
         The signed client assertion JWT.
-
-    Raises:
-        SigningKeyNotFoundException: If `kid` is not present in `jwks`.
     """
-    try:
-        signing_key = jwks[kid]
-    except KeyError as e:
-        raise SigningKeyNotFoundException(kid) from e
-
     issued_at = get_current_timestamp()
-    return jwt.encode(
-        {
-            "iss": client_id,
-            "sub": client_id,
-            "aud": token_endpoint,
-            "jti": secrets.token_urlsafe(32),
-            "iat": issued_at,
-            "exp": issued_at + lifetime,
-        },
-        signing_key.key,
-        algorithm=signing_key.algorithm_name,
-        headers={"kid": signing_key.key_id},
+    header = {"alg": signer.algorithm, "kid": signer.kid, "typ": "JWT"}
+    claims = {
+        "iss": client_id,
+        "sub": client_id,
+        "aud": token_endpoint,
+        "jti": secrets.token_urlsafe(32),
+        "iat": issued_at,
+        "exp": issued_at + lifetime,
+    }
+    signing_input = b".".join(
+        (
+            _b64url(json.dumps(header, separators=(",", ":")).encode()),
+            _b64url(json.dumps(claims, separators=(",", ":")).encode()),
+        )
     )
+    return b".".join((signing_input, _b64url(signer.sign(signing_input)))).decode()
 
 
 class OIDCException(OAuth2Exception):
@@ -646,11 +677,11 @@ class OIDCFactor(OIDCFactorBase):
 class PrivateKeyJWTOIDCFactor(OIDCFactorBase):
     """OpenID Connect factor authenticating with `private_key_jwt` (RFC 7523).
 
-    Signs a short-lived client assertion JWT for each token exchange with the key
-    selected from `jwks` by `kid`, instead of sending a shared client secret. The
-    matching public key must be registered with the provider (usually via a JWKS
-    URL). Rotating keys is a matter of adding the new key to `jwks` and pointing
-    `kid` at it (OIDC Core §10.1.1).
+    Signs a short-lived client assertion JWT for each token exchange with
+    `signer`, instead of sending a shared client secret. The matching public key
+    must be registered with the provider (usually via a JWKS URL). Rotating keys
+    is a matter of publishing the new public key and pointing the signer at its
+    private counterpart (OIDC Core §10.1.1).
 
     The provider must advertise `private_key_jwt` in its
     `token_endpoint_auth_methods_supported`.
@@ -661,8 +692,7 @@ class PrivateKeyJWTOIDCFactor(OIDCFactorBase):
         *,
         identifier: str,
         client_id: str,
-        jwks: jwt.PyJWKSet,
-        kid: str,
+        signer: Signer,
         discovery_endpoint: str,
         state_service: OAuth2StateService,
         assertion_lifetime: int = 60,
@@ -677,8 +707,7 @@ class PrivateKeyJWTOIDCFactor(OIDCFactorBase):
             step=step,
             advance_by=advance_by,
         )
-        self._signing_jwks = jwks
-        self._kid = kid
+        self._signer = signer
         self._assertion_lifetime = assertion_lifetime
 
     async def get_request_authentication(
@@ -687,8 +716,7 @@ class PrivateKeyJWTOIDCFactor(OIDCFactorBase):
         assertion = build_client_assertion(
             client_id=self.client_id,
             token_endpoint=token_endpoint,
-            jwks=self._signing_jwks,
-            kid=self._kid,
+            signer=self._signer,
             lifetime=self._assertion_lifetime,
         )
         return {}, {
