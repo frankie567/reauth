@@ -38,8 +38,13 @@ class HOTPEnrollment:
 
     @functools.cached_property
     def _impl(self) -> CryptoHOTP:
+        try:
+            key = base64.b32decode(self.secret)
+        except ValueError as exc:
+            message = "Invalid Base32 HOTP secret"
+            raise ValueError(message) from exc
         return CryptoHOTP(
-            key=base64.b32decode(self.secret.encode("ascii")),
+            key=key,
             length=self.code_length,
             algorithm=_get_algorithm(self.algorithm),
         )
@@ -268,6 +273,8 @@ class HOTPFactor(FactorBase[HOTPEnrollment], abc.ABC):
 
     def _verify(self, hotp: HOTPEnrollment, code: str) -> HOTPEnrollment:
         code = unicodedata.normalize("NFKC", code)
+        if len(code) != hotp.code_length or not code.isascii() or not code.isdigit():
+            raise InvalidHOTPCodeException()
         encoded_code = code.encode("ascii")
         counter = hotp.counter
 

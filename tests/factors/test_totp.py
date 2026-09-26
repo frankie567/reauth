@@ -148,6 +148,20 @@ def make_totp(
 
 
 class TestTOTP:
+    @pytest.mark.parametrize("secret", ["é" * 32, "Ａ" * 32, "!" * 32, "A"])
+    def test_rejects_malformed_secret(self, secret: str) -> None:
+        enrollment = TOTPEnrollment(
+            id=1,
+            identity_id=123,
+            enabled=False,
+            secret=secret,
+            algorithm="sha1",
+            code_length=6,
+            time_step=30,
+        )
+        with pytest.raises(ValueError, match="Invalid Base32 TOTP secret"):
+            enrollment.get_provisioning_uri("reauth@example.com")
+
     def test_get_provisioning_uri(self) -> None:
         secret = secrets.token_bytes(20)
         totp = TOTPEnrollment(
@@ -205,6 +219,22 @@ class TestTOTPEnroll:
 
 @pytest.mark.anyio
 class TestTOTPEnable:
+    @pytest.mark.parametrize(
+        "code", ["١٢٣٤٥٦", "é23456", "🔑23456", "12345", "1234567", "12345a", ""]
+    )
+    async def test_rejects_malformed_code(
+        self,
+        totp_factor: SQLAlchemyTOTPFactor,
+        make_totp: MakeTOTPCallable,
+        code: str,
+    ) -> None:
+        enrollment = await make_totp(enabled=False)
+        with pytest.raises(InvalidTOTPCodeException):
+            await totp_factor.enable(enrollment.identity_id, code)
+        assert (
+            await totp_factor.get_by_identity_id(enrollment.identity_id) == enrollment
+        )
+
     async def test_enable_not_enrolled(self, totp_factor: SQLAlchemyTOTPFactor) -> None:
         with pytest.raises(NotEnrolledTOTPException):
             await totp_factor.enable(999, "123456")
@@ -241,6 +271,22 @@ class TestTOTPEnable:
 
 @pytest.mark.anyio
 class TestTOTPVerify:
+    @pytest.mark.parametrize(
+        "code", ["١٢٣٤٥٦", "é23456", "🔑23456", "12345", "1234567", "12345a", ""]
+    )
+    async def test_rejects_malformed_code(
+        self,
+        totp_factor: SQLAlchemyTOTPFactor,
+        make_totp: MakeTOTPCallable,
+        code: str,
+    ) -> None:
+        enrollment = await make_totp(enabled=True)
+        with pytest.raises(InvalidTOTPCodeException):
+            await totp_factor.verify(enrollment.identity_id, code)
+        assert (
+            await totp_factor.get_by_identity_id(enrollment.identity_id) == enrollment
+        )
+
     async def test_not_enrolled(self, totp_factor: SQLAlchemyTOTPFactor) -> None:
         with pytest.raises(NotEnrolledTOTPException):
             await totp_factor.verify(999, "123456")

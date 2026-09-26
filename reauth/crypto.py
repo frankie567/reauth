@@ -30,7 +30,7 @@ def get_token_hash(token: str, *, secret: str) -> TokenHash:
     Returns:
         Hexadecimal string of the HMAC-SHA256 hash.
     """
-    hash = hmac.new(secret.encode("ascii"), token.encode("ascii"), hashlib.sha256)
+    hash = hmac.new(secret.encode("utf-8"), token.encode("utf-8"), hashlib.sha256)
     return TokenHash(hash.hexdigest())
 
 

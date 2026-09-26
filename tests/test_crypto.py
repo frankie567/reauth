@@ -1,5 +1,7 @@
 """Tests for reauth.crypto module."""
 
+import hmac
+
 import pytest
 
 from reauth.crypto import (
@@ -12,6 +14,31 @@ from reauth.crypto import (
 
 class TestGetTokenHash:
     """Tests for get_token_hash function."""
+
+    @pytest.mark.parametrize(
+        "token,secret",
+        [("token", "secret"), ("jeton_é🔑", "secret"), ("token", "秘密🔑")],
+    )
+    def test_hash_uses_utf8(self, token: str, secret: str) -> None:
+        assert (
+            get_token_hash(token, secret=secret)
+            == hmac.digest(
+                secret.encode("utf-8"), token.encode("utf-8"), "sha256"
+            ).hex()
+        )
+
+    def test_unicode_token_hash_pair(self) -> None:
+        token, token_hash = generate_token_hash_pair(secret="秘密", prefix="clé_")
+        assert token.startswith("clé_")
+        assert token_hash == get_token_hash(token, secret="秘密")
+
+    def test_hash_preserves_unicode_distinctions(self) -> None:
+        assert get_token_hash("é", secret="secret") != get_token_hash(
+            "e\u0301", secret="secret"
+        )
+        assert get_token_hash("token", secret="é") != get_token_hash(
+            "token", secret="e\u0301"
+        )
 
     @pytest.mark.parametrize(
         "token,secret",

@@ -134,6 +134,20 @@ def make_hotp(
 
 
 class TestHOTP:
+    @pytest.mark.parametrize("secret", ["é" * 32, "Ａ" * 32, "!" * 32, "A"])
+    def test_rejects_malformed_secret(self, secret: str) -> None:
+        enrollment = HOTPEnrollment(
+            id=1,
+            identity_id=123,
+            enabled=False,
+            secret=secret,
+            algorithm="sha1",
+            code_length=6,
+            counter=0,
+        )
+        with pytest.raises(ValueError, match="Invalid Base32 HOTP secret"):
+            enrollment.get_provisioning_uri("reauth@example.com")
+
     def test_get_provisioning_uri(self) -> None:
         secret = secrets.token_bytes(20)  # 160-bit secret key
         base64.b32encode(secret).decode("ascii")
@@ -191,6 +205,22 @@ class TestHOTPEnroll:
 
 @pytest.mark.anyio
 class TestHOTPEnable:
+    @pytest.mark.parametrize(
+        "code", ["١٢٣٤٥٦", "é23456", "🔑23456", "12345", "1234567", "12345a", ""]
+    )
+    async def test_rejects_malformed_code(
+        self,
+        hotp_factor: SQLAlchemyHOTPFactor,
+        make_hotp: MakeHOTPCallable,
+        code: str,
+    ) -> None:
+        enrollment = await make_hotp(enabled=False)
+        with pytest.raises(InvalidHOTPCodeException):
+            await hotp_factor.enable(enrollment.identity_id, code)
+        assert (
+            await hotp_factor.get_by_identity_id(enrollment.identity_id) == enrollment
+        )
+
     async def test_enable_not_enrolled(self, hotp_factor: SQLAlchemyHOTPFactor) -> None:
         with pytest.raises(NotEnrolledHOTPException):
             await hotp_factor.enable(999, "123456")
@@ -227,6 +257,22 @@ class TestHOTPEnable:
 
 @pytest.mark.anyio
 class TestHOTPVerify:
+    @pytest.mark.parametrize(
+        "code", ["١٢٣٤٥٦", "é23456", "🔑23456", "12345", "1234567", "12345a", ""]
+    )
+    async def test_rejects_malformed_code(
+        self,
+        hotp_factor: SQLAlchemyHOTPFactor,
+        make_hotp: MakeHOTPCallable,
+        code: str,
+    ) -> None:
+        enrollment = await make_hotp(enabled=True)
+        with pytest.raises(InvalidHOTPCodeException):
+            await hotp_factor.verify(enrollment.identity_id, code)
+        assert (
+            await hotp_factor.get_by_identity_id(enrollment.identity_id) == enrollment
+        )
+
     async def test_not_enrolled(self, hotp_factor: SQLAlchemyHOTPFactor) -> None:
         with pytest.raises(NotEnrolledHOTPException):
             await hotp_factor.verify(999, "123456")

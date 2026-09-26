@@ -48,8 +48,13 @@ class TOTPEnrollment:
 
     @functools.cached_property
     def _impl(self) -> CryptoTOTP:
+        try:
+            key = base64.b32decode(self.secret)
+        except ValueError as exc:
+            message = "Invalid Base32 TOTP secret"
+            raise ValueError(message) from exc
         return CryptoTOTP(
-            key=base64.b32decode(self.secret.encode("ascii")),
+            key=key,
             length=self.code_length,
             algorithm=_get_algorithm(self.algorithm),
             time_step=self.time_step,
@@ -280,6 +285,8 @@ class TOTPFactor(FactorBase[TOTPEnrollment], abc.ABC):
 
     def _verify(self, totp: TOTPEnrollment, code: str) -> TOTPEnrollment:
         code = unicodedata.normalize("NFKC", code)
+        if len(code) != totp.code_length or not code.isascii() or not code.isdigit():
+            raise InvalidTOTPCodeException()
         encoded_code = code.encode("ascii")
         current_time = int(time.time())
         drift = -self.drift_tolerance
