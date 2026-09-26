@@ -7,6 +7,7 @@ repo_name = "frankie567/reauth"
 extra_css = ["stylesheets/extra.css", "stylesheets/landing.css"]
 nav = [
     { "Home" = "index.md" },
+    { "Roadmap" = "roadmap.md" },
     { "Get started" = "getting-started.md" },
     { "API Reference" = [
         { "Overview" = "reference/index.md" },
