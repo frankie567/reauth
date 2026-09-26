@@ -116,7 +116,7 @@ class AuthenticationSessionService(abc.ABC):
             token_hash=token_hash,
             expires_at=get_current_timestamp() + int(self.lifetime.total_seconds()),
             identity_id=None,
-            context=context if context else None,
+            context=context or None,
         )
         authentication_session.id = await self.insert(authentication_session)
         logger.info(
