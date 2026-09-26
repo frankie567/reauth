@@ -44,6 +44,7 @@ The library has a built-in OWASP-compliant logging infrastructure. Use it for se
 
 ```python
 from reauth.logging import get_logger
+
 logger = get_logger(__name__)
 ```
 
@@ -107,15 +108,17 @@ async def insert(self, enrollment: Enrollment) -> int:
     )
     return result.scalar_one()
 
+
 async def update(self, enrollment: Enrollment) -> None:
     await self.connection.execute(
-        update(table).where(table.c.id == enrollment.id).values(**dataclasses.asdict(enrollment))
+        update(table)
+        .where(table.c.id == enrollment.id)
+        .values(**dataclasses.asdict(enrollment))
     )
 
+
 async def delete(self, enrollment: Enrollment) -> None:
-    await self.connection.execute(
-        delete(table).where(table.c.id == enrollment.id)
-    )
+    await self.connection.execute(delete(table).where(table.c.id == enrollment.id))
 ```
 
 ## Conventions
