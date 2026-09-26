@@ -1,0 +1,3 @@
+# HOTP
+
+::: reauth.factors.hotp

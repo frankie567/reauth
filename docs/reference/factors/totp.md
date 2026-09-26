@@ -1,0 +1,3 @@
+# TOTP
+
+::: reauth.factors.totp

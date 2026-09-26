@@ -20,10 +20,10 @@ test-cov-xml:
     uv run pytest --cov-report=xml
 
 docs-serve:
-    uv run mkdocs serve
+    uv run zensical serve
 
 docs-build:
-    uv run mkdocs build
+    uv run zensical build --strict
 
 version bump:
     uvx hatch version {{bump}}

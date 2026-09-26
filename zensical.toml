@@ -1,0 +1,91 @@
+[project]
+site_name = "Reauth"
+site_description = "The authentication toolkit for Python"
+site_url = "https://frankie567.github.io/reauth/"
+repo_url = "https://github.com/frankie567/reauth"
+repo_name = "frankie567/reauth"
+extra_css = ["stylesheets/extra.css", "stylesheets/landing.css"]
+nav = [
+    { "Home" = "index.md" },
+    { "Get started" = "getting-started.md" },
+    { "API Reference" = [
+        { "Overview" = "reference/index.md" },
+        { "Authentication sessions" = "reference/authentication_session.md" },
+        { "Identity sessions" = "reference/identity_session.md" },
+        { "Factors" = [
+            { "Base" = "reference/factors/base.md" },
+            { "Email OTP" = "reference/factors/email_otp.md" },
+            { "HOTP" = "reference/factors/hotp.md" },
+            { "TOTP" = "reference/factors/totp.md" },
+            { "Backup codes" = "reference/factors/backup_codes.md" },
+            { "OAuth 2.0 / OpenID Connect" = [
+                { "Base" = "reference/factors/oauth2/base.md" },
+                { "OpenID Connect" = "reference/factors/oauth2/oidc.md" },
+                { "Apple" = "reference/factors/oauth2/apple.md" },
+                { "GitHub" = "reference/factors/oauth2/github.md" },
+                { "Google" = "reference/factors/oauth2/google.md" },
+                { "PKCE" = "reference/factors/oauth2/pkce.md" },
+                { "State" = "reference/factors/oauth2/state.md" },
+            ] },
+        ] },
+        { "Utilities" = [
+            { "Cryptography" = "reference/crypto.md" },
+            { "Exceptions" = "reference/exceptions.md" },
+            { "Logging" = "reference/logging.md" },
+        ] },
+    ] },
+]
+
+[project.plugins.mkdocstrings.handlers.python]
+paths = ["."]
+
+[project.plugins.mkdocstrings.handlers.python.options]
+docstring_style = "google"
+show_root_heading = true
+show_if_no_docstring = true
+merge_init_into_class = true
+filters = ["!^_", "!^logger$"]
+show_signature_annotations = true
+separate_signature = true
+show_source = false
+members_order = "source"
+
+[[project.extra.social]]
+icon = "fontawesome/brands/github"
+link = "https://github.com/frankie567/reauth"
+name = "Reauth on GitHub"
+
+[project.theme]
+favicon = "images/favicon.svg"
+features = ["navigation.tabs", "navigation.tabs.sticky", "navigation.path", "content.code.copy"]
+
+[project.theme.icon]
+logo = "lucide/toy-brick"
+repo = "fontawesome/brands/github"
+
+[project.theme.font]
+text = "Manrope"
+code = "IBM Plex Mono"
+
+[[project.theme.palette]]
+media = "(prefers-color-scheme)"
+primary = "custom"
+accent = "custom"
+toggle.icon = "lucide/sun-moon"
+toggle.name = "Switch to light mode"
+
+[[project.theme.palette]]
+media = "(prefers-color-scheme: light)"
+scheme = "default"
+primary = "custom"
+accent = "custom"
+toggle.icon = "lucide/sun"
+toggle.name = "Switch to dark mode"
+
+[[project.theme.palette]]
+media = "(prefers-color-scheme: dark)"
+scheme = "slate"
+primary = "custom"
+accent = "custom"
+toggle.icon = "lucide/moon"
+toggle.name = "Switch to system preference"

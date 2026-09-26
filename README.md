@@ -90,13 +90,21 @@ When you push the tag on GitHub, the workflow will automatically publish it on P
 
 ## Serve the documentation
 
-You can serve the Mkdocs documentation with:
+The documentation and landing page use [Zensical](https://zensical.org/).
+Start the local preview with:
 
 ```bash
 just docs-serve
 ```
 
-It'll automatically watch for changes in your code.
+Open http://localhost:8000. The preview reloads when documentation changes.
+Edit pages in `docs/` and configure the site in `zensical.toml`.
+
+Build the static site into `site/` with:
+
+```bash
+just docs-build
+```
 
 ## License
 
