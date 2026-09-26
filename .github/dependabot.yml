@@ -1,0 +1,29 @@
+version: 2
+updates:
+    - package-ecosystem: uv
+      directory: "/"
+      schedule:
+          interval: weekly
+      cooldown:
+          default-days: 7
+      groups:
+          uv-dev:
+              patterns:
+                  - ty
+                  - ruff
+                  - pytest
+                  - pytest-cov
+                  - sqlalchemy
+                  - aiosqlite
+                  - zensical
+                  - mkdocstrings-python
+    - package-ecosystem: github-actions
+      directory: "/"
+      schedule:
+          interval: weekly
+      cooldown:
+          default-days: 7
+      groups:
+          github-actions:
+              patterns:
+                  - "*"
