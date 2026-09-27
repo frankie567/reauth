@@ -98,6 +98,7 @@ When implementing abstract methods for data persistence (insert, update, delete)
 
 ### Testing
 
+- When testing a method, do not rely on other methods to prepare the initial state. Use fixtures or write directly to the test data storage instead.
 - Leverage `dataclasses.asdict(model)` to easily dump dataclass instances for database operations
 
 ```python
