@@ -31,3 +31,9 @@ build:
 
 version bump:
     uvx hatch version {{bump}}
+
+changelog version:
+    uv run --locked keepachangelog release {{quote(version)}}
+
+release-notes version:
+    @uv run --locked keepachangelog show {{quote(version)}}
