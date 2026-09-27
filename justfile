@@ -25,5 +25,9 @@ docs-serve:
 docs-build:
     uv run zensical build --strict
 
+build:
+    uv sync --locked --all-extras --dev
+    uv build --no-build-isolation
+
 version bump:
     uvx hatch version {{bump}}
