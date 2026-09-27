@@ -122,6 +122,30 @@ async def delete(self, enrollment: Enrollment) -> None:
     await self.connection.execute(delete(table).where(table.c.id == enrollment.id))
 ```
 
+## Abstract Method Documentation
+
+Every abstract method must include an `Abstract: Implementation contract` block in its docstring, after the standard `Args`, `Returns`, and `Raises` sections when present.
+
+- Keep the summary and standard sections focused on the caller-facing API. Put requirements for concrete implementations in the contract block.
+- Make each contract self-contained and specific to the method. Describe its inputs, effects, and guarantees without referring to other methods' contracts or prescribing a call chain.
+- For persistence methods, document concurrency requirements where relevant: protected reads, protection lifetime, transaction ownership, atomicity, uniqueness, and lock ordering. Distinguish protection of existing records from coordination when no record exists.
+- State who commits and rolls back. Use "Leave commit and rollback to the caller" for caller-owned transactions; explicitly document any requirement to commit before returning.
+- Describe required guarantees rather than a particular database implementation. Mention mechanisms such as row locks only as examples where useful. Do not add concurrency requirements to methods that do not need them.
+
+```python
+    """
+    Delete an enrollment from the persistent store.
+
+    Args:
+        enrollment: The enrollment to delete.
+
+    Abstract: Implementation contract
+        Delete the supplied enrollment by ID in the transaction that protects
+        the record. Retain that protection until the transaction ends.
+        Leave commit and rollback to the caller.
+    """
+```
+
 ## Conventions
 
 - In the library code (not tests), use absolute imports within the `reauth` package (e.g., `from reauth.factors.base import FactorBase`).
