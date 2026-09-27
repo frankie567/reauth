@@ -10,15 +10,20 @@ jobs:
                 python_version: ['3.14']
 
         steps:
-            - uses: actions/checkout@v7
+            - name: Harden the runner (Audit all outbound calls)
+              uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
+              with:
+                egress-policy: audit
+
+            - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
             - name: Set up Python
-              uses: actions/setup-python@v7
+              uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
               with:
                   python-version: ${{ matrix.python_version }}
             - name: Setup Just
-              uses: extractions/setup-just@v4
+              uses: extractions/setup-just@53165ef7e734c5c07cb06b3c8e7b647c5aa16db3 # v4.0.0
             - name: Install uv and set the Python version
-              uses: astral-sh/setup-uv@v7
+              uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7.6.0
               with:
                   python-version: ${{ matrix.python_version }}
             - name: Install the project
@@ -29,7 +34,7 @@ jobs:
             - name: Test
               run: |
                   just test-cov-xml
-            - uses: codecov/codecov-action@v7
+            - uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1
               with:
                   token: ${{ secrets.CODECOV_TOKEN }}
                   fail_ci_if_error: true
@@ -52,15 +57,20 @@ jobs:
             id-token: write
 
         steps:
-            - uses: actions/checkout@v7
+            - name: Harden the runner (Audit all outbound calls)
+              uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
+              with:
+                egress-policy: audit
+
+            - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
             - name: Set up Python
-              uses: actions/setup-python@v7
+              uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
               with:
                   python-version: '3.14'
             - name: Setup Just
-              uses: extractions/setup-just@v4
+              uses: extractions/setup-just@53165ef7e734c5c07cb06b3c8e7b647c5aa16db3 # v4.0.0
             - name: Install uv and set the Python version
-              uses: astral-sh/setup-uv@v7
+              uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7.6.0
               with:
                   python-version: '3.14'
             - name: Install the project
@@ -70,7 +80,7 @@ jobs:
                   uv build
                   uv publish
             - name: Create release
-              uses: ncipollo/release-action@v1
+              uses: ncipollo/release-action@339a81892b84b4eeb0f6e744e4574d79d0d9b8dd # v1.21.0
               with:
                   draft: true
                   body: ${{ github.event.head_commit.message }}
