@@ -149,6 +149,12 @@ class OAuth2StateService(abc.ABC):
 
         Returns:
             The corresponding OAuth2State instance, or None if not found.
+
+        Abstract: Implementation contract
+            Match the stored state hash and include expired rows without validating
+            them. Acquire protection before reading and retain it until the caller's
+            transaction ends, preventing competing mutations of the returned state.
+            Leave commit and rollback to the caller.
         """
         ...
 
@@ -162,6 +168,10 @@ class OAuth2StateService(abc.ABC):
 
         Returns:
             The ID of the inserted OAuth2State.
+
+        Abstract: Implementation contract
+            Persist the supplied state, enforce uniqueness of state_hash, and return
+            the record ID. Leave commit and rollback to the caller.
         """
         ...
 
@@ -172,5 +182,10 @@ class OAuth2StateService(abc.ABC):
 
         Args:
             oauth2_state: The OAuth2State instance to delete.
+
+        Abstract: Implementation contract
+            Delete the supplied state by ID in the transaction that protects the
+            record. Leave commit and rollback to the caller. Deletion becomes durable
+            on commit; a rollback restores the state.
         """
         ...

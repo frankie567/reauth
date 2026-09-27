@@ -191,6 +191,22 @@ def authentication_session_service(
     )
 
 
+@pytest.fixture
+def authentication_session_data(
+    authentication_session_service: SQLAlchemyAuthenticationSession,
+) -> tuple[str, AuthenticationSession]:
+    token, token_hash = generate_token_hash_pair(
+        secret=authentication_session_service.hash_secret,
+        prefix=authentication_session_service.token_prefix,
+    )
+    return token, AuthenticationSession(
+        id=1,
+        token_hash=token_hash,
+        expires_at=get_current_timestamp() + 3600,
+        identity_id=None,
+    )
+
+
 @pytest.mark.anyio
 class TestAuthenticationSessionStart:
     async def test_returns_valid_session(
@@ -352,12 +368,65 @@ class TestGetAvailableFactors:
 
 @pytest.mark.anyio
 class TestAdvance:
+    async def test_invalid_token(
+        self,
+        authentication_session_service: SQLAlchemyAuthenticationSession,
+        password_factor: DummyPasswordFactor,
+    ) -> None:
+        with pytest.raises(InvalidSessionTokenException):
+            await authentication_session_service.advance("unknown", 1, password_factor)
+
+    async def test_expired_session(
+        self,
+        authentication_session_service: SQLAlchemyAuthenticationSession,
+        password_factor: DummyPasswordFactor,
+        sqlalchemy_connection: AsyncConnection,
+        authentication_session_data: tuple[str, AuthenticationSession],
+    ) -> None:
+        token, session = authentication_session_data
+        session.expires_at = 0
+        await sqlalchemy_connection.execute(
+            insert(authentication_session_table).values(**dataclasses.asdict(session))
+        )
+
+        with pytest.raises(ExpiredSessionException):
+            await authentication_session_service.advance(token, 1, password_factor)
+
+        result = await sqlalchemy_connection.execute(
+            select(authentication_session_table)
+        )
+        assert result.mappings().one() == dataclasses.asdict(session)
+
+    async def test_uses_current_step(
+        self,
+        authentication_session_service: SQLAlchemyAuthenticationSession,
+        password_factor: DummyPasswordFactor,
+        sqlalchemy_connection: AsyncConnection,
+        authentication_session_data: tuple[str, AuthenticationSession],
+    ) -> None:
+        token, session = authentication_session_data
+        session.identity_id = 1
+        session.step = 1
+        session.amr = [AuthenticationMethodReference.PWD]
+        session.used_factors = ["dummy_password"]
+        await sqlalchemy_connection.execute(
+            insert(authentication_session_table).values(**dataclasses.asdict(session))
+        )
+
+        with pytest.raises(UnavailableFactorException):
+            await authentication_session_service.advance(token, 1, password_factor)
+
+        result = await sqlalchemy_connection.execute(
+            select(authentication_session_table)
+        )
+        assert result.mappings().one() == dataclasses.asdict(session)
+
     async def test_no_identity_zero_factor(
         self,
         authentication_session_service: SQLAlchemyAuthenticationSession,
         password_factor: DummyPasswordFactor,
     ) -> None:
-        _token, token_hash = generate_token_hash_pair(
+        token, token_hash = generate_token_hash_pair(
             secret=authentication_session_service.hash_secret,
             prefix=authentication_session_service.token_prefix,
         )
@@ -371,7 +440,7 @@ class TestAdvance:
         session.id = await authentication_session_service.insert(session)
 
         updated_session = await authentication_session_service.advance(
-            session, 1, password_factor
+            token, 1, password_factor
         )
 
         assert updated_session.id == session.id
@@ -390,10 +459,10 @@ class TestAdvance:
             hash_secret="test_secret",
             factors={trusted_factor, mfa_factor},
         )
-        _token, session = await authentication_session_service.start()
+        token, _session = await authentication_session_service.start()
 
         updated_session = await authentication_session_service.advance(
-            session, 1, trusted_factor
+            token, 1, trusted_factor
         )
 
         assert updated_session.step == 2
@@ -407,7 +476,7 @@ class TestAdvance:
         authentication_session_service: SQLAlchemyAuthenticationSession,
         mfa_factor: DummyMFAFactor,
     ) -> None:
-        _token, token_hash = generate_token_hash_pair(
+        token, token_hash = generate_token_hash_pair(
             secret=authentication_session_service.hash_secret,
             prefix=authentication_session_service.token_prefix,
         )
@@ -424,7 +493,7 @@ class TestAdvance:
         session.id = await authentication_session_service.insert(session)
 
         updated_session = await authentication_session_service.advance(
-            session, 1, mfa_factor
+            token, 1, mfa_factor
         )
 
         assert updated_session.id == session.id
@@ -439,7 +508,7 @@ class TestAdvance:
         authentication_session_service: SQLAlchemyAuthenticationSession,
         mfa_factor: DummyMFAFactor,
     ) -> None:
-        _token, token_hash = generate_token_hash_pair(
+        token, token_hash = generate_token_hash_pair(
             secret=authentication_session_service.hash_secret,
             prefix=authentication_session_service.token_prefix,
         )
@@ -456,24 +525,77 @@ class TestAdvance:
         session.id = await authentication_session_service.insert(session)
 
         with pytest.raises(UnavailableFactorException):
-            await authentication_session_service.advance(session, 1, mfa_factor)
+            await authentication_session_service.advance(token, 1, mfa_factor)
 
 
 @pytest.mark.anyio
 class TestComplete:
+    async def test_invalid_token(
+        self, authentication_session_service: SQLAlchemyAuthenticationSession
+    ) -> None:
+        with pytest.raises(InvalidSessionTokenException):
+            await authentication_session_service.complete("unknown")
+
+    async def test_expired_session(
+        self,
+        authentication_session_service: SQLAlchemyAuthenticationSession,
+        sqlalchemy_connection: AsyncConnection,
+        authentication_session_data: tuple[str, AuthenticationSession],
+    ) -> None:
+        token, session = authentication_session_data
+        session.expires_at = 0
+        session.identity_id = 1
+        session.step = 2
+        await sqlalchemy_connection.execute(
+            insert(authentication_session_table).values(**dataclasses.asdict(session))
+        )
+
+        with pytest.raises(ExpiredSessionException):
+            await authentication_session_service.complete(token)
+
+        result = await sqlalchemy_connection.execute(
+            select(authentication_session_table)
+        )
+        assert result.mappings().one() == dataclasses.asdict(session)
+
+    async def test_already_completed_session(
+        self,
+        authentication_session_service: SQLAlchemyAuthenticationSession,
+        sqlalchemy_connection: AsyncConnection,
+        authentication_session_data: tuple[str, AuthenticationSession],
+    ) -> None:
+        token, session = authentication_session_data
+        session.identity_id = 1
+        session.step = 2
+        session.amr = [
+            AuthenticationMethodReference.PWD,
+            AuthenticationMethodReference.MFA,
+        ]
+        await sqlalchemy_connection.execute(
+            insert(authentication_session_table).values(**dataclasses.asdict(session))
+        )
+        await sqlalchemy_connection.execute(
+            delete(authentication_session_table).where(
+                authentication_session_table.c.id == session.id
+            )
+        )
+
+        with pytest.raises(InvalidSessionTokenException):
+            await authentication_session_service.complete(token)
+
     async def test_returns_identity_and_amr(
         self,
         authentication_session_service: SQLAlchemyAuthenticationSession,
         password_factor: DummyPasswordFactor,
         mfa_factor: DummyMFAFactor,
     ) -> None:
-        _token, session = await authentication_session_service.start()
+        token, session = await authentication_session_service.start()
         session = await authentication_session_service.advance(
-            session, 1, password_factor
+            token, 1, password_factor
         )
-        session = await authentication_session_service.advance(session, 1, mfa_factor)
+        session = await authentication_session_service.advance(token, 1, mfa_factor)
 
-        identity_id, amr = await authentication_session_service.complete(session)
+        identity_id, amr = await authentication_session_service.complete(token)
         assert identity_id == 1
         assert amr == [
             AuthenticationMethodReference.PWD,
@@ -490,23 +612,21 @@ class TestComplete:
     async def test_raises_identity_not_attached(
         self, authentication_session_service: SQLAlchemyAuthenticationSession
     ) -> None:
-        _token, session = await authentication_session_service.start()
+        token, _session = await authentication_session_service.start()
 
         with pytest.raises(IdentityNotAttachedException):
-            await authentication_session_service.complete(session)
+            await authentication_session_service.complete(token)
 
     async def test_raises_factors_remaining(
         self,
         authentication_session_service: SQLAlchemyAuthenticationSession,
         password_factor: DummyPasswordFactor,
     ) -> None:
-        _token, session = await authentication_session_service.start()
-        session = await authentication_session_service.advance(
-            session, 1, password_factor
-        )
+        token, _session = await authentication_session_service.start()
+        await authentication_session_service.advance(token, 1, password_factor)
 
         with pytest.raises(FactorsRemainingException) as exc_info:
-            await authentication_session_service.complete(session)
+            await authentication_session_service.complete(token)
 
         assert len(exc_info.value.factors) == 1
         assert isinstance(next(iter(exc_info.value.factors)), DummyMFAFactor)

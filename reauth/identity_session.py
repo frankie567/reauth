@@ -373,14 +373,18 @@ class IdentitySessionService(abc.ABC):
         """
         Atomically insert a session and initialize its family ID.
 
-        If family_id is None, set the stored family_id to the generated record ID
-        in the same transaction. Preserve an explicitly supplied family ID.
-
         Args:
             identity_session: The complete session model to insert.
 
         Returns:
             The ID of the inserted session.
+
+        Abstract: Implementation contract
+            If family_id is None, set the stored family_id to the generated record ID
+            in the same transaction. Preserve an explicitly supplied family ID.
+            Enforce uniqueness of token hashes (and non-null refresh token hashes).
+            Return the inserted ID and leave transaction commit and rollback to the
+            caller.
         """
         ...
 
@@ -395,6 +399,12 @@ class IdentitySessionService(abc.ABC):
         Returns:
             The stored session, including expired, replaced, or revoked rows,
             or None if not found.
+
+        Abstract: Implementation contract
+            Match the access token hash without filtering out expired, replaced, or
+            revoked sessions. Return current stored state without acquiring a
+            session-row lock. The returned snapshot is not protected from subsequent
+            mutations.
         """
         ...
 
@@ -411,6 +421,13 @@ class IdentitySessionService(abc.ABC):
         Returns:
             The stored session, including expired, replaced, or revoked rows,
             or None if not found.
+
+        Abstract: Implementation contract
+            Match the refresh token hash without filtering out expired, replaced, or
+            revoked sessions; retained rows are needed for reuse detection. Each call
+            must return current stored state, not a cached result or an outdated
+            transaction snapshot. Do not acquire a session-row lock; the returned
+            snapshot is not protected from subsequent mutations.
         """
         ...
 
@@ -421,16 +438,6 @@ class IdentitySessionService(abc.ABC):
         """
         Atomically replace a session if its refresh token is still usable.
 
-        Serialize with all replacements and revocations in the same family,
-        for example by locking the retained initial session row. Reload the
-        previous session under that lock: its refresh hash must still match,
-        its refresh deadline must be in the future, and it must be neither
-        revoked nor replaced. Also reject a revoked or missing family root.
-
-        Insert new_session with the same family ID and set the previous row's
-        replaced_by_id to the new ID. Commit both changes before returning;
-        roll back both on failure. Do not call the public issue() method.
-
         Args:
             previous_session: The previously retrieved session to replace.
             new_session: The complete replacement model to persist.
@@ -438,6 +445,20 @@ class IdentitySessionService(abc.ABC):
         Returns:
             The replacement ID, or None with no changes if the previous session
             is no longer eligible. Propagate storage failures after rollback.
+
+        Abstract: Implementation contract
+            Serialize with all replacements and revocations in the same family,
+            for example by locking the retained initial session row before any child
+            rows. Reload the previous session under that protection: its refresh
+            hash must still match, its refresh deadline must be in the future, and
+            it must be neither revoked nor replaced. Reject a revoked or missing
+            family root. The supplied previous_session is a snapshot, not proof of
+            eligibility.
+
+            Insert new_session with the same family ID and set the previous row's
+            replaced_by_id to the new ID in one transaction. Commit both changes
+            before returning; roll back both on failure. Return None without changes
+            if the previous session is no longer eligible.
         """
         ...
 
@@ -446,13 +467,16 @@ class IdentitySessionService(abc.ABC):
         """
         Persist revocation of every session in the supplied session's family.
 
-        Use identity_session.revoked_at, set by the service, for rows not yet
-        revoked. Preserve earlier revocation timestamps, hashes, and lineage.
-        Serialize with replace() through the same family lock and commit before
-        returning. A caller's subsequent exception must not undo revocation.
-        Missing or already-revoked families succeed without error.
-
         Args:
             identity_session: The session identifying the family and revocation time.
+
+        Abstract: Implementation contract
+            Use the supplied identity_session.revoked_at for rows not yet revoked.
+            Preserve earlier revocation timestamps, hashes, and lineage. Serialize
+            with all replacements and revocations in the family, for example by
+            locking its retained initial session row before any child rows.
+
+            Commit before returning so a caller's subsequent exception cannot undo
+            revocation. Missing or already-revoked families succeed without error.
         """
         ...

@@ -546,7 +546,8 @@ class OAuth2Factor[EXTRA](FactorBase[OAuth2Enrollment], abc.ABC):
     async def get_request_authentication(
         self, *, token_endpoint: str
     ) -> tuple[dict[str, str], dict[str, str]]:
-        """Authenticate the client for the token request (RFC 6749 Section 4.1.3).
+        """
+        Authenticate the client for the token request (RFC 6749 Section 4.1.3).
 
         Returns the extra headers and body parameters that prove the client's
         identity to the token endpoint, letting each provider authenticate by
@@ -561,6 +562,12 @@ class OAuth2Factor[EXTRA](FactorBase[OAuth2Enrollment], abc.ABC):
 
         Returns:
             A tuple ``(headers, body)`` of extra request headers and body params.
+
+        Abstract: Implementation contract
+            Return the provider's client-authentication headers and body parameters.
+            Use the supplied token endpoint for strategies that bind credentials to
+            a particular endpoint. Do not mutate shared provider configuration while
+            constructing per-request credentials.
         """
         ...
 
@@ -576,10 +583,8 @@ class OAuth2Factor[EXTRA](FactorBase[OAuth2Enrollment], abc.ABC):
         nonce: str | None = None,
         extra: EXTRA | None = None,
     ) -> str:
-        """Generate the authorization URL for the OAuth2 provider.
-
-        Provider-specific implementations should construct the URL
-        according to their API requirements.
+        """
+        Generate the authorization URL for the OAuth2 provider.
 
         Args:
             redirect_uri: The callback URI.
@@ -592,6 +597,12 @@ class OAuth2Factor[EXTRA](FactorBase[OAuth2Enrollment], abc.ABC):
 
         Returns:
             The complete authorization URL.
+
+        Abstract: Implementation contract
+            Construct the URL according to the provider's requirements, carrying the
+            supplied redirect URI, state, and supported scope, PKCE, nonce, and extra
+            parameters. Build request-specific values without modifying shared
+            provider configuration.
         """
         ...
 
@@ -605,12 +616,8 @@ class OAuth2Factor[EXTRA](FactorBase[OAuth2Enrollment], abc.ABC):
         nonce: str | None = None,
         state: OAuth2State,
     ) -> TokenResponse:
-        """Exchange authorization code for access token (RFC 6749 Section 4.1.3).
-
-        Provider-specific implementations should call their token endpoint
-        and return the token response data. Use self.client_id and
-        get_request_authentication() for client authentication as required by
-        the provider.
+        """
+        Exchange authorization code for access token (RFC 6749 Section 4.1.3).
 
         Args:
             code: The authorization code from the callback.
@@ -630,27 +637,48 @@ class OAuth2Factor[EXTRA](FactorBase[OAuth2Enrollment], abc.ABC):
             OAuth2TokenInvalidRequestException: RFC 6749 token error: invalid_request.
             OAuth2TokenUnauthorizedClientException: RFC 6749 token error: unauthorized_client.
             OAuth2TokenUnsupportedGrantTypeException: RFC 6749 token error: unsupported_grant_type.
+
+        Abstract: Implementation contract
+            Call the provider's token endpoint with the supplied authorization code
+            and applicable redirect URI, PKCE verifier, and client authentication.
+            Return normalized TokenResponse data. Map token endpoint failures to the
+            documented exceptions, passing the supplied state to them. For OIDC,
+            validate the ID Token before using its claims to identify the account.
         """
         ...
 
     @abc.abstractmethod
     async def insert(self, enrollment: OAuth2Enrollment) -> typing.Any:
-        """Insert an OAuth2 enrollment into a persistent store.
+        """
+        Insert an OAuth2 enrollment into a persistent store.
 
         Args:
             enrollment: The OAuth2Enrollment instance to insert.
 
         Returns:
             The ID of the inserted OAuth2Enrollment.
+
+        Abstract: Implementation contract
+            Persist the supplied enrollment and return its ID. Enforce uniqueness of
+            (provider, account_id) within the application's storage scope, so
+            concurrent callbacks or signup flows cannot associate the same external
+            account with different identities. Leave commit and rollback to the caller.
         """
         ...
 
     @abc.abstractmethod
     async def update(self, enrollment: OAuth2Enrollment) -> None:
-        """Update an OAuth2 enrollment in a persistent store.
+        """
+        Update an OAuth2 enrollment in a persistent store.
 
         Args:
             enrollment: The OAuth2Enrollment instance to update.
+
+        Abstract: Implementation contract
+            Persist the supplied enrollment by ID in the transaction that protected
+            its lookup. Coordinate concurrent callbacks and account changes so stale
+            writes cannot overwrite newer enrollment state. Leave commit and rollback
+            to the caller.
         """
         ...
 
@@ -660,7 +688,8 @@ class OAuth2Factor[EXTRA](FactorBase[OAuth2Enrollment], abc.ABC):
         provider: str,
         account_id: str,
     ) -> OAuth2Enrollment | None:
-        """Get enrollment by provider and account ID.
+        """
+        Get enrollment by provider and account ID.
 
         Args:
             provider: The OAuth2 provider.
@@ -668,18 +697,19 @@ class OAuth2Factor[EXTRA](FactorBase[OAuth2Enrollment], abc.ABC):
 
         Returns:
             The OAuth2Enrollment instance, or None if not found.
+
+        Abstract: Implementation contract
+            Match both provider and account_id, not either value alone. Acquire
+            protection before reading and return current state protected from
+            competing mutations until the caller's transaction ends. Leave commit
+            and rollback to the caller. An absent row is not protected by a row lock.
         """
         ...
 
     @abc.abstractmethod
     async def get_profile(self, access_token: str) -> dict[str, typing.Any]:
-        """Fetch user profile from the provider.
-
-        OAuth2 providers must implement this to fetch profile data using the
-        access_token at the provider's userinfo endpoint or equivalent.
-
-        For providers that don't support fetching profile data (e.g., Apple),
-        implementations should raise NotImplementedError.
+        """
+        Fetch user profile from the provider.
 
         Common claim keys (not exhaustive):
         - sub (str): Unique user identifier at the provider
@@ -700,5 +730,11 @@ class OAuth2Factor[EXTRA](FactorBase[OAuth2Enrollment], abc.ABC):
         Raises:
             NotImplementedError: If the provider doesn't support profile fetching.
             OAuth2GetProfileException: If fetching the profile fails.
+
+        Abstract: Implementation contract
+            Use the access token to fetch profile data from the provider's userinfo
+            endpoint or equivalent. Raise OAuth2GetProfileException on fetch failure,
+            or NotImplementedError if the provider does not support profile fetching.
+            Do not mutate shared provider configuration with per-request credentials.
         """
         ...
