@@ -20,4 +20,4 @@
    CI never rewrites `CHANGELOG.md` after a release.
 6. Verify the assets and review the draft before publishing the GitHub release.
    PyPI publication already occurs in CI; the GitHub draft is not a staging gate
-   for PyPI. See [CI security](CI_SECURITY.md) for gates and verification commands.
+   for PyPI. See [GitHub's attestation verification guide](https://docs.github.com/en/actions/how-tos/secure-your-work/use-artifact-attestations/use-artifact-attestations).
