@@ -130,7 +130,7 @@ def make_totp(
         enabled: bool = False,
         last_verified_time_step: int | None = None,
     ) -> TOTPEnrollment:
-        secret = secrets.token_bytes(20)
+        secret = b"12345678901234567890"
         totp = TOTPEnrollment(
             id=None,
             identity_id=identity_id,
@@ -319,14 +319,38 @@ class TestTOTPVerify:
         assert updated_totp.last_verified_time_step is not None
 
     async def test_beyond_drift_tolerance(
-        self, totp_factor: SQLAlchemyTOTPFactor, make_totp: MakeTOTPCallable
+        self,
+        totp_factor: SQLAlchemyTOTPFactor,
+        make_totp: MakeTOTPCallable,
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
+        now = 1_800_000_000
+        monkeypatch.setattr(time, "time", lambda: now)
         totp = await make_totp(enabled=True)
-
-        expected_code = totp._impl.generate(9999999999).decode("ascii")
+        expected_code = totp._impl.generate(
+            now + (totp_factor.drift_tolerance + 1) * totp.time_step
+        ).decode("ascii")
 
         with pytest.raises(InvalidTOTPCodeException):
             await totp_factor.verify(totp.identity_id, expected_code)
+
+    async def test_future_last_verified_time_step(
+        self,
+        totp_factor: SQLAlchemyTOTPFactor,
+        make_totp: MakeTOTPCallable,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        now = 1_800_000_000
+        monkeypatch.setattr(time, "time", lambda: now)
+        totp = await make_totp(enabled=True)
+        totp.last_verified_time_step = now // totp.time_step + 100
+        await totp_factor.update(totp)
+        future_code = totp._impl.generate(
+            (totp.last_verified_time_step + 1) * totp.time_step
+        ).decode("ascii")
+
+        with pytest.raises(InvalidTOTPCodeException):
+            await totp_factor.verify(totp.identity_id, future_code)
 
     async def test_within_drift_tolerance(
         self, totp_factor: SQLAlchemyTOTPFactor, make_totp: MakeTOTPCallable
