@@ -4,6 +4,7 @@ site_description = "The authentication toolkit for Python"
 site_url = "https://frankie567.github.io/reauth/"
 repo_url = "https://github.com/frankie567/reauth"
 repo_name = "frankie567/reauth"
+watch = ["reauth"]
 extra_css = ["stylesheets/extra.css", "stylesheets/landing.css"]
 nav = [
     { "Home" = "index.md" },
