@@ -12,7 +12,13 @@ repos:
   hooks:
   - id: end-of-file-fixer
   - id: trailing-whitespace
-- repo: https://github.com/pylint-dev/pylint
-  rev: v4.0.6
+- repo: https://github.com/astral-sh/ruff-pre-commit
+  rev: v0.16.9
   hooks:
-  - id: pylint
+  - id: ruff-check
+    args: [ --fix ]
+  - id: ruff-format
+- repo: https://github.com/astral-sh/ty-pre-commit
+  rev: v0.0.84
+  hooks:
+  - id: ty
