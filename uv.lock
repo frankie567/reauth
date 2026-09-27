@@ -291,18 +291,6 @@ wheels = [
 ]
 
 [[package]]
-name = "hatch-regex-commit"
-version = "0.0.4"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "hatchling" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/e8/0a/a3f18ecffc9629fca96ca58e4d764a6ef2c07f5f536e35eb0ceb36728c7d/hatch_regex_commit-0.0.4.tar.gz", hash = "sha256:ccf5c0ddc9040233328a16cf727700406485f22a5307683cce0ac82e24e44689", size = 6194, upload-time = "2025-09-29T12:03:45.51Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/3c/01/a6639792060d304d9485d4ba584c42de0ea3e02fa92ade43bb1baa60ab38/hatch_regex_commit-0.0.4-py3-none-any.whl", hash = "sha256:3094a7ddf7e4dbdf9a3cbaeadeacfb187b2bf29ee232602c8fd735ceee90bbe5", size = 6706, upload-time = "2025-09-29T12:03:46.562Z" },
-]
-
-[[package]]
 name = "hatchling"
 version = "1.32.3"
 source = { registry = "https://pypi.org/simple" }
@@ -731,7 +719,6 @@ dependencies = [
 [package.dev-dependencies]
 dev = [
     { name = "aiosqlite" },
-    { name = "hatch-regex-commit" },
     { name = "hatchling" },
     { name = "keepachangelog" },
     { name = "mkdocstrings-python" },
@@ -755,7 +742,6 @@ requires-dist = [
 [package.metadata.requires-dev]
 dev = [
     { name = "aiosqlite", specifier = ">=0.22.1" },
-    { name = "hatch-regex-commit", specifier = ">=0.0.4" },
     { name = "hatchling", specifier = ">=1.32.3" },
     { name = "keepachangelog", specifier = ">=2.0.0" },
     { name = "mkdocstrings-python", specifier = ">=2.0.8" },

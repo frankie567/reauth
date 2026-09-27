@@ -17,12 +17,10 @@ Documentation = "https://frankie567.github.io/reauth/"
 Source = "https://github.com/frankie567/reauth"
 
 [build-system]
-requires = ["hatchling", "hatch-regex-commit"]
+requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.version]
-source = "regex_commit"
-commit_extra_args = ["-e"]
 path = "reauth/__init__.py"
 
 [dependency-groups]
@@ -37,7 +35,6 @@ dev = [
     "mkdocstrings-python>=2.0.8",
     "pre-commit>=4.6.2",
     "hatchling>=1.32.3",
-    "hatch-regex-commit>=0.0.4",
     "keepachangelog>=2.0.0",
 ]
 
