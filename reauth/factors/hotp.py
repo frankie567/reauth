@@ -297,19 +297,19 @@ class HOTPFactor(FactorBase[HOTPEnrollment], abc.ABC):
         """
         Get the raw HOTP enrollment for a given identity, regardless of its enabled state.
 
-        This method is the primary data access point for implementers. It should retrieve
-        the enrollment record from persistent storage without any filtering based on
-        the enabled state.
-
-        The `get_enrollment` method uses this to provide a filtered view that excludes
-        disabled enrollments.
-
         Args:
             identity_id: The ID of the identity to get the HOTP enrollment for.
 
         Returns:
             The HOTP enrollment for the identity, or None if no enrollment exists.
             This may return a disabled enrollment.
+
+        Abstract: Implementation contract
+            Scope the lookup to the identity and configured factor. Include disabled
+            enrollments. Acquire protection before reading and retain it until the
+            caller's transaction ends, protecting the counter and enabled state from
+            competing mutations. Do not commit or roll back. Acquire multiple locks
+            in a consistent order. An absent row is not protected by a row lock.
         """
         ...
 
@@ -318,13 +318,17 @@ class HOTPFactor(FactorBase[HOTPEnrollment], abc.ABC):
         """
         Insert an HOTP factor into a persistent store.
 
-        Implementers should implement this method.
-
         Args:
             hotp: The HOTP factor to insert.
 
         Returns:
             The ID of the inserted HOTP factor.
+
+        Abstract: Implementation contract
+            Persist the supplied enrollment and return its record ID. Enforce
+            uniqueness for the identity and configured factor, including concurrent
+            first enrollments. Participate in the caller's transaction without
+            committing or rolling it back.
         """
         ...
 
@@ -333,10 +337,14 @@ class HOTPFactor(FactorBase[HOTPEnrollment], abc.ABC):
         """
         Update an HOTP factor in the persistent store.
 
-        Implementers should implement this method.
-
         Args:
             hotp: The HOTP factor to update.
+
+        Abstract: Implementation contract
+            Persist the supplied enrollment by ID, including its counter and enabled
+            state, in the transaction that protected the lookup. Do not allow a stale
+            write to undo a counter advance or a concurrent enrollment change. Leave
+            commit and rollback to the caller.
         """
         ...
 
@@ -345,9 +353,12 @@ class HOTPFactor(FactorBase[HOTPEnrollment], abc.ABC):
         """
         Delete an HOTP factor from the persistent store.
 
-        Implementers should implement this method.
-
         Args:
             hotp: The HOTP factor to delete.
+
+        Abstract: Implementation contract
+            Delete the supplied enrollment by ID in the transaction that protects
+            the record. Retain that protection and leave commit and rollback to the
+            caller.
         """
         ...

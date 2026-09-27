@@ -323,33 +323,57 @@ class TOTPFactor(FactorBase[TOTPEnrollment], abc.ABC):
         """
         Get the raw TOTP enrollment for a given identity, regardless of its enabled state.
 
-        This method is the primary data access point for implementers. It should retrieve
-        the enrollment record from persistent storage without any filtering based on
-        the enabled state.
-
-        The `get_enrollment` method uses this to provide a filtered view that excludes
-        disabled enrollments.
-
         Args:
             identity_id: The ID of the identity to get the TOTP enrollment for.
 
         Returns:
             The TOTP enrollment for the identity, or None if no enrollment exists.
             This may return a disabled enrollment.
+
+        Abstract: Implementation contract
+            Scope the lookup to the identity and configured factor. Include disabled
+            enrollments. Acquire protection before reading and retain it until the
+            caller's transaction ends, protecting last_verified_time_step and enabled
+            state from competing mutations. Do not commit or roll back. Acquire
+            multiple locks in a consistent order. An absent row is not protected by
+            a row lock.
         """
         ...
 
     @abc.abstractmethod
     async def insert(self, totp: TOTPEnrollment) -> typing.Any:
-        """Insert a TOTP factor into a persistent store."""
+        """
+        Insert a TOTP factor into a persistent store.
+
+        Abstract: Implementation contract
+            Persist the supplied enrollment and return its record ID. Enforce
+            uniqueness for the identity and configured factor, including concurrent
+            first enrollments. Participate in the caller's transaction without
+            committing or rolling it back.
+        """
         ...
 
     @abc.abstractmethod
     async def update(self, totp: TOTPEnrollment) -> None:
-        """Update a TOTP factor in the persistent store."""
+        """
+        Update a TOTP factor in the persistent store.
+
+        Abstract: Implementation contract
+            Persist the supplied enrollment by ID, including enabled and
+            last_verified_time_step, in the transaction that protected the lookup.
+            Do not allow a stale write to undo replay protection or a concurrent
+            enrollment change. Leave commit and rollback to the caller.
+        """
         ...
 
     @abc.abstractmethod
     async def delete(self, totp: TOTPEnrollment) -> None:
-        """Delete a TOTP factor from the persistent store."""
+        """
+        Delete a TOTP factor from the persistent store.
+
+        Abstract: Implementation contract
+            Delete the supplied enrollment by ID in the transaction that protects
+            the record. Retain that protection and leave commit and rollback to the
+            caller.
+        """
         ...

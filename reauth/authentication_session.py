@@ -321,13 +321,11 @@ class AuthenticationSessionService(abc.ABC):
 
         Abstract: Implementation contract
             Return current state protected from competing mutations until the
-            calling transaction ends. Acquire protection before reading, for example
-            through a row lock or a transaction that serializes writers. Return
-            expired sessions too; validation is handled by the service.
-
-            The caller must keep the transaction open through advance() or complete()
-            and their corresponding update or delete. Loading current state alone
-            does not make these operations concurrency-safe without this guarantee.
+            caller's transaction ends. Acquire protection before reading, for example
+            through a row lock or a transaction that serializes writers. Include
+            expired sessions without validating them. Do not commit, roll back, or
+            release the protection before returning. An absent row is not protected
+            by a row lock.
         """
         ...
 
