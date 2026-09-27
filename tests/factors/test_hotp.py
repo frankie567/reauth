@@ -117,7 +117,7 @@ def make_hotp(
     async def _make_hotp(
         identity_id: int = 123, enabled: bool = False, counter: int = 0
     ) -> HOTPEnrollment:
-        secret = secrets.token_bytes(20)
+        secret = b"12345678901234567890"
         hotp = HOTPEnrollment(
             id=None,
             identity_id=identity_id,

@@ -289,9 +289,7 @@ class TOTPFactor(FactorBase[TOTPEnrollment], abc.ABC):
             raise InvalidTOTPCodeException()
         encoded_code = code.encode("ascii")
         current_time = int(time.time())
-        drift = -self.drift_tolerance
-
-        while True:
+        for drift in range(-self.drift_tolerance, self.drift_tolerance + 1):
             try:
                 # Calculate the actual Unix time for this drift step
                 check_time = current_time + drift * totp.time_step
@@ -303,18 +301,16 @@ class TOTPFactor(FactorBase[TOTPEnrollment], abc.ABC):
                     totp.last_verified_time_step is not None
                     and check_time_step <= totp.last_verified_time_step
                 ):
-                    drift += 1
                     continue
 
                 totp._impl.verify(encoded_code, check_time)
-            except InvalidToken as e:
-                if drift > self.drift_tolerance:
-                    raise InvalidTOTPCodeException() from e
-                drift += 1
+            except InvalidToken:
+                continue
             else:
                 # Update last verified time step
                 totp.last_verified_time_step = check_time_step
                 return totp
+        raise InvalidTOTPCodeException()
 
     @abc.abstractmethod
     async def get_by_identity_id(
