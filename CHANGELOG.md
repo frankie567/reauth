@@ -1,9 +1,12 @@
 # Changelog
 
 Add curated entries under `Unreleased`, using [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
-categories. Run `just changelog <version>` before tagging to create a dated entry.
+categories. From a clean checkout, run `just version patch` (or `minor`, `major`,
+or an explicit version) to update the package version and changelog, open the
+commit editor, and create a signed commit and tag. Review before pushing.
+Use `just release-notes <version>` to preview the GitHub release body.
 Public security details must follow coordinated disclosure.
-See [release instructions](.github/RELEASING.md). Earlier release notes are in [GitHub Releases](https://github.com/frankie567/reauth/releases).
+Earlier release notes are in [GitHub Releases](https://github.com/frankie567/reauth/releases).
 
 ## [Unreleased]
 
