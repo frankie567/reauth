@@ -19,6 +19,8 @@ jobs:
                 egress-policy: audit
 
             - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+              with:
+                  persist-credentials: false
             - name: Set up Python
               uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
               with:
@@ -30,34 +32,64 @@ jobs:
               with:
                   python-version: ${{ matrix.python_version }}
             - name: Install the project
-              run: uv sync --all-extras --dev
+              run: uv sync --locked --all-extras --dev
             - name: Lint and typecheck
               run: |
                   just lint-check
             - name: Test
               run: |
                   just test-cov-xml
+            - name: Validate release tag
+              if: startsWith(github.ref, 'refs/tags/')
+              run: |
+                  [[ "$GITHUB_REF_NAME" =~ ^v[0-9]+\.[0-9]+\.[0-9]+([ab][0-9]+|rc[0-9]+)?$ ]]
+                  test "$GITHUB_REF_NAME" = "v$(uv run --locked python -c 'import reauth; print(reauth.__version__)')"
+            - name: Build distributions
+              run: just build
+            - name: Prepare release hashes
+              if: startsWith(github.ref, 'refs/tags/')
+              run: |
+                  cd dist
+                  sha256sum *.whl *.tar.gz > SHA256SUMS
+            - name: Upload release assets
+              if: startsWith(github.ref, 'refs/tags/')
+              uses: actions/upload-artifact@4cec3d8aa04e39d1a68397de0c4cd6fb9dce8ec1 # v4.6.1
+              with:
+                  name: distributions
+                  path: dist/
+                  if-no-files-found: error
             - uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1
               with:
                   token: ${{ secrets.CODECOV_TOKEN }}
                   fail_ci_if_error: true
                   verbose: true
 
+    security-analysis:
+        permissions:
+            contents: read
+            security-events: write
+        uses: ./.github/workflows/codeql.yml
+
     tests-passed:
         runs-on: ubuntu-latest
+        permissions: {}
         needs: test
         if: always()
         steps:
-            - run: test "${{ needs.test.result }}" = "success"
+            - env:
+                  TEST_RESULT: ${{ needs.test.result }}
+              run: |
+                  test "$TEST_RESULT" = success
 
     release:
         runs-on: ubuntu-latest
         environment: release
-        needs: test
-        if: startsWith(github.ref, 'refs/tags/')
+        needs: [tests-passed, security-analysis]
+        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
         permissions:
             contents: write
             id-token: write
+            attestations: write
 
         steps:
             - name: Harden the runner (Audit all outbound calls)
@@ -65,27 +97,23 @@ jobs:
               with:
                 egress-policy: audit
 
-            - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-            - name: Set up Python
-              uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+            - name: Download tested distributions
+              uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5
               with:
-                  python-version: '3.14'
-            - name: Setup Just
-              uses: extractions/setup-just@53165ef7e734c5c07cb06b3c8e7b647c5aa16db3 # v4.0.0
-            - name: Install uv and set the Python version
+                  name: distributions
+                  path: dist/
+            - name: Attest release assets
+              uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+              with:
+                  subject-path: dist/*
+            - name: Install uv
               uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7.6.0
-              with:
-                  python-version: '3.14'
-            - name: Install the project
-              run: uv sync --all-extras --dev
-            - name: Build and publish on PyPI
-              run: |
-                  uv build
-                  uv publish
+            - name: Publish on PyPI
+              run: uv publish --trusted-publishing always dist/*.whl dist/*.tar.gz
             - name: Create release
               uses: ncipollo/release-action@339a81892b84b4eeb0f6e744e4574d79d0d9b8dd # v1.21.0
               with:
                   draft: true
                   body: ${{ github.event.head_commit.message }}
-                  artifacts: dist/*.whl,dist/*.tar.gz
+                  artifacts: dist/*
                   token: ${{ secrets.GITHUB_TOKEN }}
