@@ -46,11 +46,13 @@ jobs:
                   test "$GITHUB_REF_NAME" = "v$(uv run --locked python -c 'import reauth; print(reauth.__version__)')"
             - name: Build distributions
               run: just build
-            - name: Prepare release hashes
+            - name: Prepare release notes and hashes
               if: startsWith(github.ref, 'refs/tags/')
               run: |
+                  just release-notes "${GITHUB_REF_NAME#v}" > "dist/reauth-${GITHUB_REF_NAME}-release-notes.md"
+                  test -s "dist/reauth-${GITHUB_REF_NAME}-release-notes.md"
                   cd dist
-                  sha256sum *.whl *.tar.gz > SHA256SUMS
+                  sha256sum *.whl *.tar.gz *-release-notes.md > SHA256SUMS
             - name: Upload release assets
               if: startsWith(github.ref, 'refs/tags/')
               uses: actions/upload-artifact@4cec3d8aa04e39d1a68397de0c4cd6fb9dce8ec1 # v4.6.1
@@ -114,6 +116,6 @@ jobs:
               uses: ncipollo/release-action@339a81892b84b4eeb0f6e744e4574d79d0d9b8dd # v1.21.0
               with:
                   draft: true
-                  body: ${{ github.event.head_commit.message }}
+                  bodyFile: dist/reauth-${{ github.ref_name }}-release-notes.md
                   artifacts: dist/*
                   token: ${{ secrets.GITHUB_TOKEN }}
