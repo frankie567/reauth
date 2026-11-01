@@ -334,6 +334,18 @@ class TestValidateIDToken:
                 id_token_signing_alg_values_supported=["RS256"],
             )
 
+    @pytest.mark.parametrize("token", ["", "not-a-jwt", "a.b.c"])
+    def test_malformed_token(self, token: str, jwks: jwt.PyJWKSet) -> None:
+        """Test that a token that is not a JWT raises InvalidIDTokenException."""
+        with pytest.raises(InvalidIDTokenException):
+            validate_id_token(
+                token,
+                jwks,
+                issuer="https://issuer.example.com",
+                client_id="test-client-id",
+                id_token_signing_alg_values_supported=["RS256"],
+            )
+
     def test_mismatched_nonce(self, rsa_key: RSAPrivateKey, jwks: jwt.PyJWKSet) -> None:
         """Test that a mismatched nonce raises InvalidIDTokenException."""
         token = create_id_token(rsa_key, nonce="token-nonce")
