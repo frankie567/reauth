@@ -274,7 +274,10 @@ def validate_id_token(
         InvalidIDTokenException: If the token is invalid.
     """
     # First, decode without verification to get the header and kid
-    unverified = jwt.decode_complete(id_token, options={"verify_signature": False})
+    try:
+        unverified = jwt.decode_complete(id_token, options={"verify_signature": False})
+    except jwt.InvalidTokenError as e:
+        raise InvalidIDTokenException() from e
     header = unverified["header"]
 
     # Get the JWK for this kid
