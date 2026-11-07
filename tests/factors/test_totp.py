@@ -2,6 +2,7 @@ import base64
 import dataclasses
 import secrets
 import time
+import types
 import typing
 from collections.abc import AsyncGenerator
 
@@ -325,7 +326,9 @@ class TestTOTPVerify:
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         now = 1_800_000_000
-        monkeypatch.setattr(time, "time", lambda: now)
+        monkeypatch.setattr(
+            "reauth.factors.totp.time", types.SimpleNamespace(time=lambda: now)
+        )
         totp = await make_totp(enabled=True)
         expected_code = totp._impl.generate(
             now + (totp_factor.drift_tolerance + 1) * totp.time_step
@@ -341,7 +344,9 @@ class TestTOTPVerify:
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         now = 1_800_000_000
-        monkeypatch.setattr(time, "time", lambda: now)
+        monkeypatch.setattr(
+            "reauth.factors.totp.time", types.SimpleNamespace(time=lambda: now)
+        )
         totp = await make_totp(enabled=True)
         totp.last_verified_time_step = now // totp.time_step + 100
         await totp_factor.update(totp)
