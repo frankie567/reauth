@@ -7,6 +7,7 @@
 [![build](https://github.com/frankie567/reauth/workflows/Build/badge.svg)](https://github.com/frankie567/reauth/actions)
 [![codecov](https://codecov.io/gh/frankie567/reauth/branch/master/graph/badge.svg)](https://codecov.io/gh/frankie567/reauth)
 [![PyPI version](https://badge.fury.io/py/reauth.svg)](https://badge.fury.io/py/reauth)
+[![OpenSSF Baseline](https://www.bestpractices.dev/projects/14975/baseline)](https://www.bestpractices.dev/projects/14975)
 
 ---
 

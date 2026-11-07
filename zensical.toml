@@ -4,8 +4,8 @@ site_description = "The authentication toolkit for Python"
 site_url = "https://frankie567.github.io/reauth/"
 repo_url = "https://github.com/frankie567/reauth"
 repo_name = "frankie567/reauth"
-watch = ["reauth"]
 extra_css = ["stylesheets/extra.css", "stylesheets/landing.css"]
+watch = ["reauth", "SECURITY.md"]
 nav = [
     { "Home" = "index.md" },
     { "Roadmap" = "roadmap.md" },
@@ -14,6 +14,7 @@ nav = [
         { "Overview" = "reference/index.md" },
         { "Authentication sessions" = "reference/authentication_session.md" },
         { "Identity sessions" = "reference/identity_session.md" },
+        { "Tokens" = "reference/tokens.md" },
         { "Factors" = [
             { "Base" = "reference/factors/base.md" },
             { "Email OTP" = "reference/factors/email_otp.md" },
@@ -31,12 +32,22 @@ nav = [
             ] },
         ] },
         { "Utilities" = [
-            { "Cryptography" = "reference/crypto.md" },
             { "Exceptions" = "reference/exceptions.md" },
             { "Logging" = "reference/logging.md" },
         ] },
     ] },
+    { "Security" = "security.md" },
 ]
+
+[project.markdown_extensions]
+admonition = {}
+pymdownx.highlight = {}
+pymdownx.superfences = {}
+pymdownx.tabbed.alternate_style = true
+pymdownx.tasklist.custom_checkbox = true
+
+[project.markdown_extensions.pymdownx.snippets]
+check_paths = true
 
 [project.plugins.mkdocstrings.handlers.python]
 paths = ["."]

@@ -1,7 +1,7 @@
 # https://just.systems
 
 install:
-    uv sync --all-extras
+    uv sync --all-extras && pre-commit
 
 lint:
     uv run ruff format .
@@ -24,6 +24,10 @@ docs-serve:
 
 docs-build:
     uv run zensical build --strict
+
+build:
+    uv sync --locked --all-extras --dev
+    uv build --no-build-isolation
 
 version bump:
     uvx hatch version {{bump}}

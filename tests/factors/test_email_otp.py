@@ -1,4 +1,5 @@
 import dataclasses
+import typing
 from collections.abc import AsyncGenerator
 
 import pytest
@@ -14,7 +15,6 @@ from sqlalchemy import (
 )
 from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine
 
-from reauth.crypto import generate_code_hash_pair, get_token_hash
 from reauth.factors.email_otp import (
     EmailOTP,
     EmailOTPEnrollment,
@@ -23,16 +23,17 @@ from reauth.factors.email_otp import (
     InvalidOTPException,
 )
 from reauth.timestamp import get_current_timestamp
+from reauth.tokens import HMACTokenVerifier, TokenVerifier
 
 sqlalchemy_meta = MetaData()
 email_otp_table = Table(
     "email_otps",
     sqlalchemy_meta,
     Column("id", Integer, primary_key=True),
-    Column("code_hash", String(64), nullable=False),
+    Column("code_verifier", String, nullable=False),
     Column("expires_at", Integer, nullable=False),
     Column("identity_id", Integer, nullable=False),
-    Column("authentication_session_id", Integer, nullable=False),
+    Column("authentication_session_id", Integer, nullable=False, unique=True),
     Column("email", String, nullable=False),
     sqlite_autoincrement=True,
 )
@@ -45,11 +46,11 @@ class SQLAlchemyEmailOTPFactor(EmailOTPFactor):
         self,
         connection: AsyncConnection,
         *,
-        hash_secret: str,
+        verifier: TokenVerifier,
         code_length: int = 6,
     ) -> None:
         self.connection = connection
-        super().__init__(hash_secret=hash_secret, code_length=code_length)
+        super().__init__(verifier=verifier, code_length=code_length)
 
     async def get_enrollment(self, identity_id: int) -> EmailOTPEnrollment | None:
         """Return a dummy enrollment for testing purposes."""
@@ -66,13 +67,22 @@ class SQLAlchemyEmailOTPFactor(EmailOTPFactor):
         )
         return result.scalar_one()
 
-    async def get_by_code_hash_and_authentication_session_id(
-        self, code_hash: str, authentication_session_id: int
+    async def get_by_id(self, otp_id: typing.Any) -> EmailOTP | None:
+        """Retrieve an EmailOTP by its ID."""
+        result = await self.connection.execute(
+            select(email_otp_table).where(email_otp_table.c.id == otp_id)
+        )
+        row = result.fetchone()
+        if row is None:
+            return None
+        return EmailOTP(**row._asdict())
+
+    async def get_by_authentication_session_id(
+        self, authentication_session_id: int
     ) -> EmailOTP | None:
-        """Retrieve an EmailOTP by its code hash and authentication session ID."""
+        """Retrieve an EmailOTP by its authentication session ID."""
         result = await self.connection.execute(
             select(email_otp_table).where(
-                email_otp_table.c.code_hash == code_hash,
                 email_otp_table.c.authentication_session_id
                 == authentication_session_id,
             )
@@ -83,7 +93,6 @@ class SQLAlchemyEmailOTPFactor(EmailOTPFactor):
         return EmailOTP(**row._asdict())
 
     async def delete(self, email_otp: EmailOTP) -> None:
-        """Delete an EmailOTP from the database."""
         await self.connection.execute(
             delete(email_otp_table).where(email_otp_table.c.id == email_otp.id)
         )
@@ -117,7 +126,7 @@ def email_otp_factor(
     """Fixture that provides an instance of SQLAlchemyEmailOTPFactor."""
     return SQLAlchemyEmailOTPFactor(
         connection=sqlalchemy_connection,
-        hash_secret="test_secret",
+        verifier=HMACTokenVerifier(current_key_id="test", keys={"test": b"t" * 32}),
         code_length=6,
     )
 
@@ -144,9 +153,6 @@ class TestEmailOTPCreate:
         assert otp.email == "reauth@example.com"
         assert not otp.is_expired()
 
-        code_hash = get_token_hash(code, secret=email_otp_factor.hash_secret)
-        assert otp.code_hash == code_hash
-
     async def test_overrides_existing_otp(
         self, email_otp_factor: SQLAlchemyEmailOTPFactor
     ) -> None:
@@ -167,11 +173,7 @@ class TestEmailOTPCreate:
         assert second_otp.id != first_otp.id
         assert second_code != first_code
 
-        deleted_first_otp = (
-            await email_otp_factor.get_by_code_hash_and_authentication_session_id(
-                first_otp.code_hash, authentication_session_id
-            )
-        )
+        deleted_first_otp = await email_otp_factor.get_by_id(first_otp.id)
         assert deleted_first_otp is None
 
     async def test_otp_not_expired_immediately(
@@ -211,12 +213,13 @@ class TestEmailOTPConsume:
     async def test_invalid_authentication_session_id(
         self, email_otp_factor: SQLAlchemyEmailOTPFactor
     ) -> None:
-        code, code_hash = generate_code_hash_pair(secret=email_otp_factor.hash_secret)
+        code = "ABC123"
+        code_verifier = await email_otp_factor.verifier.create(code)
         identity_id = 123
         authentication_session_id = 456
         email_otp = EmailOTP(
             id=None,
-            code_hash=code_hash,
+            code_verifier=code_verifier,
             expires_at=get_current_timestamp() + 3600,
             identity_id=identity_id,
             authentication_session_id=authentication_session_id,
@@ -229,12 +232,13 @@ class TestEmailOTPConsume:
     async def test_expired_otp(
         self, email_otp_factor: SQLAlchemyEmailOTPFactor
     ) -> None:
-        code, code_hash = generate_code_hash_pair(secret=email_otp_factor.hash_secret)
+        code = "ABC123"
+        code_verifier = await email_otp_factor.verifier.create(code)
         identity_id = 123
         authentication_session_id = 456
         email_otp = EmailOTP(
             id=None,
-            code_hash=code_hash,
+            code_verifier=code_verifier,
             expires_at=0,  # Expired
             identity_id=identity_id,
             authentication_session_id=authentication_session_id,
@@ -248,13 +252,14 @@ class TestEmailOTPConsume:
     async def test_successful_consume(
         self, email_otp_factor: SQLAlchemyEmailOTPFactor
     ) -> None:
-        code, code_hash = generate_code_hash_pair(secret=email_otp_factor.hash_secret)
+        code = "ABC123"
+        code_verifier = await email_otp_factor.verifier.create(code)
         identity_id = 123
         authentication_session_id = 456
         email = "reauth@example.com"
         email_otp = EmailOTP(
             id=None,
-            code_hash=code_hash,
+            code_verifier=code_verifier,
             expires_at=get_current_timestamp() + 3600,
             identity_id=identity_id,
             authentication_session_id=authentication_session_id,
@@ -269,9 +274,5 @@ class TestEmailOTPConsume:
         assert returned_email == email
 
         # Verify that the OTP is deleted
-        deleted_email_otp = (
-            await email_otp_factor.get_by_code_hash_and_authentication_session_id(
-                code_hash, authentication_session_id
-            )
-        )
+        deleted_email_otp = await email_otp_factor.get_by_id(email_otp.id)
         assert deleted_email_otp is None

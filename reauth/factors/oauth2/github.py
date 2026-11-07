@@ -41,21 +41,21 @@ class GitHubEmail(typing.TypedDict):
     visibility: typing.Literal["public", "private"]
 
 
-def get_primary_email(emails: list[GitHubEmail]) -> str:
+def get_primary_email(emails: list[GitHubEmail]) -> tuple[str, bool]:
     """Get the primary email address from a list of GitHubEmail objects.
 
     Args:
         emails: A list of GitHubEmail objects representing the email addresses associated with the account.
 
     Returns:
-        The primary email address.
+        The primary email address and its verification status.
 
     Raises:
         ValueError: If no primary email is found in the list.
     """
     for email in emails:
         if email["primary"]:
-            return email["email"]
+            return email["email"], email["verified"]
     raise ValueError()
 
 

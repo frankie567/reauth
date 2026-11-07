@@ -3,10 +3,15 @@ import dataclasses
 import datetime
 import typing
 
-from reauth.crypto import TokenHash, generate_token_hash_pair, get_token_hash
 from reauth.exceptions import ReauthException
 from reauth.logging import get_logger
 from reauth.timestamp import get_current_timestamp
+from reauth.tokens import (
+    InvalidTokenException,
+    TokenGenerationException,
+    TokenIdentifierCollision,
+    TokenProvider,
+)
 
 logger = get_logger(__name__)
 
@@ -14,7 +19,8 @@ logger = get_logger(__name__)
 @dataclasses.dataclass
 class OAuth2State:
     id: typing.Any | None
-    state_hash: TokenHash
+    token_identifier: str
+    token_verifier: str
     provider: str
     code_verifier: str | None
     nonce: str | None
@@ -47,13 +53,11 @@ class OAuth2StateService(abc.ABC):
     def __init__(
         self,
         *,
-        hash_secret: str,
+        token_provider: TokenProvider,
         lifetime: datetime.timedelta = datetime.timedelta(minutes=10),
-        token_prefix: str = "reauth_oauth2_",
     ) -> None:
-        self.hash_secret = hash_secret
+        self.token_provider = token_provider
         self.lifetime = lifetime
-        self.token_prefix = token_prefix
 
     async def create(
         self,
@@ -72,14 +76,16 @@ class OAuth2StateService(abc.ABC):
         Returns:
             A tuple of (state_token, OAuth2State).
             The caller MUST bind state_token to the user agent context.
+
+        Raises:
+            TokenGenerationException: If credential generation repeatedly collides.
         """
         logger.debug("OAuth2 state creation attempted", extra={"provider": provider})
-        token, token_hash = generate_token_hash_pair(
-            secret=self.hash_secret, prefix=self.token_prefix
-        )
+        generated = await self.token_provider.generate()
         oauth2_state = OAuth2State(
             id=None,
-            state_hash=token_hash,
+            token_identifier=generated.identifier,
+            token_verifier=generated.verifier,
             provider=provider,
             code_verifier=code_verifier,
             nonce=nonce,
@@ -89,7 +95,16 @@ class OAuth2StateService(abc.ABC):
             expires_at=get_current_timestamp() + int(self.lifetime.total_seconds()),
             context=context or None,
         )
-        oauth2_state.id = await self.insert(oauth2_state)
+        for attempt in range(3):
+            try:
+                oauth2_state.id = await self.insert(oauth2_state)
+                break
+            except TokenIdentifierCollision as error:
+                if attempt == 2:
+                    raise TokenGenerationException() from error
+                generated = await self.token_provider.generate()
+                oauth2_state.token_identifier = generated.identifier
+                oauth2_state.token_verifier = generated.verifier
         logger.info(
             "OAuth2 state created",
             extra={
@@ -98,7 +113,7 @@ class OAuth2StateService(abc.ABC):
                 "expires_at": oauth2_state.expires_at,
             },
         )
-        return token, oauth2_state
+        return generated.token, oauth2_state
 
     async def consume(self, state: str) -> OAuth2State:
         """
@@ -115,13 +130,23 @@ class OAuth2StateService(abc.ABC):
             ExpiredStateException: If the state has expired.
         """
         logger.debug("OAuth2 state consumption attempted")
-        state_hash = get_token_hash(state, secret=self.hash_secret)
-        oauth2_state = await self.get_by_state_hash(state_hash)
+        try:
+            parts = self.token_provider.parse(state)
+        except InvalidTokenException:
+            logger.warning("Malformed token provided")
+            raise InvalidStateException() from None
+        oauth2_state = await self.get_by_token_identifier(parts.identifier)
 
         if oauth2_state is None:
             logger.warning("Invalid OAuth2 state provided for consumption")
             raise InvalidStateException()
 
+        valid, _ = await self.token_provider.verify_and_update(
+            parts.secret, oauth2_state.token_verifier
+        )
+        if not valid:
+            logger.warning("Invalid token secret provided")
+            raise InvalidStateException()
         if oauth2_state.expires_at <= get_current_timestamp():
             logger.warning(
                 "OAuth2 state expired",
@@ -140,21 +165,23 @@ class OAuth2StateService(abc.ABC):
         return oauth2_state
 
     @abc.abstractmethod
-    async def get_by_state_hash(self, state_hash: TokenHash) -> OAuth2State | None:
+    async def get_by_token_identifier(
+        self, token_identifier: str
+    ) -> OAuth2State | None:
         """
-        Retrieve OAuth2 state by its hash from persistent store.
+        Retrieve OAuth2 state by its identifier from persistent store.
 
         Args:
-            state_hash: The hash of the state token to look up.
+            token_identifier: The identifier of the state token to look up.
 
         Returns:
             The corresponding OAuth2State instance, or None if not found.
 
         Abstract: Implementation contract
-            Match the stored state hash and include expired rows without validating
-            them. Acquire protection before reading and retain it until the caller's
-            transaction ends, preventing competing mutations of the returned state.
-            Leave commit and rollback to the caller.
+            Match the supplied token identifier and include expired rows without
+            validating them. Acquire protection before reading and retain it until
+            the caller's transaction ends, preventing competing mutations of the
+            returned state. Leave commit and rollback to the caller.
         """
         ...
 
@@ -169,9 +196,14 @@ class OAuth2StateService(abc.ABC):
         Returns:
             The ID of the inserted OAuth2State.
 
+        Raises:
+            TokenIdentifierCollision: If the identifier already exists in the store.
+
         Abstract: Implementation contract
-            Persist the supplied state, enforce uniqueness of state_hash, and return
-            the record ID. Leave commit and rollback to the caller.
+            Persist the supplied state, enforce uniqueness of token_identifier, and
+            return the record ID. On identifier collision, raise
+            TokenIdentifierCollision without persisting changes and leave the
+            transaction usable for retry. Leave commit and rollback to the caller.
         """
         ...
 

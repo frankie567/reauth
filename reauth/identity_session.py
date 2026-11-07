@@ -4,10 +4,15 @@ import datetime
 import typing
 
 from reauth.amr import AuthenticationMethodReference
-from reauth.crypto import TokenHash, generate_token_hash_pair, get_token_hash
 from reauth.exceptions import ReauthException
 from reauth.logging import get_logger
 from reauth.timestamp import get_current_timestamp
+from reauth.tokens import (
+    InvalidTokenException,
+    TokenGenerationException,
+    TokenIdentifierCollision,
+    TokenProvider,
+)
 
 logger = get_logger(__name__)
 
@@ -19,12 +24,14 @@ class IdentitySession:
 
     Attributes:
         id: The stored session ID, or None before insertion.
-        token_hash: The HMAC-SHA256 hash of the session token.
+        token_identifier: The public lookup identifier of the session token.
+        token_verifier: The opaque access-token secret verifier.
         expires_at: The access token expiration as a Unix timestamp in seconds.
         identity_id: The ID of the authenticated identity.
         amr: The authentication methods used to authenticate the identity.
         context: Optional additional data stored with the session.
-        refresh_token_hash: The refresh token hash, or None if renewal is disabled.
+        refresh_token_identifier: The refresh token identifier, or None if renewal is disabled.
+        refresh_token_verifier: The opaque refresh verifier, or None if disabled.
         refresh_token_expires_at: The family's absolute deadline, or None if this
             session has no refresh token. Replacements inherit the deadline.
         family_id: The initial session's ID, or None before initial insertion.
@@ -33,12 +40,14 @@ class IdentitySession:
     """
 
     id: typing.Any | None
-    token_hash: TokenHash
+    token_identifier: str
+    token_verifier: str
     expires_at: int
     identity_id: typing.Any
     amr: list[AuthenticationMethodReference]
     context: dict[str, typing.Any] | None = None
-    refresh_token_hash: TokenHash | None = None
+    refresh_token_identifier: str | None = None
+    refresh_token_verifier: str | None = None
     refresh_token_expires_at: int | None = None
     family_id: typing.Any | None = None
     replaced_by_id: typing.Any | None = None
@@ -84,33 +93,30 @@ class IdentitySessionService(abc.ABC):
 
     Implementers provide token lookups, initial insertion, atomic replacement,
     and family revocation. Retain replaced sessions until the family's absolute
-    deadline so their hashes can identify refresh token reuse.
+    deadline so their identifiers and verifiers can identify refresh token reuse.
     """
 
     def __init__(
         self,
         *,
-        hash_secret: str,
-        token_prefix: str = "reauth_is_",
+        token_provider: TokenProvider,
+        refresh_token_provider: TokenProvider,
         lifetime: datetime.timedelta = datetime.timedelta(hours=24),
-        refresh_token_prefix: str = "reauth_isr_",
         refresh_token_lifetime: datetime.timedelta = datetime.timedelta(days=30),
     ) -> None:
         """
         Initialize the identity session service.
 
         Args:
-            hash_secret: The ASCII secret used to compute token hashes.
-            token_prefix: The session token prefix. Defaults to "reauth_is_".
+            token_provider: Access token generation and verification.
+            refresh_token_provider: Independent refresh token generation and verification.
             lifetime: The access token lifetime. Defaults to 24 hours.
-            refresh_token_prefix: The refresh token prefix. Defaults to "reauth_isr_".
             refresh_token_lifetime: The absolute lifetime of a refreshable family,
                 measured from initial issuance. Defaults to 30 days.
         """
-        self.hash_secret = hash_secret
-        self.token_prefix = token_prefix
+        self.token_provider = token_provider
+        self.refresh_token_provider = refresh_token_provider
         self.lifetime = lifetime
-        self.refresh_token_prefix = refresh_token_prefix
         self.refresh_token_lifetime = refresh_token_lifetime
 
     async def issue(
@@ -125,7 +131,7 @@ class IdentitySessionService(abc.ABC):
         Issue and persist a session for an authenticated identity.
 
         The caller is responsible for authenticating the identity before issuance.
-        Only token hashes are persisted; plaintext tokens are returned to the caller.
+        Only token identifiers and verifiers are persisted; plaintext tokens are returned to the caller.
 
         Args:
             identity_id: The ID of the authenticated identity.
@@ -136,12 +142,24 @@ class IdentitySessionService(abc.ABC):
         Returns:
             A tuple of (token, refresh_token, IdentitySession instance). The
             refresh token is None when renewal is disabled.
+
+        Raises:
+            TokenGenerationException: If credential generation repeatedly collides.
         """
         logger.debug("Identity session issuance attempted")
-        token, refresh_token_value, identity_session = self._create_session(
-            identity_id, amr=amr, context=context or None, refresh_token=refresh_token
-        )
-        identity_session.id = await self.insert(identity_session)
+        for attempt in range(3):
+            token, refresh_token_value, identity_session = await self._create_session(
+                identity_id,
+                amr=amr,
+                context=context or None,
+                refresh_token=refresh_token,
+            )
+            try:
+                identity_session.id = await self.insert(identity_session)
+                break
+            except TokenIdentifierCollision as error:
+                if attempt == 2:
+                    raise TokenGenerationException() from error
         identity_session.family_id = identity_session.id
         logger.info(
             "Identity session issued",
@@ -169,12 +187,12 @@ class IdentitySessionService(abc.ABC):
         """
         logger.debug("Identity session validation attempted")
         try:
-            token_hash = get_token_hash(token, secret=self.hash_secret)
-        except UnicodeEncodeError:
+            parts = self.token_provider.parse(token)
+        except InvalidTokenException:
             logger.warning("Invalid identity session token provided")
             raise InvalidSessionTokenException() from None
 
-        identity_session = await self.get_by_token_hash(token_hash)
+        identity_session = await self.get_by_token_identifier(parts.identifier)
         if (
             identity_session is None
             or identity_session.revoked_at is not None
@@ -182,11 +200,23 @@ class IdentitySessionService(abc.ABC):
         ):
             logger.warning("Invalid identity session token provided")
             raise InvalidSessionTokenException()
+        valid, replacement = await self.token_provider.verify_and_update(
+            parts.secret, identity_session.token_verifier
+        )
+        if not valid:
+            logger.warning("Invalid identity session secret provided")
+            raise InvalidSessionTokenException()
         if identity_session.is_expired():
             logger.warning(
                 "Identity session expired", extra={"session_id": identity_session.id}
             )
             raise ExpiredSessionException()
+        if replacement is not None:
+            previous_verifier = identity_session.token_verifier
+            identity_session.token_verifier = replacement
+            await self.update_verifier(
+                identity_session, previous_verifier=previous_verifier
+            )
         return identity_session
 
     async def refresh(
@@ -215,26 +245,27 @@ class IdentitySessionService(abc.ABC):
             ExpiredRefreshTokenException: If the absolute deadline has passed.
             ReusedRefreshTokenException: If the token was already consumed.
                 Family revocation is persisted before this exception is raised.
+            TokenGenerationException: If credential generation repeatedly collides.
         """  # noqa: DOC502
         logger.debug("Identity session refresh attempted")
-        try:
-            token_hash = get_token_hash(token, secret=self.hash_secret)
-        except UnicodeEncodeError:
-            logger.warning("Invalid refresh token provided")
-            raise InvalidRefreshTokenException() from None
-
-        previous_session = await self._validate_refresh_token_hash(token_hash)
-        token_value, refresh_token_value, new_session = self._create_session(
-            previous_session.identity_id,
-            amr=previous_session.amr,
-            context=previous_session.context,
-            refresh_token=refresh_token,
-            refresh_token_expires_at=previous_session.refresh_token_expires_at,
-            family_id=previous_session.family_id,
-        )
-        new_session.id = await self.replace(previous_session, new_session)
+        previous_session = await self._validate_refresh_token(token)
+        for attempt in range(3):
+            token_value, refresh_token_value, new_session = await self._create_session(
+                previous_session.identity_id,
+                amr=previous_session.amr,
+                context=previous_session.context,
+                refresh_token=refresh_token,
+                refresh_token_expires_at=previous_session.refresh_token_expires_at,
+                family_id=previous_session.family_id,
+            )
+            try:
+                new_session.id = await self.replace(previous_session, new_session)
+                break
+            except TokenIdentifierCollision as error:
+                if attempt == 2:
+                    raise TokenGenerationException() from error
         if new_session.id is None:
-            await self._validate_refresh_token_hash(token_hash)
+            await self._validate_refresh_token(token)
             logger.warning("Identity session replacement rejected")
             raise InvalidRefreshTokenException()
         logger.info(
@@ -254,13 +285,33 @@ class IdentitySessionService(abc.ABC):
             token: An access token or refresh token from the family to revoke.
         """
         logger.debug("Identity session revocation attempted")
-        try:
-            token_hash = get_token_hash(token, secret=self.hash_secret)
-        except UnicodeEncodeError:
-            return
-        identity_session = await self.get_by_token_hash(token_hash)
-        if identity_session is None:
-            identity_session = await self.get_by_refresh_token_hash(token_hash)
+        identity_session = None
+        for provider, refresh in [
+            (self.token_provider, False),
+            (self.refresh_token_provider, True),
+        ]:
+            try:
+                parts = provider.parse(token)
+            except InvalidTokenException:
+                continue
+            candidate = (
+                await self.get_by_refresh_token_identifier(parts.identifier)
+                if refresh
+                else await self.get_by_token_identifier(parts.identifier)
+            )
+            if candidate is None:
+                continue
+            verifier = (
+                candidate.refresh_token_verifier
+                if refresh
+                else candidate.token_verifier
+            )
+            if verifier is None:
+                continue
+            valid, _ = await provider.verify_and_update(parts.secret, verifier)
+            if valid:
+                identity_session = candidate
+                break
         if identity_session is None:
             return
         identity_session.revoked_at = get_current_timestamp()
@@ -270,7 +321,7 @@ class IdentitySessionService(abc.ABC):
             extra={"family_id": identity_session.family_id},
         )
 
-    def _create_session(
+    async def _create_session(
         self,
         identity_id: typing.Any,
         *,
@@ -295,15 +346,10 @@ class IdentitySessionService(abc.ABC):
             A tuple of (token, optional refresh token, unsaved session).
         """
         now = get_current_timestamp()
-        token, token_hash = generate_token_hash_pair(
-            secret=self.hash_secret, prefix=self.token_prefix
-        )
-        refresh_token_value = None
-        refresh_token_hash = None
+        generated = await self.token_provider.generate()
+        refresh_generated = None
         if refresh_token:
-            refresh_token_value, refresh_token_hash = generate_token_hash_pair(
-                secret=self.hash_secret, prefix=self.refresh_token_prefix
-            )
+            refresh_generated = await self.refresh_token_provider.generate()
             if refresh_token_expires_at is None:
                 refresh_token_expires_at = now + int(
                     self.refresh_token_lifetime.total_seconds()
@@ -312,16 +358,22 @@ class IdentitySessionService(abc.ABC):
         if refresh_token_expires_at is not None:
             expires_at = min(expires_at, refresh_token_expires_at)
         return (
-            token,
-            refresh_token_value,
+            generated.token,
+            refresh_generated.token if refresh_generated else None,
             IdentitySession(
                 id=None,
-                token_hash=token_hash,
+                token_identifier=generated.identifier,
+                token_verifier=generated.verifier,
                 expires_at=expires_at,
                 identity_id=identity_id,
                 amr=amr.copy(),
                 context=context.copy() if context else None,
-                refresh_token_hash=refresh_token_hash,
+                refresh_token_identifier=refresh_generated.identifier
+                if refresh_generated
+                else None,
+                refresh_token_verifier=refresh_generated.verifier
+                if refresh_generated
+                else None,
                 refresh_token_expires_at=refresh_token_expires_at
                 if refresh_token
                 else None,
@@ -329,14 +381,12 @@ class IdentitySessionService(abc.ABC):
             ),
         )
 
-    async def _validate_refresh_token_hash(
-        self, token_hash: TokenHash
-    ) -> IdentitySession:
+    async def _validate_refresh_token(self, token: str) -> IdentitySession:
         """
         Load a refresh token's session, revoking its family on reuse.
 
         Args:
-            token_hash: The refresh token hash to look up.
+            token: The complete refresh token.
 
         Returns:
             The session eligible for replacement.
@@ -346,8 +396,19 @@ class IdentitySessionService(abc.ABC):
             ExpiredRefreshTokenException: If the absolute deadline has passed.
             ReusedRefreshTokenException: If the token was consumed previously.
         """
-        identity_session = await self.get_by_refresh_token_hash(token_hash)
-        if identity_session is None or identity_session.revoked_at is not None:
+        try:
+            parts = self.refresh_token_provider.parse(token)
+        except InvalidTokenException:
+            logger.warning("Malformed refresh token provided")
+            raise InvalidRefreshTokenException() from None
+        identity_session = await self.get_by_refresh_token_identifier(parts.identifier)
+        if identity_session is None or identity_session.refresh_token_verifier is None:
+            logger.warning("Unknown refresh token provided")
+            raise InvalidRefreshTokenException()
+        valid, _ = await self.refresh_token_provider.verify_and_update(
+            parts.secret, identity_session.refresh_token_verifier
+        )
+        if not valid or identity_session.revoked_at is not None:
             logger.warning("Invalid refresh token provided")
             raise InvalidRefreshTokenException()
         if identity_session.replaced_by_id is not None:
@@ -379,55 +440,83 @@ class IdentitySessionService(abc.ABC):
         Returns:
             The ID of the inserted session.
 
+        Raises:
+            TokenIdentifierCollision: If the access or refresh identifiers already exist in the store.
+
         Abstract: Implementation contract
             If family_id is None, set the stored family_id to the generated record ID
             in the same transaction. Preserve an explicitly supplied family ID.
-            Enforce uniqueness of token hashes (and non-null refresh token hashes).
+            Enforce uniqueness of token identifiers (and non-null refresh identifiers).
             Return the inserted ID and leave transaction commit and rollback to the
-            caller.
+            caller. On identifier collision, raise TokenIdentifierCollision without
+            persisting changes and leave the transaction usable for retry.
         """
         ...
 
     @abc.abstractmethod
-    async def get_by_token_hash(self, token_hash: TokenHash) -> IdentitySession | None:
+    async def update_verifier(
+        self, identity_session: IdentitySession, *, previous_verifier: str
+    ) -> None:
         """
-        Retrieve a session by its access token hash, regardless of its validity.
+        Conditionally upgrade an access-token verifier.
 
         Args:
-            token_hash: The access token hash to look up.
-
-        Returns:
-            The stored session, including expired, replaced, or revoked rows,
-            or None if not found.
+            identity_session: The session containing the replacement access verifier.
+            previous_verifier: The verifier used for successful verification.
 
         Abstract: Implementation contract
-            Match the access token hash without filtering out expired, replaced, or
-            revoked sessions. Return current stored state without acquiring a
-            session-row lock. The returned snapshot is not protected from subsequent
-            mutations.
+            Update only token_verifier for the supplied session ID and access
+            identifier, only if the stored verifier equals previous_verifier and
+            the session remains unexpired, unrevoked and unreplaced. Perform the
+            checks and write atomically; do nothing if they no longer match.
+            Preserve refresh credentials, family state and every other field.
+            Participate in the caller's transaction without committing or rolling
+            it back. Propagate storage failures.
         """
         ...
 
     @abc.abstractmethod
-    async def get_by_refresh_token_hash(
-        self, refresh_token_hash: TokenHash
+    async def get_by_token_identifier(
+        self, token_identifier: str
     ) -> IdentitySession | None:
         """
-        Retrieve a session by its refresh token hash, regardless of its validity.
+        Retrieve a session by its access token identifier, regardless of its validity.
 
         Args:
-            refresh_token_hash: The refresh token hash to look up.
+            token_identifier: The access token identifier to look up.
 
         Returns:
             The stored session, including expired, replaced, or revoked rows,
             or None if not found.
 
         Abstract: Implementation contract
-            Match the refresh token hash without filtering out expired, replaced, or
-            revoked sessions; retained rows are needed for reuse detection. Each call
-            must return current stored state, not a cached result or an outdated
-            transaction snapshot. Do not acquire a session-row lock; the returned
-            snapshot is not protected from subsequent mutations.
+            Match the access token identifier without filtering out expired,
+            replaced, or revoked sessions. Return current stored state without
+            acquiring a session-row lock. The returned snapshot is not protected
+            from subsequent mutations.
+        """
+        ...
+
+    @abc.abstractmethod
+    async def get_by_refresh_token_identifier(
+        self, refresh_token_identifier: str
+    ) -> IdentitySession | None:
+        """
+        Retrieve a session by its refresh token identifier, regardless of its validity.
+
+        Args:
+            refresh_token_identifier: The refresh token identifier to look up.
+
+        Returns:
+            The stored session, including expired, replaced, or revoked rows,
+            or None if not found.
+
+        Abstract: Implementation contract
+            Match the refresh token identifier without filtering out expired,
+            replaced, or revoked sessions; retained rows are needed for reuse
+            detection. Each call must return current stored state, not a cached
+            result or an outdated transaction snapshot. Do not acquire a session-row
+            lock; the returned snapshot is not protected from subsequent mutations.
         """
         ...
 
@@ -446,19 +535,25 @@ class IdentitySessionService(abc.ABC):
             The replacement ID, or None with no changes if the previous session
             is no longer eligible. Propagate storage failures after rollback.
 
+        Raises:
+            TokenIdentifierCollision: If the new session's access or refresh
+                identifiers already exist in the store.
+
         Abstract: Implementation contract
             Serialize with all replacements and revocations in the same family,
             for example by locking the retained initial session row before any child
             rows. Reload the previous session under that protection: its refresh
-            hash must still match, its refresh deadline must be in the future, and
-            it must be neither revoked nor replaced. Reject a revoked or missing
-            family root. The supplied previous_session is a snapshot, not proof of
-            eligibility.
+            identifier and verifier must still match, its refresh deadline must be
+            in the future, and it must be neither revoked nor replaced. Reject a
+            revoked or missing family root. The supplied previous_session is a
+            snapshot, not proof of eligibility.
 
             Insert new_session with the same family ID and set the previous row's
             replaced_by_id to the new ID in one transaction. Commit both changes
             before returning; roll back both on failure. Return None without changes
-            if the previous session is no longer eligible.
+            if the previous session is no longer eligible. On identifier collision,
+            raise TokenIdentifierCollision without persisting changes and leave the
+            transaction usable for retry.
         """
         ...
 
@@ -472,9 +567,10 @@ class IdentitySessionService(abc.ABC):
 
         Abstract: Implementation contract
             Use the supplied identity_session.revoked_at for rows not yet revoked.
-            Preserve earlier revocation timestamps, hashes, and lineage. Serialize
-            with all replacements and revocations in the family, for example by
-            locking its retained initial session row before any child rows.
+            Preserve earlier revocation timestamps, identifiers, verifiers, and
+            lineage. Serialize with all replacements and revocations in the family,
+            for example by locking its retained initial session row before any child
+            rows.
 
             Commit before returning so a caller's subsequent exception cannot undo
             revocation. Missing or already-revoked families succeed without error.
