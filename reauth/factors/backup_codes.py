@@ -195,15 +195,34 @@ class BackupCodesFactor(FactorBase[BackupCodesEnrollment], abc.ABC):
 
     @abc.abstractmethod
     async def insert(self, backup_codes: BackupCodesEnrollment) -> typing.Any:
-        """Insert a backup codes enrollment into a persistent store."""
+        """
+        Insert a backup codes enrollment into a persistent store.
+
+        Abstract: Implementation contract
+            Persist the supplied enrollment and return its ID. Enforce uniqueness for
+            the identity and configured factor, including concurrent first enrollments.
+            Leave commit and rollback to the caller.
+        """
         ...
 
     @abc.abstractmethod
     async def update(self, backup_codes: BackupCodesEnrollment) -> None:
-        """Update a backup codes enrollment in the persistent store."""
+        """
+        Update a backup codes enrollment in the persistent store.
+
+        Abstract: Implementation contract
+            Persist the supplied enrollment by ID in the transaction that protects
+            the record. Leave commit and rollback to the caller.
+        """
         ...
 
     @abc.abstractmethod
     async def delete(self, backup_codes: BackupCodesEnrollment) -> None:
-        """Delete a backup codes enrollment from the persistent store."""
+        """
+        Delete a backup codes enrollment from the persistent store.
+
+        Abstract: Implementation contract
+            Delete the supplied enrollment by ID in the transaction that protects
+            the record. Leave commit and rollback to the caller.
+        """
         ...

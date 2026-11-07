@@ -176,6 +176,12 @@ class OAuth2StateService(abc.ABC):
 
         Returns:
             The corresponding OAuth2State instance, or None if not found.
+
+        Abstract: Implementation contract
+            Match the supplied token identifier and include expired rows without
+            validating them. Acquire protection before reading and retain it until
+            the caller's transaction ends, preventing competing mutations of the
+            returned state. Leave commit and rollback to the caller.
         """
         ...
 
@@ -192,6 +198,12 @@ class OAuth2StateService(abc.ABC):
 
         Raises:
             TokenIdentifierCollision: If the identifier already exists in the store.
+
+        Abstract: Implementation contract
+            Persist the supplied state, enforce uniqueness of token_identifier, and
+            return the record ID. On identifier collision, raise
+            TokenIdentifierCollision without persisting changes and leave the
+            transaction usable for retry. Leave commit and rollback to the caller.
         """
         ...
 
@@ -202,5 +214,10 @@ class OAuth2StateService(abc.ABC):
 
         Args:
             oauth2_state: The OAuth2State instance to delete.
+
+        Abstract: Implementation contract
+            Delete the supplied state by ID in the transaction that protects the
+            record. Leave commit and rollback to the caller. Deletion becomes durable
+            on commit; a rollback restores the state.
         """
         ...

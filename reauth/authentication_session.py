@@ -214,15 +214,17 @@ class AuthenticationSessionService(abc.ABC):
 
     async def advance(
         self,
-        authentication_session: AuthenticationSession,
+        token: str,
         identity_id: typing.Any,
         factor: FactorBase[typing.Any],
     ) -> AuthenticationSession:
         """
         Advance an authentication session by marking a factor as completed.
 
+        Load and validate the session before checking factor availability.
+
         Args:
-            authentication_session: The AuthenticationSession instance to advance.
+            token: The authentication session token.
             identity_id: The ID of the identity that has completed the factor.
             factor: The FactorBase instance representing the factor that has been completed.
 
@@ -230,8 +232,11 @@ class AuthenticationSessionService(abc.ABC):
             The updated AuthenticationSession instance.
 
         Raises:
+            InvalidSessionTokenException: If the token does not correspond to a session.
+            ExpiredSessionException: If the session has expired.
             UnavailableFactorException: If the factor is not available for the session.
-        """
+        """  # noqa: DOC502
+        authentication_session = await self.validate(token)
         available_factors = await self.get_available_factors(authentication_session)
         if factor not in available_factors:
             raise UnavailableFactorException()
@@ -258,24 +263,28 @@ class AuthenticationSessionService(abc.ABC):
         return authentication_session
 
     async def complete(
-        self, authentication_session: AuthenticationSession
+        self, token: str
     ) -> tuple[typing.Any, list[AuthenticationMethodReference]]:
         """
         Complete an authentication session and return identity info.
 
-        Validates that the session is complete (identity attached, no factors remaining),
-        deletes the session, and returns the identity_id and AMR list.
+        Loads and validates the session, checks that it is complete (identity
+        attached, no factors remaining), deletes it, and returns the identity_id
+        and AMR list.
 
         Args:
-            authentication_session: The session to complete.
+            token: The authentication session token.
 
         Returns:
             A tuple of (identity_id, amr) for creating a user session.
 
         Raises:
+            InvalidSessionTokenException: If the token does not correspond to a session.
+            ExpiredSessionException: If the session has expired.
             IdentityNotAttachedException: If no identity_id is attached to the session.
             FactorsRemainingException: If there are still available factors.
-        """
+        """  # noqa: DOC502
+        authentication_session = await self.validate(token)
         logger.debug(
             "Session completion attempted",
             extra={"session_id": authentication_session.id},
@@ -314,8 +323,6 @@ class AuthenticationSessionService(abc.ABC):
         """
         Insert an authentication session into a persistent store.
 
-        Implementers should implement this method.
-
         Args:
             authentication_session: The AuthenticationSession instance to insert.
 
@@ -324,6 +331,12 @@ class AuthenticationSessionService(abc.ABC):
 
         Raises:
             TokenIdentifierCollision: If the identifier already exists in the store.
+
+        Abstract: Implementation contract
+            Persist the session, enforce identifier uniqueness and return the record
+            ID. On identifier collision, raise TokenIdentifierCollision without
+            persisting changes and leave the transaction usable for retry. Leave
+            commit and rollback to the caller.
         """
         ...
 
@@ -334,13 +347,17 @@ class AuthenticationSessionService(abc.ABC):
         """
         Retrieve an authentication session by its token identifier from the persistent store.
 
-        Implementers should implement this method.
-
         Args:
             token_identifier: The identifier of the token to look up.
 
         Returns:
             The corresponding AuthenticationSession instance, or None if not found.
+
+        Abstract: Implementation contract
+            Match the supplied token identifier and return the session protected from
+            competing mutations until the caller's transaction ends. Acquire protection
+            before reading. Include expired sessions without validating them. Leave
+            commit and rollback to the caller.
         """
         ...
 
@@ -349,10 +366,13 @@ class AuthenticationSessionService(abc.ABC):
         """
         Update an authentication session in the persistent store.
 
-        Implementers should implement this method.
-
         Args:
             authentication_session: The AuthenticationSession instance to update.
+
+        Abstract: Implementation contract
+            Persist the supplied session's state using its record ID. Use the same
+            transaction that protected the lookup, leaving commit and rollback to
+            the caller.
         """
         ...
 
@@ -361,9 +381,12 @@ class AuthenticationSessionService(abc.ABC):
         """
         Delete an authentication session from the persistent store.
 
-        Implementers should implement this method.
-
         Args:
             authentication_session: The AuthenticationSession instance to delete.
+
+        Abstract: Implementation contract
+            Delete the record identified by the supplied session's ID. Use the same
+            transaction that protected the lookup, leaving commit and rollback to
+            the caller.
         """
         ...

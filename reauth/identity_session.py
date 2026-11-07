@@ -213,7 +213,7 @@ class IdentitySessionService(abc.ABC):
             raise ExpiredSessionException()
         if replacement is not None:
             identity_session.token_verifier = replacement
-            await self.update(identity_session)
+            await self.update_verifier(identity_session)
         return identity_session
 
     async def refresh(
@@ -262,7 +262,7 @@ class IdentitySessionService(abc.ABC):
                 if attempt == 2:
                     raise TokenGenerationException() from error
         if new_session.id is None:
-            await self._validate_refresh_token(token, update_verifier=False)
+            await self._validate_refresh_token(token)
             logger.warning("Identity session replacement rejected")
             raise InvalidRefreshTokenException()
         logger.info(
@@ -378,15 +378,12 @@ class IdentitySessionService(abc.ABC):
             ),
         )
 
-    async def _validate_refresh_token(
-        self, token: str, *, update_verifier: bool = True
-    ) -> IdentitySession:
+    async def _validate_refresh_token(self, token: str) -> IdentitySession:
         """
         Load a refresh token's session, revoking its family on reuse.
 
         Args:
             token: The complete refresh token.
-            update_verifier: Whether to persist upgrades; disabled for conflict checks.
 
         Returns:
             The session eligible for replacement.
@@ -405,7 +402,7 @@ class IdentitySessionService(abc.ABC):
         if identity_session is None or identity_session.refresh_token_verifier is None:
             logger.warning("Unknown refresh token provided")
             raise InvalidRefreshTokenException()
-        valid, replacement = await self.refresh_token_provider.verify_and_update(
+        valid, _ = await self.refresh_token_provider.verify_and_update(
             parts.secret, identity_session.refresh_token_verifier
         )
         if not valid or identity_session.revoked_at is not None:
@@ -427,18 +424,12 @@ class IdentitySessionService(abc.ABC):
                 "Refresh token expired", extra={"session_id": identity_session.id}
             )
             raise ExpiredRefreshTokenException()
-        if replacement is not None and update_verifier:
-            identity_session.refresh_token_verifier = replacement
-            await self.update(identity_session)
         return identity_session
 
     @abc.abstractmethod
     async def insert(self, identity_session: IdentitySession) -> typing.Any:
         """
         Atomically insert a session and initialize its family ID.
-
-        If family_id is None, set the stored family_id to the generated record ID
-        in the same transaction. Preserve an explicitly supplied family ID.
 
         Args:
             identity_session: The complete session model to insert.
@@ -448,19 +439,28 @@ class IdentitySessionService(abc.ABC):
 
         Raises:
             TokenIdentifierCollision: If the access or refresh identifiers already exist in the store.
+
+        Abstract: Implementation contract
+            If family_id is None, set the stored family_id to the generated record ID
+            in the same transaction. Preserve an explicitly supplied family ID.
+            Enforce uniqueness of token identifiers (and non-null refresh identifiers).
+            Return the inserted ID and leave transaction commit and rollback to the
+            caller. On identifier collision, raise TokenIdentifierCollision without
+            persisting changes and leave the transaction usable for retry.
         """
         ...
 
     @abc.abstractmethod
-    async def update(self, identity_session: IdentitySession) -> None:
+    async def update_verifier(self, identity_session: IdentitySession) -> None:
         """
-        Update an identity session in the persistent store.
+        Upgrade an access-token verifier.
 
         Args:
-            identity_session: The complete session model to update.
+            identity_session: The session containing the replacement access verifier.
 
-        Raises:
-            TokenIdentifierCollision: If the access or refresh identifiers already exist in the store.
+        Abstract: Implementation contract
+            Update only token_verifier by session ID in the transaction that
+            protects the record. Leave commit and rollback to the caller.
         """
         ...
 
@@ -477,6 +477,13 @@ class IdentitySessionService(abc.ABC):
         Returns:
             The stored session, including expired, replaced, or revoked rows,
             or None if not found.
+
+        Abstract: Implementation contract
+            Match the access token identifier without filtering out expired,
+            replaced, or revoked sessions. Acquire family protection before locking
+            session rows and return current state protected from competing mutations
+            until the caller's transaction ends. Leave commit and rollback to the
+            caller.
         """
         ...
 
@@ -493,6 +500,13 @@ class IdentitySessionService(abc.ABC):
         Returns:
             The stored session, including expired, replaced, or revoked rows,
             or None if not found.
+
+        Abstract: Implementation contract
+            Match the refresh token identifier without filtering out expired,
+            replaced, or revoked sessions; retained rows are needed for reuse
+            detection. Acquire family protection before locking session rows and
+            return current state protected from competing mutations until the
+            caller's transaction ends. Leave commit and rollback to the caller.
         """
         ...
 
@@ -502,16 +516,6 @@ class IdentitySessionService(abc.ABC):
     ) -> typing.Any | None:
         """
         Atomically replace a session if its refresh token is still usable.
-
-        Serialize with all replacements and revocations in the same family,
-        for example by locking the retained initial session row. Reload the
-        previous session under that lock: its refresh identifier and verifier must still match,
-        its refresh deadline must be in the future, and it must be neither
-        revoked nor replaced. Also reject a revoked or missing family root.
-
-        Insert new_session with the same family ID and set the previous row's
-        replaced_by_id to the new ID. Commit both changes before returning;
-        roll back both on failure. Do not call the public issue() method.
 
         Args:
             previous_session: The previously retrieved session to replace.
@@ -524,6 +528,22 @@ class IdentitySessionService(abc.ABC):
         Raises:
             TokenIdentifierCollision: If the new session's access or refresh
                 identifiers already exist in the store.
+
+        Abstract: Implementation contract
+            Serialize with all replacements and revocations in the same family,
+            for example by locking the retained initial session row before any child
+            rows. Reload the previous session under that protection: its refresh
+            identifier and verifier must still match, its refresh deadline must be
+            in the future, and it must be neither revoked nor replaced. Reject a
+            revoked or missing family root. The supplied previous_session is a
+            snapshot, not proof of eligibility.
+
+            Insert new_session with the same family ID and set the previous row's
+            replaced_by_id to the new ID in one transaction. Commit both changes
+            before returning; roll back both on failure. Return None without changes
+            if the previous session is no longer eligible. On identifier collision,
+            raise TokenIdentifierCollision without persisting changes and leave the
+            transaction usable for retry.
         """
         ...
 
@@ -532,13 +552,17 @@ class IdentitySessionService(abc.ABC):
         """
         Persist revocation of every session in the supplied session's family.
 
-        Use identity_session.revoked_at, set by the service, for rows not yet
-        revoked. Preserve earlier revocation timestamps, identifiers and verifiers, and lineage.
-        Serialize with replace() through the same family lock and commit before
-        returning. A caller's subsequent exception must not undo revocation.
-        Missing or already-revoked families succeed without error.
-
         Args:
             identity_session: The session identifying the family and revocation time.
+
+        Abstract: Implementation contract
+            Use the supplied identity_session.revoked_at for rows not yet revoked.
+            Preserve earlier revocation timestamps, identifiers, verifiers, and
+            lineage. Serialize with all replacements and revocations in the family,
+            for example by locking its retained initial session row before any child
+            rows.
+
+            Commit before returning so a caller's subsequent exception cannot undo
+            revocation. Missing or already-revoked families succeed without error.
         """
         ...

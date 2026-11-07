@@ -127,11 +127,11 @@ class SQLAlchemyIdentitySessionService(IdentitySessionService):
         row = result.mappings().one_or_none()
         return IdentitySession(**row) if row is not None else None
 
-    async def update(self, identity_session: IdentitySession) -> None:
+    async def update_verifier(self, identity_session: IdentitySession) -> None:
         await self.connection.execute(
             update(identity_session_table)
             .where(identity_session_table.c.id == identity_session.id)
-            .values(**dataclasses.asdict(identity_session))
+            .values(token_verifier=identity_session.token_verifier)
         )
 
     async def replace(

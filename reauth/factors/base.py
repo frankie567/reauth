@@ -67,5 +67,10 @@ class FactorBase[ENROLLMENT: FactorEnrollment](abc.ABC):
         Returns:
             The enrollment information for the factor,
             or None if the factor is not enrolled for the identity.
+
+        Abstract: Implementation contract
+            Scope the lookup to the requested identity and this factor. Acquire
+            protection before reading and retain it after returning. Leave commit
+            and rollback to the caller.
         """
         ...

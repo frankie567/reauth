@@ -193,13 +193,15 @@ class EmailOTPFactor(FactorBase[EmailOTPEnrollment], abc.ABC):
         """
         Insert an EmailOTP instance into a persistent store.
 
-        Implementers should implement this method.
-
         Args:
             email_otp: The EmailOTP instance to insert.
 
         Returns:
             The ID of the inserted EmailOTP.
+
+        Abstract: Implementation contract
+            Persist the supplied OTP and return its ID. Enforce at most one pending
+            OTP per authentication session. Leave commit and rollback to the caller.
         """
         ...
 
@@ -210,13 +212,16 @@ class EmailOTPFactor(FactorBase[EmailOTPEnrollment], abc.ABC):
         """
         Retrieve an EmailOTP instance by its authentication session from the persistent store.
 
-        Implementers should implement this method.
-
         Args:
             authentication_session_id: The ID of the authentication session this OTP is associated with.
 
         Returns:
             The corresponding EmailOTP instance, or None if not found.
+
+        Abstract: Implementation contract
+            Match the authentication session ID. Include expired records without
+            validating them. Acquire protection before reading and retain it until
+            the caller's transaction ends. Leave commit and rollback to the caller.
         """
         ...
 
@@ -225,10 +230,13 @@ class EmailOTPFactor(FactorBase[EmailOTPEnrollment], abc.ABC):
         """
         Delete an EmailOTP instance from the persistent store.
 
-        Implementers should implement this method.
-
         Args:
             email_otp: The EmailOTP instance to delete.
+
+        Abstract: Implementation contract
+            Delete the supplied OTP by ID in the transaction that protected its
+            lookup. Preserve that protection through consumption and leave commit
+            and rollback to the caller.
         """
         ...
 
@@ -239,9 +247,13 @@ class EmailOTPFactor(FactorBase[EmailOTPEnrollment], abc.ABC):
         """
         Delete all EmailOTP instances associated with a given authentication session ID.
 
-        Implementers should implement this method.
-
         Args:
             authentication_session_id: The ID of the authentication session to delete OTPs for.
+
+        Abstract: Implementation contract
+            Delete all pending OTPs for the supplied authentication session. Acquire
+            protection for that session before deleting, including when no OTP exists,
+            for example by locking a stable parent row. Leave commit and rollback to
+            the caller.
         """
         ...
