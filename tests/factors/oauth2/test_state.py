@@ -167,7 +167,6 @@ class TestOAuth2StateConsume:
     ) -> None:
         service = SQLAlchemyOAuth2StateService(
             connection=sqlalchemy_connection,
-            hash_secret="test-secret",
             lifetime=datetime.timedelta(seconds=0),  # Expires immediately
         )
 

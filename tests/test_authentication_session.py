@@ -15,6 +15,7 @@ from sqlalchemy import (
     select,
     update,
 )
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine
 
 from reauth.amr import AuthenticationMethodReference
@@ -27,16 +28,30 @@ from reauth.authentication_session import (
     InvalidSessionTokenException,
     UnavailableFactorException,
 )
-from reauth.crypto import generate_token_hash_pair, get_token_hash
 from reauth.factors import FactorBase
 from reauth.timestamp import get_current_timestamp
+from reauth.tokens import (
+    ChecksummedTokenProvider,
+    HMACTokenVerifier,
+    TokenIdentifierCollision,
+    TokenProvider,
+)
+
+
+def make_provider(prefix: str = "reauth_as_") -> ChecksummedTokenProvider:
+    return ChecksummedTokenProvider(
+        prefix=prefix,
+        verifier=HMACTokenVerifier(current_key_id="test", keys={"test": b"t" * 32}),
+    )
+
 
 sqlalchemy_meta = MetaData()
 authentication_session_table = Table(
     "authentication_sessions",
     sqlalchemy_meta,
     Column("id", Integer, primary_key=True),
-    Column("token_hash", String(64), nullable=False),
+    Column("token_identifier", String(16), nullable=False, unique=True),
+    Column("token_verifier", String, nullable=False),
     Column("expires_at", Integer, nullable=False),
     Column("identity_id", Integer, nullable=True),
     Column("step", Integer, nullable=False, default=0),
@@ -110,26 +125,32 @@ class SQLAlchemyAuthenticationSession(AuthenticationSessionService):
         self,
         connection: AsyncConnection,
         *,
-        hash_secret: str,
+        token_provider: TokenProvider,
         factors: set[FactorBase[typing.Any]],
     ) -> None:
         self.connection = connection
-        super().__init__(hash_secret=hash_secret, factors=factors)
+        super().__init__(token_provider=token_provider, factors=factors)
 
     async def insert(self, authentication_session: AuthenticationSession) -> int:
         """Insert an authentication session into the database."""
-        result = await self.connection.execute(
-            insert(authentication_session_table)
-            .values(**dataclasses.asdict(authentication_session))
-            .returning(authentication_session_table.c.id)
-        )
-        return result.scalar_one()
+        try:
+            async with self.connection.begin_nested():
+                result = await self.connection.execute(
+                    insert(authentication_session_table)
+                    .values(**dataclasses.asdict(authentication_session))
+                    .returning(authentication_session_table.c.id)
+                )
+                return result.scalar_one()
+        except IntegrityError as error:
+            raise TokenIdentifierCollision() from error
 
-    async def get_by_token_hash(self, token_hash: str) -> AuthenticationSession | None:
-        """Retrieve an authentication session by its token hash."""
+    async def get_by_token_identifier(
+        self, token_identifier: str
+    ) -> AuthenticationSession | None:
+        """Retrieve an authentication session by its token identifier."""
         result = await self.connection.execute(
             select(authentication_session_table).where(
-                authentication_session_table.c.token_hash == token_hash
+                authentication_session_table.c.token_identifier == token_identifier
             )
         )
         row = result.fetchone()
@@ -186,7 +207,7 @@ def authentication_session_service(
     """Fixture that provides an instance of SQLAlchemyAuthenticationSession."""
     return SQLAlchemyAuthenticationSession(
         connection=sqlalchemy_connection,
-        hash_secret="test_secret",
+        token_provider=make_provider(),
         factors={password_factor, mfa_factor},
     )
 
@@ -202,10 +223,11 @@ class TestAuthenticationSessionStart:
         assert session.expires_at > get_current_timestamp()
         assert session.identity_id is None
 
-        token_hash = get_token_hash(
-            token, secret=authentication_session_service.hash_secret
-        )
-        assert session.token_hash == token_hash
+        parts = authentication_session_service.token_provider.parse(token)
+        assert session.token_identifier == parts.identifier
+        assert await authentication_session_service.token_provider.verify_and_update(
+            parts.secret, session.token_verifier
+        ) == (True, None)
 
     async def test_start_with_context(
         self, authentication_session_service: SQLAlchemyAuthenticationSession
@@ -241,14 +263,13 @@ class TestAuthenticationSessionValidate:
     async def test_expired_session(
         self, authentication_session_service: SQLAlchemyAuthenticationSession
     ) -> None:
-        token, token_hash = generate_token_hash_pair(
-            secret=authentication_session_service.hash_secret,
-            prefix=authentication_session_service.token_prefix,
-        )
+        generated = await authentication_session_service.token_provider.generate()
+        token = generated.token
         await authentication_session_service.insert(
             AuthenticationSession(
                 id=None,
-                token_hash=token_hash,
+                token_identifier=generated.identifier,
+                token_verifier=generated.verifier,
                 expires_at=0,
                 identity_id=None,
                 context=None,
@@ -261,14 +282,13 @@ class TestAuthenticationSessionValidate:
     async def test_valid_session(
         self, authentication_session_service: SQLAlchemyAuthenticationSession
     ) -> None:
-        token, token_hash = generate_token_hash_pair(
-            secret=authentication_session_service.hash_secret,
-            prefix=authentication_session_service.token_prefix,
-        )
+        generated = await authentication_session_service.token_provider.generate()
+        token = generated.token
         session_id = await authentication_session_service.insert(
             AuthenticationSession(
                 id=None,
-                token_hash=token_hash,
+                token_identifier=generated.identifier,
+                token_verifier=generated.verifier,
                 expires_at=get_current_timestamp() + 3600,
                 identity_id=None,
                 context=None,
@@ -284,13 +304,11 @@ class TestGetAvailableFactors:
     async def test_no_identity_zero_factor(
         self, authentication_session_service: SQLAlchemyAuthenticationSession
     ) -> None:
-        _token, token_hash = generate_token_hash_pair(
-            secret=authentication_session_service.hash_secret,
-            prefix=authentication_session_service.token_prefix,
-        )
+        generated = await authentication_session_service.token_provider.generate()
         session = AuthenticationSession(
             id=None,
-            token_hash=token_hash,
+            token_identifier=generated.identifier,
+            token_verifier=generated.verifier,
             expires_at=get_current_timestamp() + 3600,
             identity_id=None,
             context=None,
@@ -305,13 +323,11 @@ class TestGetAvailableFactors:
     async def test_identity_one_factor_enrolled(
         self, authentication_session_service: SQLAlchemyAuthenticationSession
     ) -> None:
-        _token, token_hash = generate_token_hash_pair(
-            secret=authentication_session_service.hash_secret,
-            prefix=authentication_session_service.token_prefix,
-        )
+        generated = await authentication_session_service.token_provider.generate()
         session = AuthenticationSession(
             id=None,
-            token_hash=token_hash,
+            token_identifier=generated.identifier,
+            token_verifier=generated.verifier,
             expires_at=get_current_timestamp() + 3600,
             identity_id=1,
             amr=[AuthenticationMethodReference.PWD],
@@ -329,13 +345,11 @@ class TestGetAvailableFactors:
     async def test_identity_one_factor_not_enrolled(
         self, authentication_session_service: SQLAlchemyAuthenticationSession
     ) -> None:
-        _token, token_hash = generate_token_hash_pair(
-            secret=authentication_session_service.hash_secret,
-            prefix=authentication_session_service.token_prefix,
-        )
+        generated = await authentication_session_service.token_provider.generate()
         session = AuthenticationSession(
             id=None,
-            token_hash=token_hash,
+            token_identifier=generated.identifier,
+            token_verifier=generated.verifier,
             expires_at=get_current_timestamp() + 3600,
             identity_id=2,
             amr=[AuthenticationMethodReference.PWD],
@@ -357,13 +371,11 @@ class TestAdvance:
         authentication_session_service: SQLAlchemyAuthenticationSession,
         password_factor: DummyPasswordFactor,
     ) -> None:
-        _token, token_hash = generate_token_hash_pair(
-            secret=authentication_session_service.hash_secret,
-            prefix=authentication_session_service.token_prefix,
-        )
+        generated = await authentication_session_service.token_provider.generate()
         session = AuthenticationSession(
             id=None,
-            token_hash=token_hash,
+            token_identifier=generated.identifier,
+            token_verifier=generated.verifier,
             expires_at=get_current_timestamp() + 3600,
             identity_id=None,
             context=None,
@@ -387,7 +399,7 @@ class TestAdvance:
         trusted_factor = DummySSOFactor()
         authentication_session_service = SQLAlchemyAuthenticationSession(
             connection=sqlalchemy_connection,
-            hash_secret="test_secret",
+            token_provider=make_provider(),
             factors={trusted_factor, mfa_factor},
         )
         _token, session = await authentication_session_service.start()
@@ -407,13 +419,11 @@ class TestAdvance:
         authentication_session_service: SQLAlchemyAuthenticationSession,
         mfa_factor: DummyMFAFactor,
     ) -> None:
-        _token, token_hash = generate_token_hash_pair(
-            secret=authentication_session_service.hash_secret,
-            prefix=authentication_session_service.token_prefix,
-        )
+        generated = await authentication_session_service.token_provider.generate()
         session = AuthenticationSession(
             id=None,
-            token_hash=token_hash,
+            token_identifier=generated.identifier,
+            token_verifier=generated.verifier,
             expires_at=get_current_timestamp() + 3600,
             identity_id=1,
             amr=[AuthenticationMethodReference.PWD],
@@ -439,13 +449,11 @@ class TestAdvance:
         authentication_session_service: SQLAlchemyAuthenticationSession,
         mfa_factor: DummyMFAFactor,
     ) -> None:
-        _token, token_hash = generate_token_hash_pair(
-            secret=authentication_session_service.hash_secret,
-            prefix=authentication_session_service.token_prefix,
-        )
+        generated = await authentication_session_service.token_provider.generate()
         session = AuthenticationSession(
             id=None,
-            token_hash=token_hash,
+            token_identifier=generated.identifier,
+            token_verifier=generated.verifier,
             expires_at=get_current_timestamp() + 3600,
             identity_id=2,
             amr=[AuthenticationMethodReference.PWD],
@@ -482,8 +490,8 @@ class TestComplete:
         assert session.used_factors == ["dummy_password", "dummy_mfa"]
 
         # Verify session was deleted
-        deleted = await authentication_session_service.get_by_token_hash(
-            session.token_hash
+        deleted = await authentication_session_service.get_by_token_identifier(
+            session.token_identifier
         )
         assert deleted is None
 

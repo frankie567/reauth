@@ -11,7 +11,6 @@ from cryptography.hazmat.primitives.asymmetric import padding, rsa
 from cryptography.hazmat.primitives.asymmetric.rsa import RSAPrivateKey
 from sqlalchemy.ext.asyncio import AsyncConnection
 
-from reauth.crypto import TokenHash
 from reauth.factors.oauth2.base import (
     OAuth2Enrollment,
     OAuth2InvalidClientException,
@@ -227,7 +226,8 @@ def oauth2_state() -> OAuth2State:
     """Return a mock OAuth2State for testing."""
     return OAuth2State(
         id=None,
-        state_hash=TokenHash("test-hash"),
+        token_identifier="test-identifier",
+        token_verifier="test-verifier",
         provider="test",
         code_verifier=None,
         nonce=None,

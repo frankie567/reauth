@@ -2,14 +2,16 @@ import abc
 import dataclasses
 import datetime
 import hashlib
+import secrets
+import string
 import typing
 
 from reauth.amr import AuthenticationMethodReference
-from reauth.crypto import generate_code_hash_pair, get_token_hash
 from reauth.exceptions import ReauthException
 from reauth.factors.base import FactorBase
 from reauth.logging import get_logger
 from reauth.timestamp import get_current_timestamp
+from reauth.tokens import TokenVerifier
 
 logger = get_logger(__name__)
 
@@ -38,7 +40,7 @@ class EmailOTP:
     id: typing.Any | None
     identity_id: typing.Any | None
     email: str
-    code_hash: str
+    code_verifier: str
     expires_at: int
     authentication_session_id: typing.Any
 
@@ -72,7 +74,7 @@ class EmailOTPFactor(FactorBase[EmailOTPEnrollment], abc.ABC):
     def __init__(
         self,
         *,
-        hash_secret: str,
+        verifier: TokenVerifier,
         code_length: int = 6,
         lifetime: datetime.timedelta = datetime.timedelta(minutes=10),
         identifier: str = "email_otp",
@@ -80,7 +82,7 @@ class EmailOTPFactor(FactorBase[EmailOTPEnrollment], abc.ABC):
         advance_by: int = 1,
     ) -> None:
         super().__init__(identifier=identifier, step=step, advance_by=advance_by)
-        self.hash_secret = hash_secret
+        self.verifier = verifier
         self.code_length = code_length
         self.lifetime = lifetime
 
@@ -107,19 +109,20 @@ class EmailOTPFactor(FactorBase[EmailOTPEnrollment], abc.ABC):
         logger.debug(
             "Email OTP send attempted", extra={"email_hash": _hash_email(email)}
         )
-        await self.delete_by_authentication_session_id(authentication_session_id)
-
-        code, code_hash = generate_code_hash_pair(
-            secret=self.hash_secret, length=self.code_length
+        code = "".join(
+            secrets.choice(string.ascii_uppercase + string.digits)
+            for _ in range(self.code_length)
         )
+        code_verifier = await self.verifier.create(code)
         email_otp = EmailOTP(
             id=None,
-            code_hash=code_hash,
+            code_verifier=code_verifier,
             expires_at=get_current_timestamp() + int(self.lifetime.total_seconds()),
             identity_id=identity_id,
             authentication_session_id=authentication_session_id,
             email=email,
         )
+        await self.delete_by_authentication_session_id(authentication_session_id)
         email_otp.id = await self.insert(email_otp)
 
         logger.info(
@@ -155,15 +158,18 @@ class EmailOTPFactor(FactorBase[EmailOTPEnrollment], abc.ABC):
             "Email OTP consumption attempted",
             extra={"authentication_session_id": authentication_session_id},
         )
-        code_hash = get_token_hash(code, secret=self.hash_secret)
-        email_otp = await self.get_by_code_hash_and_authentication_session_id(
-            code_hash, authentication_session_id
+        email_otp = await self.get_by_authentication_session_id(
+            authentication_session_id
         )
         if email_otp is None:
             logger.warning(
                 "Email OTP consume failed: invalid",
                 extra={"authentication_session_id": authentication_session_id},
             )
+            raise InvalidOTPException()
+        valid, _ = await self.verifier.verify_and_update(code, email_otp.code_verifier)
+        if not valid:
+            logger.warning("Invalid email OTP provided")
             raise InvalidOTPException()
         if email_otp.is_expired():
             logger.warning(
@@ -198,16 +204,15 @@ class EmailOTPFactor(FactorBase[EmailOTPEnrollment], abc.ABC):
         ...
 
     @abc.abstractmethod
-    async def get_by_code_hash_and_authentication_session_id(
-        self, code_hash: str, authentication_session_id: typing.Any
+    async def get_by_authentication_session_id(
+        self, authentication_session_id: typing.Any
     ) -> EmailOTP | None:
         """
-        Retrieve an EmailOTP instance by its code hash from the persistent store.
+        Retrieve an EmailOTP instance by its authentication session from the persistent store.
 
         Implementers should implement this method.
 
         Args:
-            code_hash: The hash of the OTP code to retrieve.
             authentication_session_id: The ID of the authentication session this OTP is associated with.
 
         Returns:
