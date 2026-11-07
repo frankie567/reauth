@@ -1,3 +1,4 @@
+import dataclasses
 from collections.abc import AsyncGenerator
 
 import pytest
@@ -18,6 +19,7 @@ from reauth.factors.backup_codes import (
     InvalidBackupCodeException,
     NotEnrolledBackupCodesException,
 )
+from reauth.tokens import HMACTokenVerifier, TokenVerifier
 
 sqlalchemy_meta = MetaData()
 backup_codes_table = Table(
@@ -25,8 +27,8 @@ backup_codes_table = Table(
     sqlalchemy_meta,
     Column("id", Integer, primary_key=True),
     Column("identity_id", Integer, nullable=False),
-    Column("codes_hashes", JSON, nullable=False),
-    Column("used_codes_hashes", JSON, nullable=False),
+    Column("codes", JSON, nullable=False),
+    Column("used_codes", JSON, nullable=False),
     sqlite_autoincrement=True,
 )
 
@@ -38,7 +40,7 @@ class SQLAlchemyBackupCodesFactor(BackupCodesFactor):
         self,
         connection: AsyncConnection,
         *,
-        hash_secret: str = "test-secret",
+        verifier: TokenVerifier | None = None,
         code_length: int = 10,
         code_count: int = 10,
         chars: str = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789",
@@ -47,7 +49,8 @@ class SQLAlchemyBackupCodesFactor(BackupCodesFactor):
     ) -> None:
         self.connection = connection
         super().__init__(
-            hash_secret=hash_secret,
+            verifier=verifier
+            or HMACTokenVerifier(current_key_id="test", keys={"test": b"t" * 32}),
             code_length=code_length,
             code_count=code_count,
             chars=chars,
@@ -68,32 +71,24 @@ class SQLAlchemyBackupCodesFactor(BackupCodesFactor):
         return BackupCodesEnrollment(
             id=row.id,
             identity_id=row.identity_id,
-            codes_hashes=row.codes_hashes,
-            used_codes_hashes=row.used_codes_hashes,
+            codes=row.codes,
+            used_codes=row.used_codes,
         )
 
     async def insert(self, backup_codes: BackupCodesEnrollment) -> int:
         """Insert a backup codes enrollment into the database."""
         result = await self.connection.execute(
             insert(backup_codes_table)
-            .values(
-                identity_id=backup_codes.identity_id,
-                codes_hashes=backup_codes.codes_hashes,
-                used_codes_hashes=backup_codes.used_codes_hashes,
-            )
+            .values(**dataclasses.asdict(backup_codes))
             .returning(backup_codes_table.c.id)
         )
         return result.scalar_one()
 
     async def update(self, backup_codes: BackupCodesEnrollment) -> None:
-        """Update an existing backup codes enrollment in the database."""
         await self.connection.execute(
             update(backup_codes_table)
             .where(backup_codes_table.c.id == backup_codes.id)
-            .values(
-                codes_hashes=backup_codes.codes_hashes,
-                used_codes_hashes=backup_codes.used_codes_hashes,
-            )
+            .values(**dataclasses.asdict(backup_codes))
         )
 
     async def delete(self, backup_codes: BackupCodesEnrollment) -> None:
@@ -133,8 +128,8 @@ class TestBackupCodesEnroll:
         plaintext_codes, enrollment = await backup_codes_factor.enroll(identity_id=1)
 
         assert len(plaintext_codes) == 10
-        assert len(enrollment.codes_hashes) == 10
-        assert enrollment.used_codes_hashes == []
+        assert len(enrollment.codes) == 10
+        assert enrollment.used_codes == []
         assert enrollment.identity_id == 1
         assert enrollment.id is not None
 
@@ -155,17 +150,17 @@ class TestBackupCodesEnroll:
         """Test that enroll overwrites existing backup codes."""
         # First enrollment
         first_codes, first_enrollment = await backup_codes_factor.enroll(identity_id=1)
-        first_hashes = first_enrollment.codes_hashes
+        first_entries = first_enrollment.codes
 
         # Second enrollment
         second_codes, second_enrollment = await backup_codes_factor.enroll(
             identity_id=1
         )
-        second_hashes = second_enrollment.codes_hashes
+        second_entries = second_enrollment.codes
 
         # Codes should be different
         assert first_codes != second_codes
-        assert first_hashes != second_hashes
+        assert first_entries != second_entries
 
         # Only one enrollment should exist
         current = await backup_codes_factor.get_enrollment(identity_id=1)
@@ -185,7 +180,7 @@ class TestBackupCodesEnroll:
         plaintext_codes, enrollment = await factor.enroll(identity_id=1)
 
         assert len(plaintext_codes) == 5
-        assert len(enrollment.codes_hashes) == 5
+        assert len(enrollment.codes) == 5
         for code in plaintext_codes:
             assert len(code) == 8
             assert all(c in "ABC123" for c in code)
@@ -207,7 +202,7 @@ class TestBackupCodesVerify:
         )
 
         assert result.identity_id == 1
-        assert len(result.used_codes_hashes) == 1
+        assert len(result.used_codes) == 1
 
     async def test_verify_invalid_code(
         self, backup_codes_factor: SQLAlchemyBackupCodesFactor
@@ -251,7 +246,7 @@ class TestBackupCodesVerify:
         # Get current enrollment
         enrollment = await backup_codes_factor.get_enrollment(identity_id=1)
         assert enrollment is not None
-        assert len(enrollment.used_codes_hashes) == 2
+        assert len(enrollment.used_codes) == 2
 
     async def test_verify_remaining_codes_unused(
         self, backup_codes_factor: SQLAlchemyBackupCodesFactor

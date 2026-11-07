@@ -14,11 +14,18 @@ from sqlalchemy import (
     insert,
     select,
 )
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine
 
 from reauth.factors.oauth2.state import (
     OAuth2State,
     OAuth2StateService,
+)
+from reauth.tokens import (
+    ChecksummedTokenProvider,
+    HMACTokenVerifier,
+    TokenIdentifierCollision,
+    TokenProvider,
 )
 
 sqlalchemy_meta = MetaData()
@@ -27,7 +34,8 @@ oauth2_state_table = Table(
     "oauth2_states",
     sqlalchemy_meta,
     Column("id", Integer, primary_key=True),
-    Column("state_hash", String(64), nullable=False, unique=True),
+    Column("token_identifier", String(16), nullable=False, unique=True),
+    Column("token_verifier", String, nullable=False),
     Column("provider", String(64), nullable=False),
     Column("code_verifier", String(128), nullable=True),
     Column("nonce", String(128), nullable=True),
@@ -62,17 +70,28 @@ class SQLAlchemyOAuth2StateService(OAuth2StateService):
         self,
         connection: AsyncConnection,
         *,
-        hash_secret: str = "test-secret",
+        token_provider: TokenProvider | None = None,
         lifetime: datetime.timedelta = datetime.timedelta(minutes=10),
     ) -> None:
         self.connection = connection
-        super().__init__(hash_secret=hash_secret, lifetime=lifetime)
+        super().__init__(
+            token_provider=token_provider
+            or ChecksummedTokenProvider(
+                prefix="reauth_oauth2_",
+                verifier=HMACTokenVerifier(
+                    current_key_id="test", keys={"test": b"t" * 32}
+                ),
+            ),
+            lifetime=lifetime,
+        )
 
-    async def get_by_state_hash(self, state_hash: str) -> OAuth2State | None:
-        """Retrieve OAuth2 state by its hash from the database."""
+    async def get_by_token_identifier(
+        self, token_identifier: str
+    ) -> OAuth2State | None:
+        """Retrieve OAuth2 state by its identifier from the database."""
         result = await self.connection.execute(
             select(oauth2_state_table).where(
-                oauth2_state_table.c.state_hash == state_hash
+                oauth2_state_table.c.token_identifier == token_identifier
             )
         )
         row = result.fetchone()
@@ -82,15 +101,18 @@ class SQLAlchemyOAuth2StateService(OAuth2StateService):
 
     async def insert(self, oauth2_state: OAuth2State) -> int:
         """Insert OAuth2 state into the database."""
-        result = await self.connection.execute(
-            insert(oauth2_state_table)
-            .values(**dict(oauth2_state.__dict__))
-            .returning(oauth2_state_table.c.id)
-        )
-        return result.scalar_one()
+        try:
+            async with self.connection.begin_nested():
+                result = await self.connection.execute(
+                    insert(oauth2_state_table)
+                    .values(**dict(oauth2_state.__dict__))
+                    .returning(oauth2_state_table.c.id)
+                )
+                return result.scalar_one()
+        except IntegrityError as error:
+            raise TokenIdentifierCollision() from error
 
     async def delete(self, oauth2_state: OAuth2State) -> None:
-        """Delete OAuth2 state from the database."""
         await self.connection.execute(
             delete(oauth2_state_table).where(oauth2_state_table.c.id == oauth2_state.id)
         )
@@ -114,6 +136,5 @@ def oauth2_state_service(
     """Fixture providing an instance of SQLAlchemyOAuth2StateService."""
     return SQLAlchemyOAuth2StateService(
         connection=sqlalchemy_connection,
-        hash_secret="test-secret",
         lifetime=datetime.timedelta(minutes=10),
     )

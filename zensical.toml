@@ -14,6 +14,7 @@ nav = [
         { "Overview" = "reference/index.md" },
         { "Authentication sessions" = "reference/authentication_session.md" },
         { "Identity sessions" = "reference/identity_session.md" },
+        { "Tokens" = "reference/tokens.md" },
         { "Factors" = [
             { "Base" = "reference/factors/base.md" },
             { "Email OTP" = "reference/factors/email_otp.md" },
@@ -31,13 +32,19 @@ nav = [
             ] },
         ] },
         { "Utilities" = [
-            { "Cryptography" = "reference/crypto.md" },
             { "Exceptions" = "reference/exceptions.md" },
             { "Logging" = "reference/logging.md" },
         ] },
     ] },
     { "Security" = "security.md" },
 ]
+
+[project.markdown_extensions]
+admonition = {}
+pymdownx.highlight = {}
+pymdownx.superfences = {}
+pymdownx.tabbed.alternate_style = true
+pymdownx.tasklist.custom_checkbox = true
 
 [project.markdown_extensions.pymdownx.snippets]
 check_paths = true

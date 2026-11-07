@@ -4,11 +4,16 @@ import datetime
 import typing
 
 from reauth.amr import AuthenticationMethodReference
-from reauth.crypto import TokenHash, generate_token_hash_pair, get_token_hash
 from reauth.exceptions import ReauthException
 from reauth.factors import FactorBase
 from reauth.logging import get_logger
 from reauth.timestamp import get_current_timestamp
+from reauth.tokens import (
+    InvalidTokenException,
+    TokenGenerationException,
+    TokenIdentifierCollision,
+    TokenProvider,
+)
 
 logger = get_logger(__name__)
 
@@ -16,7 +21,8 @@ logger = get_logger(__name__)
 @dataclasses.dataclass
 class AuthenticationSession:
     id: typing.Any | None
-    token_hash: TokenHash
+    token_identifier: str
+    token_verifier: str
     expires_at: int
     identity_id: typing.Any | None
     step: int = 0
@@ -78,22 +84,19 @@ class AuthenticationSessionService(abc.ABC):
     def __init__(
         self,
         *,
-        hash_secret: str,
+        token_provider: TokenProvider,
         factors: set[FactorBase[typing.Any]],
-        token_prefix: str = "reauth_as_",
         lifetime: datetime.timedelta = datetime.timedelta(minutes=15),
     ) -> None:
         logger.debug(
             "AuthenticationSessionService initialized",
             extra={
-                "token_prefix": token_prefix,
                 "lifetime_seconds": int(lifetime.total_seconds()),
                 "factor_count": len(factors),
             },
         )
-        self.hash_secret = hash_secret
+        self.token_provider = token_provider
         self.factors = factors
-        self.token_prefix = token_prefix
         self.lifetime = lifetime
 
     async def start(self, **context: typing.Any) -> tuple[str, AuthenticationSession]:
@@ -106,19 +109,30 @@ class AuthenticationSessionService(abc.ABC):
 
         Returns:
             A tuple of (token, AuthenticationSession instance).
+
+        Raises:
+            TokenGenerationException: If credential generation repeatedly collides.
         """
         logger.debug("Authentication session start attempted")
-        token, token_hash = generate_token_hash_pair(
-            secret=self.hash_secret, prefix=self.token_prefix
-        )
+        generated = await self.token_provider.generate()
         authentication_session = AuthenticationSession(
             id=None,
-            token_hash=token_hash,
+            token_identifier=generated.identifier,
+            token_verifier=generated.verifier,
             expires_at=get_current_timestamp() + int(self.lifetime.total_seconds()),
             identity_id=None,
             context=context or None,
         )
-        authentication_session.id = await self.insert(authentication_session)
+        for attempt in range(3):
+            try:
+                authentication_session.id = await self.insert(authentication_session)
+                break
+            except TokenIdentifierCollision as error:
+                if attempt == 2:
+                    raise TokenGenerationException() from error
+                generated = await self.token_provider.generate()
+                authentication_session.token_identifier = generated.identifier
+                authentication_session.token_verifier = generated.verifier
         logger.info(
             "Session created",
             extra={
@@ -126,7 +140,7 @@ class AuthenticationSessionService(abc.ABC):
                 "expires_at": authentication_session.expires_at,
             },
         )
-        return token, authentication_session
+        return generated.token, authentication_session
 
     async def validate(self, token: str) -> AuthenticationSession:
         """
@@ -143,16 +157,29 @@ class AuthenticationSessionService(abc.ABC):
             ExpiredSessionException: If the session corresponding to the token has expired.
         """
         logger.debug("Token validation attempted")
-        token_hash = get_token_hash(token, secret=self.hash_secret)
-        authentication_session = await self.get_by_token_hash(token_hash)
+        try:
+            parts = self.token_provider.parse(token)
+        except InvalidTokenException:
+            logger.warning("Malformed token provided")
+            raise InvalidSessionTokenException() from None
+        authentication_session = await self.get_by_token_identifier(parts.identifier)
         if authentication_session is None:
             logger.warning("Invalid token provided")
+            raise InvalidSessionTokenException()
+        valid, replacement = await self.token_provider.verify_and_update(
+            parts.secret, authentication_session.token_verifier
+        )
+        if not valid:
+            logger.warning("Invalid token secret provided")
             raise InvalidSessionTokenException()
         if authentication_session.is_expired():
             logger.warning(
                 "Session expired", extra={"session_id": authentication_session.id}
             )
             raise ExpiredSessionException()
+        if replacement is not None:
+            authentication_session.token_verifier = replacement
+            await self.update(authentication_session)
         return authentication_session
 
     async def get_available_factors(
@@ -294,18 +321,23 @@ class AuthenticationSessionService(abc.ABC):
 
         Returns:
             The ID of the inserted authentication session.
+
+        Raises:
+            TokenIdentifierCollision: If the identifier already exists in the store.
         """
         ...
 
     @abc.abstractmethod
-    async def get_by_token_hash(self, token_hash: str) -> AuthenticationSession | None:
+    async def get_by_token_identifier(
+        self, token_identifier: str
+    ) -> AuthenticationSession | None:
         """
-        Retrieve an authentication session by its token hash from the persistent store.
+        Retrieve an authentication session by its token identifier from the persistent store.
 
         Implementers should implement this method.
 
         Args:
-            token_hash: The hash of the token to look up.
+            token_identifier: The identifier of the token to look up.
 
         Returns:
             The corresponding AuthenticationSession instance, or None if not found.
