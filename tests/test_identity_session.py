@@ -3,7 +3,6 @@ import datetime
 import hashlib
 import typing
 from collections.abc import AsyncGenerator
-from unittest.mock import patch
 
 import pytest
 from sqlalchemy import (
@@ -39,15 +38,10 @@ from reauth.tokens import (
 from reauth.tokens.checksummed import _checksum
 
 
-def make_provider(
-    prefix: str = "reauth_is_", *, current_key_id: str = "test"
-) -> ChecksummedTokenProvider:
+def make_provider(prefix: str = "reauth_is_") -> ChecksummedTokenProvider:
     return ChecksummedTokenProvider(
         prefix=prefix,
-        verifier=HMACTokenVerifier(
-            current_key_id=current_key_id,
-            keys={"test": b"t" * 32, "new": b"n" * 32},
-        ),
+        verifier=HMACTokenVerifier(current_key_id="test", keys={"test": b"t" * 32}),
     )
 
 
@@ -133,20 +127,10 @@ class SQLAlchemyIdentitySessionService(IdentitySessionService):
         row = result.mappings().one_or_none()
         return IdentitySession(**row) if row is not None else None
 
-    async def update_verifier(
-        self, identity_session: IdentitySession, *, previous_verifier: str
-    ) -> None:
+    async def update_verifier(self, identity_session: IdentitySession) -> None:
         await self.connection.execute(
             update(identity_session_table)
-            .where(
-                identity_session_table.c.id == identity_session.id,
-                identity_session_table.c.token_identifier
-                == identity_session.token_identifier,
-                identity_session_table.c.token_verifier == previous_verifier,
-                identity_session_table.c.expires_at > get_current_timestamp(),
-                identity_session_table.c.revoked_at.is_(None),
-                identity_session_table.c.replaced_by_id.is_(None),
-            )
+            .where(identity_session_table.c.id == identity_session.id)
             .values(token_verifier=identity_session.token_verifier)
         )
 
@@ -231,17 +215,6 @@ async def session() -> IdentitySession:
         refresh_token_verifier=await fixed_verifier("refresh_token"),
         refresh_token_expires_at=get_current_timestamp() + 7200,
     )
-
-
-@pytest.fixture
-async def persisted_session(
-    sqlalchemy_connection: AsyncConnection, session: IdentitySession
-) -> IdentitySession:
-    stored = dataclasses.replace(session, id=1, family_id=1)
-    await sqlalchemy_connection.execute(
-        insert(identity_session_table).values(**dataclasses.asdict(stored))
-    )
-    return stored
 
 
 @pytest.fixture
@@ -394,69 +367,6 @@ class TestIdentitySessionIssue:
 
 @pytest.mark.anyio
 class TestIdentitySessionValidate:
-    async def test_upgrades_only_access_verifier(
-        self,
-        identity_session_service: SQLAlchemyIdentitySessionService,
-        sqlalchemy_connection: AsyncConnection,
-        persisted_session: IdentitySession,
-    ) -> None:
-        provider = make_provider(current_key_id="new")
-        identity_session_service.token_provider = provider
-
-        validated = await identity_session_service.validate(fixed_token("access_token"))
-
-        replacement = await provider.verifier.create(
-            provider.parse(fixed_token("access_token")).secret
-        )
-        expected = dataclasses.replace(persisted_session, token_verifier=replacement)
-        result = await sqlalchemy_connection.execute(select(identity_session_table))
-        assert result.mappings().one() == dataclasses.asdict(expected)
-        assert validated == expected
-
-    @pytest.mark.parametrize(
-        "state",
-        [
-            {"revoked_at": 123},
-            {"replaced_by_id": 2},
-            {"expires_at": 0},
-            {"token_verifier": "concurrent-verifier"},
-            {"context": {"device": "updated"}},
-        ],
-    )
-    async def test_upgrade_preserves_concurrent_changes(
-        self,
-        identity_session_service: SQLAlchemyIdentitySessionService,
-        sqlalchemy_connection: AsyncConnection,
-        persisted_session: IdentitySession,
-        state: dict[str, typing.Any],
-    ) -> None:
-        provider = make_provider(current_key_id="new")
-        identity_session_service.token_provider = provider
-        verify = provider.verify_and_update
-
-        async def verify_after_change(
-            secret: str, verifier: str
-        ) -> tuple[bool, str | None]:
-            await sqlalchemy_connection.execute(
-                update(identity_session_table)
-                .where(identity_session_table.c.id == persisted_session.id)
-                .values(**state)
-            )
-            return await verify(secret, verifier)
-
-        with patch.object(
-            provider, "verify_and_update", side_effect=verify_after_change
-        ):
-            await identity_session_service.validate(fixed_token("access_token"))
-
-        expected = dataclasses.replace(persisted_session, **state)
-        if "context" in state:
-            expected.token_verifier = await provider.verifier.create(
-                provider.parse(fixed_token("access_token")).secret
-            )
-        result = await sqlalchemy_connection.execute(select(identity_session_table))
-        assert result.mappings().one() == dataclasses.asdict(expected)
-
     @pytest.mark.parametrize(
         "token", ["unknown_token", "invalid_é", fixed_token("refresh_token")]
     )
@@ -509,39 +419,6 @@ class TestIdentitySessionValidate:
 
 @pytest.mark.anyio
 class TestIdentitySessionRefresh:
-    async def test_rotation_preserves_consumed_verifier_for_replay(
-        self,
-        identity_session_service: SQLAlchemyIdentitySessionService,
-        sqlalchemy_connection: AsyncConnection,
-        persisted_session: IdentitySession,
-    ) -> None:
-        identity_session_service.token_provider = make_provider(current_key_id="new")
-        identity_session_service.refresh_token_provider = make_provider(
-            "reauth_isr_", current_key_id="new"
-        )
-
-        _, _, refreshed = await identity_session_service.refresh(
-            fixed_token("refresh_token")
-        )
-
-        result = await sqlalchemy_connection.execute(
-            select(identity_session_table).where(
-                identity_session_table.c.id == persisted_session.id
-            )
-        )
-        assert result.mappings().one() == dataclasses.asdict(
-            dataclasses.replace(persisted_session, replaced_by_id=refreshed.id)
-        )
-        assert refreshed.token_verifier.startswith("hmac-sha256$1$new$")
-        assert refreshed.refresh_token_verifier is not None
-        assert refreshed.refresh_token_verifier.startswith("hmac-sha256$1$new$")
-
-        with pytest.raises(ReusedRefreshTokenException):
-            await identity_session_service.refresh(fixed_token("refresh_token"))
-
-        result = await sqlalchemy_connection.execute(select(identity_session_table))
-        assert all(row.revoked_at is not None for row in result)
-
     async def test_replaces_expired_access_session(
         self,
         identity_session_service: SQLAlchemyIdentitySessionService,

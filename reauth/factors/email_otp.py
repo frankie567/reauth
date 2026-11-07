@@ -201,9 +201,7 @@ class EmailOTPFactor(FactorBase[EmailOTPEnrollment], abc.ABC):
 
         Abstract: Implementation contract
             Persist the supplied OTP and return its ID. Enforce at most one pending
-            OTP per authentication session in this factor's storage scope.
-            Participate in the caller's transaction without committing or rolling
-            it back.
+            OTP per authentication session. Leave commit and rollback to the caller.
         """
         ...
 
@@ -221,11 +219,9 @@ class EmailOTPFactor(FactorBase[EmailOTPEnrollment], abc.ABC):
             The corresponding EmailOTP instance, or None if not found.
 
         Abstract: Implementation contract
-            Match the authentication session ID within this factor's storage scope.
-            Include expired records without validating them. Acquire protection
-            before reading and retain it until the caller's transaction ends,
-            preventing competing mutations of the returned record. Use a consistent
-            lock order and leave commit and rollback to the caller.
+            Match the authentication session ID. Include expired records without
+            validating them. Acquire protection before reading and retain it until
+            the caller's transaction ends. Leave commit and rollback to the caller.
         """
         ...
 
@@ -255,11 +251,9 @@ class EmailOTPFactor(FactorBase[EmailOTPEnrollment], abc.ABC):
             authentication_session_id: The ID of the authentication session to delete OTPs for.
 
         Abstract: Implementation contract
-            Delete all pending OTPs for the supplied authentication session within
-            this factor's storage scope. Acquire protection for that session before
-            deleting, including when no OTP exists, for example by locking a stable
-            parent row. Retain it until the caller's transaction ends to exclude
-            competing creation or consumption. Leave commit and rollback to the
-            caller.
+            Delete all pending OTPs for the supplied authentication session. Acquire
+            protection for that session before deleting, including when no OTP exists,
+            for example by locking a stable parent row. Leave commit and rollback to
+            the caller.
         """
         ...

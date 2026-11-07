@@ -69,13 +69,8 @@ class FactorBase[ENROLLMENT: FactorEnrollment](abc.ABC):
             or None if the factor is not enrolled for the identity.
 
         Abstract: Implementation contract
-            Scope the lookup to the requested identity and this factor, including
-            its provider when applicable. Return current enrollment state protected
-            from competing mutations until the caller's transaction ends, including
-            when the lookup is used only to determine factor availability.
-
-            Acquire protection before reading and retain it after returning. Acquire
-            multiple locks in a consistent order. Do not commit or roll back the
-            caller's transaction. An absent row is not protected by a row lock.
+            Scope the lookup to the requested identity and this factor. Acquire
+            protection before reading and retain it after returning. Leave commit
+            and rollback to the caller.
         """
         ...

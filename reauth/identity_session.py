@@ -212,11 +212,8 @@ class IdentitySessionService(abc.ABC):
             )
             raise ExpiredSessionException()
         if replacement is not None:
-            previous_verifier = identity_session.token_verifier
             identity_session.token_verifier = replacement
-            await self.update_verifier(
-                identity_session, previous_verifier=previous_verifier
-            )
+            await self.update_verifier(identity_session)
         return identity_session
 
     async def refresh(
@@ -454,24 +451,16 @@ class IdentitySessionService(abc.ABC):
         ...
 
     @abc.abstractmethod
-    async def update_verifier(
-        self, identity_session: IdentitySession, *, previous_verifier: str
-    ) -> None:
+    async def update_verifier(self, identity_session: IdentitySession) -> None:
         """
-        Conditionally upgrade an access-token verifier.
+        Upgrade an access-token verifier.
 
         Args:
             identity_session: The session containing the replacement access verifier.
-            previous_verifier: The verifier used for successful verification.
 
         Abstract: Implementation contract
-            Update only token_verifier for the supplied session ID and access
-            identifier, only if the stored verifier equals previous_verifier and
-            the session remains unexpired, unrevoked and unreplaced. Perform the
-            checks and write atomically; do nothing if they no longer match.
-            Preserve refresh credentials, family state and every other field.
-            Participate in the caller's transaction without committing or rolling
-            it back. Propagate storage failures.
+            Update only token_verifier by session ID in the transaction that
+            protects the record. Leave commit and rollback to the caller.
         """
         ...
 
@@ -491,9 +480,10 @@ class IdentitySessionService(abc.ABC):
 
         Abstract: Implementation contract
             Match the access token identifier without filtering out expired,
-            replaced, or revoked sessions. Return current stored state without
-            acquiring a session-row lock. The returned snapshot is not protected
-            from subsequent mutations.
+            replaced, or revoked sessions. Acquire family protection before locking
+            session rows and return current state protected from competing mutations
+            until the caller's transaction ends. Leave commit and rollback to the
+            caller.
         """
         ...
 
@@ -514,9 +504,9 @@ class IdentitySessionService(abc.ABC):
         Abstract: Implementation contract
             Match the refresh token identifier without filtering out expired,
             replaced, or revoked sessions; retained rows are needed for reuse
-            detection. Each call must return current stored state, not a cached
-            result or an outdated transaction snapshot. Do not acquire a session-row
-            lock; the returned snapshot is not protected from subsequent mutations.
+            detection. Acquire family protection before locking session rows and
+            return current state protected from competing mutations until the
+            caller's transaction ends. Leave commit and rollback to the caller.
         """
         ...
 

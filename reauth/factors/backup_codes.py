@@ -199,10 +199,9 @@ class BackupCodesFactor(FactorBase[BackupCodesEnrollment], abc.ABC):
         Insert a backup codes enrollment into a persistent store.
 
         Abstract: Implementation contract
-            Persist the supplied verifiers and return the enrollment ID. Enforce
-            uniqueness for the identity and configured factor, including concurrent
-            first enrollments. Participate in the caller's transaction without
-            committing or rolling it back.
+            Persist the supplied enrollment and return its ID. Enforce uniqueness for
+            the identity and configured factor, including concurrent first enrollments.
+            Leave commit and rollback to the caller.
         """
         ...
 
@@ -213,10 +212,7 @@ class BackupCodesFactor(FactorBase[BackupCodesEnrollment], abc.ABC):
 
         Abstract: Implementation contract
             Persist the supplied enrollment by ID in the transaction that protects
-            the record. Persist verifier replacements in codes and used_codes
-            consistently, preserving whether each code was already used. Do not
-            allow stale writes to discard previously committed consumption. Leave
-            commit and rollback to the caller.
+            the record. Leave commit and rollback to the caller.
         """
         ...
 
@@ -227,7 +223,6 @@ class BackupCodesFactor(FactorBase[BackupCodesEnrollment], abc.ABC):
 
         Abstract: Implementation contract
             Delete the supplied enrollment by ID in the transaction that protects
-            the record. Retain that protection and leave commit and rollback to the
-            caller.
+            the record. Leave commit and rollback to the caller.
         """
         ...

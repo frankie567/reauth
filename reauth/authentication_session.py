@@ -333,10 +333,10 @@ class AuthenticationSessionService(abc.ABC):
             TokenIdentifierCollision: If the identifier already exists in the store.
 
         Abstract: Implementation contract
-            Persist the supplied identifier, verifier and session state, enforce
-            identifier uniqueness and return the record ID. On identifier collision,
-            raise TokenIdentifierCollision without persisting changes and leave the
-            transaction usable for retry. Leave commit and rollback to the caller.
+            Persist the session, enforce identifier uniqueness and return the record
+            ID. On identifier collision, raise TokenIdentifierCollision without
+            persisting changes and leave the transaction usable for retry. Leave
+            commit and rollback to the caller.
         """
         ...
 
@@ -354,13 +354,10 @@ class AuthenticationSessionService(abc.ABC):
             The corresponding AuthenticationSession instance, or None if not found.
 
         Abstract: Implementation contract
-            Match the supplied token identifier and return its verifier and current
-            session state protected from competing mutations until the
-            caller's transaction ends. Acquire protection before reading, for example
-            through a row lock or a transaction that serializes writers. Include
-            expired sessions without validating them. Do not commit, roll back, or
-            release the protection before returning. An absent row is not protected
-            by a row lock.
+            Match the supplied token identifier and return the session protected from
+            competing mutations until the caller's transaction ends. Acquire protection
+            before reading. Include expired sessions without validating them. Leave
+            commit and rollback to the caller.
         """
         ...
 

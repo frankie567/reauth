@@ -329,10 +329,7 @@ class TOTPFactor(FactorBase[TOTPEnrollment], abc.ABC):
         Abstract: Implementation contract
             Scope the lookup to the identity and configured factor. Include disabled
             enrollments. Acquire protection before reading and retain it until the
-            caller's transaction ends, protecting last_verified_time_step and enabled
-            state from competing mutations. Do not commit or roll back. Acquire
-            multiple locks in a consistent order. An absent row is not protected by
-            a row lock.
+            caller's transaction ends. Leave commit and rollback to the caller.
         """
         ...
 
@@ -344,8 +341,7 @@ class TOTPFactor(FactorBase[TOTPEnrollment], abc.ABC):
         Abstract: Implementation contract
             Persist the supplied enrollment and return its record ID. Enforce
             uniqueness for the identity and configured factor, including concurrent
-            first enrollments. Participate in the caller's transaction without
-            committing or rolling it back.
+            first enrollments. Leave commit and rollback to the caller.
         """
         ...
 
@@ -355,10 +351,8 @@ class TOTPFactor(FactorBase[TOTPEnrollment], abc.ABC):
         Update a TOTP factor in the persistent store.
 
         Abstract: Implementation contract
-            Persist the supplied enrollment by ID, including enabled and
-            last_verified_time_step, in the transaction that protected the lookup.
-            Do not allow a stale write to undo replay protection or a concurrent
-            enrollment change. Leave commit and rollback to the caller.
+            Persist the supplied enrollment by ID, in the transaction that protected
+            the lookup. Leave commit and rollback to the caller.
         """
         ...
 

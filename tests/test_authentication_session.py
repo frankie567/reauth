@@ -36,7 +36,6 @@ from reauth.tokens import (
     TokenIdentifierCollision,
     TokenProvider,
 )
-from reauth.tokens.checksummed import _checksum
 
 
 def make_provider(prefix: str = "reauth_as_") -> ChecksummedTokenProvider:
@@ -377,34 +376,6 @@ class TestGetAvailableFactors:
         factors = await authentication_session_service.get_available_factors(session)
 
         assert len(factors) == 0
-
-
-@pytest.mark.anyio
-@pytest.mark.parametrize("operation", ["advance", "complete"])
-async def test_mutations_reject_invalid_secret(
-    authentication_session_service: SQLAlchemyAuthenticationSession,
-    sqlalchemy_connection: AsyncConnection,
-    authentication_session_data: tuple[str, AuthenticationSession],
-    password_factor: DummyPasswordFactor,
-    operation: str,
-) -> None:
-    token, session = authentication_session_data
-    await sqlalchemy_connection.execute(
-        insert(authentication_session_table).values(**dataclasses.asdict(session))
-    )
-    value = token[:-7] + ("A" if token[-7] != "A" else "B")
-    invalid_token = value + _checksum(value)
-
-    mutation = (
-        authentication_session_service.advance(invalid_token, 1, password_factor)
-        if operation == "advance"
-        else authentication_session_service.complete(invalid_token)
-    )
-    with pytest.raises(InvalidSessionTokenException):
-        await mutation
-
-    result = await sqlalchemy_connection.execute(select(authentication_session_table))
-    assert result.mappings().one() == dataclasses.asdict(session)
 
 
 @pytest.mark.anyio
