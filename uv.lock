@@ -291,18 +291,6 @@ wheels = [
 ]
 
 [[package]]
-name = "hatch-regex-commit"
-version = "0.0.4"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "hatchling" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/e8/0a/a3f18ecffc9629fca96ca58e4d764a6ef2c07f5f536e35eb0ceb36728c7d/hatch_regex_commit-0.0.4.tar.gz", hash = "sha256:ccf5c0ddc9040233328a16cf727700406485f22a5307683cce0ac82e24e44689", size = 6194, upload-time = "2025-09-29T12:03:45.51Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/3c/01/a6639792060d304d9485d4ba584c42de0ea3e02fa92ade43bb1baa60ab38/hatch_regex_commit-0.0.4-py3-none-any.whl", hash = "sha256:3094a7ddf7e4dbdf9a3cbaeadeacfb187b2bf29ee232602c8fd735ceee90bbe5", size = 6706, upload-time = "2025-09-29T12:03:46.562Z" },
-]
-
-[[package]]
 name = "hatchling"
 version = "1.32.3"
 source = { registry = "https://pypi.org/simple" }
@@ -383,6 +371,15 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/df/bf/f7da0350254c0ed7c72f3e33cef02e048281fec7ecec5f032d4aac52226b/jinja2-3.1.6.tar.gz", hash = "sha256:0137fb05990d35f1275a587e9aee6d56da821fc83491a0fb838183be43f66d6d", size = 245115, upload-time = "2025-03-05T20:05:02.478Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/62/a1/3d680cbfd5f4b8f15abc1d571870c5fc3e594bb582bc3b64ea099db13e56/jinja2-3.1.6-py3-none-any.whl", hash = "sha256:85ece4451f492d0c13c5dd7c13a64681a86afae63a5f347908daf103ce6d2f67", size = 134899, upload-time = "2025-03-05T20:05:00.369Z" },
+]
+
+[[package]]
+name = "keepachangelog"
+version = "2.0.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/fa/2e/951923e56c149b6772dbffee0dcac00738405d7d7a0fdd30537047cf6727/keepachangelog-2.0.0.tar.gz", hash = "sha256:6839f0646690ae514aca6dedbc7b8aa652c56db3be43081a1940c55c1c807709", size = 24488, upload-time = "2024-06-14T12:56:28.442Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/23/06/b4f06ca7afb5d9e942c642980c308ffcfa1fa0e8b0a3ddbec78483ef1614/keepachangelog-2.0.0-py3-none-any.whl", hash = "sha256:0b2259fd73b55f2b99e61035ff83f3d86d0f2764841a7e2de86e31e675e42fee", size = 13349, upload-time = "2024-06-14T12:56:26.884Z" },
 ]
 
 [[package]]
@@ -722,8 +719,8 @@ dependencies = [
 [package.dev-dependencies]
 dev = [
     { name = "aiosqlite" },
-    { name = "hatch-regex-commit" },
     { name = "hatchling" },
+    { name = "keepachangelog" },
     { name = "mkdocstrings-python" },
     { name = "pre-commit" },
     { name = "pytest" },
@@ -745,8 +742,8 @@ requires-dist = [
 [package.metadata.requires-dev]
 dev = [
     { name = "aiosqlite", specifier = ">=0.22.1" },
-    { name = "hatch-regex-commit", specifier = ">=0.0.4" },
     { name = "hatchling", specifier = ">=1.32.3" },
+    { name = "keepachangelog", specifier = ">=2.0.0" },
     { name = "mkdocstrings-python", specifier = ">=2.0.8" },
     { name = "pre-commit", specifier = ">=4.6.2" },
     { name = "pytest" },
