@@ -226,6 +226,10 @@ class IdentitySessionService(abc.ABC):
         AMR, context, family, and absolute deadline, even if access has expired.
         Reuse of a consumed refresh token revokes its whole family.
 
+        Commit the caller's transaction before exposing the replacement tokens.
+        Catch ReusedRefreshTokenException inside the transaction and commit the
+        family revocation before reporting the authentication failure.
+
         Args:
             token: The refresh token to consume.
             refresh_token: Whether to issue another refresh token. Defaults to True.
@@ -241,7 +245,8 @@ class IdentitySessionService(abc.ABC):
                 revoked, or otherwise no longer refreshable.
             ExpiredRefreshTokenException: If the absolute deadline has passed.
             ReusedRefreshTokenException: If the token was already consumed.
-                Family revocation is persisted before this exception is raised.
+                Family revocation is pending in the caller's transaction and must
+                be committed despite this exception.
             TokenGenerationException: If credential generation repeatedly collides.
         """  # noqa: DOC502
         logger.debug("Identity session refresh attempted")
@@ -277,6 +282,7 @@ class IdentitySessionService(abc.ABC):
 
         Expired and replaced tokens can still identify a family. Unknown,
         malformed, and already-revoked tokens succeed without error.
+        Commit the caller's transaction before reporting successful revocation.
 
         Args:
             token: An access token or refresh token from the family to revoke.
@@ -392,6 +398,7 @@ class IdentitySessionService(abc.ABC):
             InvalidRefreshTokenException: If the token is unknown, disabled, or revoked.
             ExpiredRefreshTokenException: If the absolute deadline has passed.
             ReusedRefreshTokenException: If the token was consumed previously.
+                Family revocation is pending in the caller's transaction.
         """
         try:
             parts = self.refresh_token_provider.parse(token)
@@ -523,7 +530,7 @@ class IdentitySessionService(abc.ABC):
 
         Returns:
             The replacement ID, or None with no changes if the previous session
-            is no longer eligible. Propagate storage failures after rollback.
+            is no longer eligible.
 
         Raises:
             TokenIdentifierCollision: If the new session's access or refresh
@@ -539,11 +546,12 @@ class IdentitySessionService(abc.ABC):
             snapshot, not proof of eligibility.
 
             Insert new_session with the same family ID and set the previous row's
-            replaced_by_id to the new ID in one transaction. Commit both changes
-            before returning; roll back both on failure. Return None without changes
-            if the previous session is no longer eligible. On identifier collision,
-            raise TokenIdentifierCollision without persisting changes and leave the
-            transaction usable for retry.
+            replaced_by_id to the new ID atomically in the caller's transaction.
+            Retain family and session protection until the transaction ends.
+            Leave commit and rollback to the caller. Return None without changes
+            if the previous session is no longer eligible. Propagate storage
+            failures. On identifier collision, raise TokenIdentifierCollision without
+            persisting changes and leave the transaction usable for retry.
         """
         ...
 
@@ -562,7 +570,10 @@ class IdentitySessionService(abc.ABC):
             for example by locking its retained initial session row before any child
             rows.
 
-            Commit before returning so a caller's subsequent exception cannot undo
-            revocation. Missing or already-revoked families succeed without error.
+            Apply revocation in the caller's transaction and retain family and
+            session protection until the transaction ends. Leave commit and rollback
+            to the caller. Revocation becomes durable on commit; a rollback restores
+            the previous state. Missing or already-revoked families succeed without
+            error.
         """
         ...
