@@ -86,12 +86,7 @@ class OTPEnrollmentMixin[ENROLLMENT: HOTPEnrollment | TOTPEnrollment](Transactio
                 .with_for_update()
             )
             if existing_id is not None:
-                raise EnrollmentAlreadyExistsException(
-                    error.statement,
-                    error.params,
-                    error.orig if error.orig is not None else error,
-                    hide_parameters=error.hide_parameters,
-                ) from error
+                raise EnrollmentAlreadyExistsException() from error
             raise
 
     async def _update_enrollment(self, enrollment: ENROLLMENT) -> None:

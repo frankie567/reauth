@@ -6,11 +6,11 @@ from collections.abc import AsyncGenerator
 import anyio
 import pytest
 import sqlalchemy
-import sqlalchemy.exc
 from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine
 
 from reauth.factors.hotp import HOTPEnrollment, InvalidHOTPCodeException
 from reauth.integrations.sqlalchemy import (
+    EnrollmentAlreadyExistsException,
     MissingTransactionException,
     SQLAlchemyHOTPFactor,
     create_hotp_enrollment_table,
@@ -229,7 +229,7 @@ class TestSQLAlchemyHOTP:
                 sqlalchemy.insert(table).values(**dataclasses.asdict(enrollment))
             )
         async with sqlalchemy_integration_engine.connect() as connection:
-            with pytest.raises(sqlalchemy.exc.IntegrityError):
+            with pytest.raises(EnrollmentAlreadyExistsException):
                 async with connection.begin():
                     await make_factor(connection, table).insert(
                         dataclasses.replace(enrollment, id=None)
