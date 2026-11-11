@@ -450,6 +450,9 @@ class IdentitySessionService(abc.ABC):
         Abstract: Implementation contract
             If family_id is None, set the stored family_id to the generated record ID
             in the same transaction. Preserve an explicitly supplied family ID.
+            For a new member of an existing family, acquire family protection
+            before insertion and reject a missing or revoked family root. Retain
+            that protection until the transaction ends.
             Enforce uniqueness of token identifiers (and non-null refresh identifiers).
             Return the inserted ID and leave transaction commit and rollback to the
             caller. On identifier collision, raise TokenIdentifierCollision without
@@ -483,7 +486,7 @@ class IdentitySessionService(abc.ABC):
 
         Returns:
             The stored session, including expired, replaced, or revoked rows,
-            or None if not found.
+            or None if the session or its family root is missing.
 
         Abstract: Implementation contract
             Match the access token identifier without filtering out expired,
@@ -506,7 +509,7 @@ class IdentitySessionService(abc.ABC):
 
         Returns:
             The stored session, including expired, replaced, or revoked rows,
-            or None if not found.
+            or None if the session or its family root is missing.
 
         Abstract: Implementation contract
             Match the refresh token identifier without filtering out expired,
