@@ -1,0 +1,27 @@
+reauth/identity_session.py
+  s_db3501e07aac70::t_f474832607ef89 453-455,489,512
+reauth/integrations/sqlalchemy/__init__.py
+  s_db3501e07aac70::t_4ca95069603ec6 24-28,49,59,69
+reauth/integrations/sqlalchemy/identity_session.py
+  s_db3501e07aac70::t_89ea433ab5acd1 1-323
+tests/integrations/sqlalchemy/test_identity_session.py
+  s_db3501e07aac70::t_e203613f5c9bf4 1-908
+tests/test_identity_session.py
+  s_db3501e07aac70::t_ec2ddf26063f32 23-26,57,60-63,68,70,82,91-92,130-136,225,252,274,286-288,299,309,325,388,419,430,441,507,535
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "1431f93fbf4cc2938b3d702c569754a53fda6275",
+  "prompts": {},
+  "sessions": {
+    "s_db3501e07aac70": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1c9cb-c6fb-7af1-9b2b-1e83254d278d",
+        "model": "unknown"
+      },
+      "human_author": "François Voron <me@fvoron.com>"
+    }
+  }
+}
