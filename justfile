@@ -56,7 +56,7 @@ test-cov-xml:
     uv run pytest --cov-report=xml
 
 ai-review base:
-    cubic review -j -b {{quote(base)}}
+    cubic review --output-format stream-json -b {{quote(base)}}
 
 docs-serve:
     uv run zensical serve
