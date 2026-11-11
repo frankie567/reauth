@@ -36,13 +36,16 @@ def create_oauth2_enrollment_table(
     Returns:
         The table registered in the supplied metadata. Applications own migrations.
     """
+    identifier_type = sqlalchemy.String(255).with_variant(
+        sqlalchemy.String(255, collation="utf8mb4_0900_bin"), "mysql"
+    )
     return sqlalchemy.Table(
         name,
         metadata,
         sqlalchemy.Column("id", id_type, primary_key=True),
         sqlalchemy.Column("identity_id", identity_id_type, nullable=False),
-        sqlalchemy.Column("provider", sqlalchemy.String(255), nullable=False),
-        sqlalchemy.Column("account_id", sqlalchemy.String(255), nullable=False),
+        sqlalchemy.Column("provider", identifier_type, nullable=False),
+        sqlalchemy.Column("account_id", identifier_type, nullable=False),
         sqlalchemy.Column("access_token", sqlalchemy.Text, nullable=False),
         sqlalchemy.Column("expires_at", sqlalchemy.BigInteger, nullable=True),
         sqlalchemy.Column("refresh_token", sqlalchemy.Text, nullable=True),
@@ -80,8 +83,9 @@ class SQLAlchemyOAuth2Mixin(TransactionMixin):
                 autocommit. Keep the transaction open throughout each operation.
             table: A table containing the OAuth2Enrollment fields, with a primary
                 key on id and non-deferrable unique constraints on
-                (identity_id, provider) and (provider, account_id). Provider
-                credentials are stored as plaintext.
+                (identity_id, provider) and (provider, account_id). Provider and
+                account_id must compare exactly, including case and trailing spaces.
+                Provider credentials are stored as plaintext.
             **kwargs: Constructor arguments forwarded to the composed factor.
 
         Raises:

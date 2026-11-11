@@ -251,6 +251,67 @@ class TestSQLAlchemyOAuth2:
             )
 
     @pytest.mark.parametrize(
+        "field,first_value,second_value",
+        [
+            ("account_id", "User123", "user123"),
+            ("account_id", "subject", "subject "),
+            ("provider", "Provider", "provider"),
+            ("provider", "provider", "provider "),
+        ],
+    )
+    async def test_identifier_comparisons_are_exact(
+        self,
+        sqlalchemy_integration_engine: AsyncEngine,
+        table: sqlalchemy.Table,
+        enrollment: OAuth2Enrollment,
+        field: str,
+        first_value: str,
+        second_value: str,
+    ) -> None:
+        first = dataclasses.replace(enrollment, id=42, **{field: first_value})
+        second = dataclasses.replace(
+            enrollment,
+            id=43,
+            identity_id=2 if field == "account_id" else 1,
+            **{field: second_value},
+        )
+        async with sqlalchemy_integration_engine.begin() as connection:
+            await connection.execute(
+                sqlalchemy.insert(table).values(**dataclasses.asdict(first))
+            )
+        async with sqlalchemy_integration_engine.begin() as connection:
+            factor = make_factor(connection, table)
+            assert (
+                await factor.get_enrollment_by_provider_and_account(
+                    second.provider, second.account_id
+                )
+                is None
+            )
+            if field == "provider":
+                assert (
+                    await make_factor(
+                        connection, table, identifier=second.provider
+                    ).get_enrollment(1)
+                    is None
+                )
+            await connection.execute(
+                sqlalchemy.insert(table).values(**dataclasses.asdict(second))
+            )
+            for expected in (first, second):
+                assert (
+                    await factor.get_enrollment_by_provider_and_account(
+                        expected.provider, expected.account_id
+                    )
+                    == expected
+                )
+                assert (
+                    await make_factor(
+                        connection, table, identifier=expected.provider
+                    ).get_enrollment(expected.identity_id)
+                    == expected
+                )
+
+    @pytest.mark.parametrize(
         "identity_id,account_id", [(1, "different"), (2, "account"), (1, "account")]
     )
     async def test_enrollment_uniqueness(
