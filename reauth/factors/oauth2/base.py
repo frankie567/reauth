@@ -658,11 +658,18 @@ class OAuth2Factor[EXTRA](FactorBase[OAuth2Enrollment], abc.ABC):
         Returns:
             The ID of the inserted OAuth2Enrollment.
 
+        Raises:
+            EnrollmentCollision: If an enrollment for the provider and account ID
+                already exists within the application's storage scope.
+
         Abstract: Implementation contract
             Persist the supplied enrollment and return its ID. Enforce uniqueness of
             (provider, account_id) within the application's storage scope, so
             concurrent callbacks or signup flows cannot associate the same external
-            account with different identities. Leave commit and rollback to the caller.
+            account with different identities. On an integrity error caused by a
+            duplicate (provider, account_id), raise EnrollmentCollision without
+            persisting the conflicting enrollment and leave the transaction usable.
+            Propagate unrelated integrity errors. Leave commit and rollback to the caller.
         """
         ...
 

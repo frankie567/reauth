@@ -7,10 +7,10 @@ import sqlalchemy
 import sqlalchemy.exc
 import sqlalchemy.ext.asyncio
 
+from reauth.factors import EnrollmentCollision
 from reauth.factors.hotp import HOTPEnrollment
 from reauth.factors.totp import TOTPEnrollment
 from reauth.integrations.sqlalchemy.exceptions import (
-    EnrollmentAlreadyExistsException,
     MissingTransactionException,
 )
 
@@ -63,7 +63,7 @@ class OTPEnrollmentMixin[ENROLLMENT: HOTPEnrollment | TOTPEnrollment](Transactio
             The inserted record ID.
 
         Raises:
-            EnrollmentAlreadyExistsException: If this identity already has an
+            EnrollmentCollision: If this identity already has an
                 enrollment. The caller's transaction remains usable.
             sqlalchemy.exc.IntegrityError: If another integrity constraint fails.
         """
@@ -86,7 +86,7 @@ class OTPEnrollmentMixin[ENROLLMENT: HOTPEnrollment | TOTPEnrollment](Transactio
                 .with_for_update()
             )
             if existing_id is not None:
-                raise EnrollmentAlreadyExistsException() from error
+                raise EnrollmentCollision() from error
             raise
 
     async def _update_enrollment(self, enrollment: ENROLLMENT) -> None:

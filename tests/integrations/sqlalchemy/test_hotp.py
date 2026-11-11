@@ -8,9 +8,9 @@ import pytest
 import sqlalchemy
 from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine
 
+from reauth.factors import EnrollmentCollision
 from reauth.factors.hotp import HOTPEnrollment, InvalidHOTPCodeException
 from reauth.integrations.sqlalchemy import (
-    EnrollmentAlreadyExistsException,
     MissingTransactionException,
     SQLAlchemyHOTPFactor,
     create_hotp_enrollment_table,
@@ -229,7 +229,7 @@ class TestSQLAlchemyHOTP:
                 sqlalchemy.insert(table).values(**dataclasses.asdict(enrollment))
             )
         async with sqlalchemy_integration_engine.connect() as connection:
-            with pytest.raises(EnrollmentAlreadyExistsException):
+            with pytest.raises(EnrollmentCollision):
                 async with connection.begin():
                     await make_factor(connection, table).insert(
                         dataclasses.replace(enrollment, id=None)
