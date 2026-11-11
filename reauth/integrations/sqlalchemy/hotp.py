@@ -1,13 +1,12 @@
 """HOTP enrollment storage using SQLAlchemy Core."""
 
-import dataclasses
 import typing
 
 import sqlalchemy
 import sqlalchemy.ext.asyncio
 
 from reauth.factors.hotp import HOTPAlgorithm, HOTPEnrollment, HOTPFactor
-from reauth.integrations.sqlalchemy.mixins import TransactionMixin
+from reauth.integrations.sqlalchemy.mixins import OTPEnrollmentMixin
 
 
 def create_hotp_enrollment_table(
@@ -44,8 +43,10 @@ def create_hotp_enrollment_table(
     )
 
 
-class SQLAlchemyHOTPFactor(TransactionMixin, HOTPFactor):
+class SQLAlchemyHOTPFactor(OTPEnrollmentMixin[HOTPEnrollment], HOTPFactor):
     """Store HOTP enrollments within a caller-owned SQLAlchemy transaction."""
+
+    enrollment_type = HOTPEnrollment
 
     def __init__(
         self,
@@ -90,64 +91,11 @@ class SQLAlchemyHOTPFactor(TransactionMixin, HOTPFactor):
             advance_by=advance_by,
         )
 
-    async def get_by_identity_id(
-        self, identity_id: typing.Any
-    ) -> HOTPEnrollment | None:
-        """
-        Read an enrollment, including disabled ones, under a transaction-long lock.
-
-        Args:
-            identity_id: The identity whose enrollment to retrieve.
-
-        Returns:
-            The stored enrollment, or None if it does not exist.
-        """
-        self._require_transaction()
-        result = await self.connection.execute(
-            sqlalchemy.select(
-                *(
-                    self.table.c[field.name]
-                    for field in dataclasses.fields(HOTPEnrollment)
-                )
-            )
-            .where(self.table.c.identity_id == identity_id)
-            .with_for_update()
-        )
-        row = result.mappings().one_or_none()
-        return HOTPEnrollment(**row) if row is not None else None
-
     async def insert(self, hotp: HOTPEnrollment) -> typing.Any:
-        """
-        Insert an enrollment without committing the caller's transaction.
-
-        Returns:
-            The inserted record ID.
-        """
-        self._require_transaction()
-        values = dataclasses.asdict(hotp)
-        if hotp.id is None:
-            del values["id"]
-        result = await self.connection.execute(
-            sqlalchemy.insert(self.table).values(**values)
-        )
-        primary_key = result.inserted_primary_key
-        assert primary_key is not None
-        return primary_key[0]
+        return await self._insert_enrollment(hotp)
 
     async def update(self, hotp: HOTPEnrollment) -> None:
-        """Update a previously protected enrollment without committing."""
-        self._require_transaction()
-        values = dataclasses.asdict(hotp)
-        del values["id"]
-        await self.connection.execute(
-            sqlalchemy.update(self.table)
-            .where(self.table.c.id == hotp.id)
-            .values(**values)
-        )
+        await self._update_enrollment(hotp)
 
     async def delete(self, hotp: HOTPEnrollment) -> None:
-        """Delete a previously protected enrollment without committing."""
-        self._require_transaction()
-        await self.connection.execute(
-            sqlalchemy.delete(self.table).where(self.table.c.id == hotp.id)
-        )
+        await self._delete_enrollment(hotp)

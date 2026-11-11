@@ -5,6 +5,7 @@ from reauth.integrations.sqlalchemy.authentication_session import (
     create_authentication_session_table,
 )
 from reauth.integrations.sqlalchemy.exceptions import (
+    EnrollmentAlreadyExistsException,
     MissingTransactionException,
     ReauthSQLAlchemyException,
 )
@@ -18,6 +19,7 @@ from reauth.integrations.sqlalchemy.totp import (
 )
 
 __all__ = [
+    "EnrollmentAlreadyExistsException",
     "MissingTransactionException",
     "ReauthSQLAlchemyException",
     "SQLAlchemyAuthenticationSessionService",
