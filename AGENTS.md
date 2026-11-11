@@ -35,6 +35,19 @@ The project uses `uv` for environment and dependency management. To run Python c
 uv run python <your_command_here>
 ```
 
+### AI Review
+
+Before opening a pull request, run the AI review to check for potential issues and improvements. Use the following command:
+
+```bash
+just ai-review
+```
+
+It can take a few minutes to complete. Once you get results, review the suggestions:
+
+- If the suggestion is invalid or concerns an agreed-upon design decision, you can ignore it.
+- If the suggestion is valid, report it to the user before making any change.
+
 ## Logging
 
 The library has a built-in OWASP-compliant logging infrastructure. Use it for security-relevant events.
