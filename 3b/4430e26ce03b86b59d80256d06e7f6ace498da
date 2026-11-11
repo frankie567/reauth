@@ -1,0 +1,33 @@
+reauth/factors/oauth2/base.py
+  s_db3501e07aac70::t_22b97ea2057937 663-664
+reauth/integrations/sqlalchemy/__init__.py
+  s_db3501e07aac70::t_ef8b71f13de2a6 24-36,46,50-51,53-56,62-63
+reauth/integrations/sqlalchemy/oauth2.py
+  s_db3501e07aac70::t_422da3283ecf64 1-6,7-8,9-150,151-155,162-317
+reauth/integrations/sqlalchemy/oauth2_state.py
+  s_db3501e07aac70::t_4bda540b9b434f 1-144
+tests/factors/oauth2/conftest.py
+  s_db3501e07aac70::t_868c146edf4cfe 5,8-11,13,16-17,22,25,38-42
+tests/factors/oauth2/test_base.py
+  s_db3501e07aac70::t_99db77bb243091 4,20,25,37-38,244,254-256,281,291-293,331,341-343
+tests/integrations/sqlalchemy/test_oauth2.py
+  s_db3501e07aac70::t_2f84ca0772f9e2 1-10,11-255,257-269,273-276,277-398
+tests/integrations/sqlalchemy/test_oauth2_state.py
+  s_db3501e07aac70::t_fe3b968de35d2a 1-295
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "3b4430e26ce03b86b59d80256d06e7f6ace498da",
+  "prompts": {},
+  "sessions": {
+    "s_db3501e07aac70": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1c9cb-c6fb-7af1-9b2b-1e83254d278d",
+        "model": "unknown"
+      },
+      "human_author": "François Voron <me@fvoron.com>"
+    }
+  }
+}

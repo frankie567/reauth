@@ -1,0 +1,14 @@
+justfile
+  h_868de2c7aaf22e 59
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "b84ff93055faf104e9dfc165c222a914769b4ab6",
+  "prompts": {},
+  "humans": {
+    "h_868de2c7aaf22e": {
+      "author": "François Voron <me@fvoron.com>"
+    }
+  }
+}
