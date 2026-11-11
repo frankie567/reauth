@@ -1,0 +1,37 @@
+AGENTS.md
+  s_db3501e07aac70::t_8a5a090200ef37 174-175
+reauth/factors/__init__.py
+  s_db3501e07aac70::t_aea0bba165e295 1,3
+reauth/factors/backup_codes.py
+  s_db3501e07aac70::t_367728779b98f8 203
+reauth/factors/hotp.py
+  s_db3501e07aac70::t_bed2d9cc46cf03 15,170,327-328
+reauth/factors/oauth2/base.py
+  s_db3501e07aac70::t_6a92a034c6db55 663-664
+reauth/factors/totp.py
+  s_db3501e07aac70::t_650a59d88c6d54 16,184,343-344
+reauth/integrations/sqlalchemy/mixins.py
+  s_db3501e07aac70::t_463ca751ec15f9 70-75
+tests/integrations/sqlalchemy/test_backup_codes.py
+  s_db3501e07aac70::t_cde0d5e39a61fe 235-239
+tests/integrations/sqlalchemy/test_hotp.py
+  s_db3501e07aac70::t_b6208de134c2d6 9,232
+tests/integrations/sqlalchemy/test_totp.py
+  s_db3501e07aac70::t_93124d79b67d8c 10,233
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "a2c2c316eed0bd5dcef91bab04200e1202db1fd0",
+  "prompts": {},
+  "sessions": {
+    "s_db3501e07aac70": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1c9cb-c6fb-7af1-9b2b-1e83254d278d",
+        "model": "unknown"
+      },
+      "human_author": "François Voron <me@fvoron.com>"
+    }
+  }
+}
