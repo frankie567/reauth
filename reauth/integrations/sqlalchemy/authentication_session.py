@@ -14,7 +14,7 @@ from reauth.authentication_session import (
     AuthenticationSessionService,
 )
 from reauth.factors import FactorBase
-from reauth.integrations.sqlalchemy.exceptions import MissingTransactionException
+from reauth.integrations.sqlalchemy.mixins import TransactionMixin
 from reauth.tokens import TokenIdentifierCollision, TokenProvider
 
 
@@ -56,7 +56,9 @@ def create_authentication_session_table(
     )
 
 
-class SQLAlchemyAuthenticationSessionService(AuthenticationSessionService):
+class SQLAlchemyAuthenticationSessionService(
+    TransactionMixin, AuthenticationSessionService
+):
     """Store authentication sessions within a caller-owned SQLAlchemy transaction."""
 
     def __init__(
@@ -82,10 +84,9 @@ class SQLAlchemyAuthenticationSessionService(AuthenticationSessionService):
 
         Raises:
             MissingTransactionException: If the connection has no active transaction.
-        """
-        if not connection.in_transaction():
-            raise MissingTransactionException()
+        """  # noqa: DOC502
         self.connection = connection
+        self._require_transaction()
         self.table = table
         super().__init__(
             token_provider=token_provider, factors=factors, lifetime=lifetime
@@ -181,7 +182,3 @@ class SQLAlchemyAuthenticationSessionService(AuthenticationSessionService):
                 self.table.c.id == authentication_session.id
             )
         )
-
-    def _require_transaction(self) -> None:
-        if not self.connection.in_transaction():
-            raise MissingTransactionException()

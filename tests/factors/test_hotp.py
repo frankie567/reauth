@@ -3,92 +3,39 @@ import dataclasses
 import secrets
 import typing
 from collections.abc import AsyncGenerator
+from unittest.mock import AsyncMock
 
 import pytest
 from sqlalchemy import (
-    Column,
-    Integer,
     MetaData,
-    String,
-    Table,
     insert,
-    select,
 )
 from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine
-from sqlalchemy.sql.expression import update
 
+from reauth.factors import EnrollmentCollision
 from reauth.factors.hotp import (
     AlreadyEnabledHOTPException,
     AlreadyEnrolledHOTPException,
     HOTPEnrollment,
-    HOTPFactor,
     InvalidHOTPCodeException,
     NotEnabledHOTPException,
     NotEnrolledHOTPException,
 )
-
-sqlalchemy_meta = MetaData()
-hotp_table = Table(
-    "hotps",
-    sqlalchemy_meta,
-    Column("id", Integer, primary_key=True),
-    Column("identity_id", Integer, nullable=False),
-    Column("enabled", Integer, nullable=False, default=0),
-    Column("secret", String(32), nullable=False),
-    Column("algorithm", String(4), nullable=False),
-    Column("code_length", Integer, nullable=False),
-    Column("counter", Integer, nullable=False),
-    sqlite_autoincrement=True,
+from reauth.integrations.sqlalchemy import (
+    SQLAlchemyHOTPFactor,
+    create_hotp_enrollment_table,
 )
 
-
-class SQLAlchemyHOTPFactor(HOTPFactor):
-    """Concrete implementation of HOTPFactor using SQLAlchemy."""
-
-    def __init__(self, connection: AsyncConnection) -> None:
-        self.connection = connection
-        super().__init__()
-
-    async def get_by_identity_id(self, identity_id: int) -> HOTPEnrollment | None:
-        """Retrieve the HOTP enrollment for a given identity, regardless of enabled state."""
-        result = await self.connection.execute(
-            select(hotp_table).where(hotp_table.c.identity_id == identity_id)
-        )
-        row = result.fetchone()
-        if row is None:
-            return None
-        return HOTPEnrollment(**row._asdict())
-
-    async def insert(self, hotp: HOTPEnrollment) -> int:
-        """Insert an HOTP into the database."""
-        result = await self.connection.execute(
-            insert(hotp_table)
-            .values(**dataclasses.asdict(hotp))
-            .returning(hotp_table.c.id)
-        )
-        return result.scalar_one()
-
-    async def update(self, hotp: HOTPEnrollment) -> None:
-        """Update an existing HOTP in the database."""
-        await self.connection.execute(
-            update(hotp_table)
-            .where(hotp_table.c.id == hotp.id)
-            .values(**dataclasses.asdict(hotp))
-        )
-
-    async def delete(self, hotp: HOTPEnrollment) -> None:
-        """Delete an HOTP from the database."""
-        await self.connection.execute(
-            hotp_table.delete().where(hotp_table.c.id == hotp.id)
-        )
+sqlalchemy_meta = MetaData()
+hotp_table = create_hotp_enrollment_table(sqlalchemy_meta)
 
 
 @pytest.fixture
 async def sqlalchemy_connection(
-    sqlalchemy_engine: AsyncEngine,
+    sqlalchemy_integration_engine: AsyncEngine,
 ) -> AsyncGenerator[AsyncConnection]:
     """Fixture that creates tables and provides a connection for testing."""
-    async with sqlalchemy_engine.begin() as conn:
+    async with sqlalchemy_integration_engine.begin() as conn:
         await conn.run_sync(sqlalchemy_meta.create_all)
         yield conn
         await conn.run_sync(sqlalchemy_meta.drop_all)
@@ -99,7 +46,7 @@ def hotp_factor(
     sqlalchemy_connection: AsyncConnection,
 ) -> SQLAlchemyHOTPFactor:
     """Fixture that provides an instance of SQLAlchemyHOTPFactor."""
-    return SQLAlchemyHOTPFactor(connection=sqlalchemy_connection)
+    return SQLAlchemyHOTPFactor(connection=sqlalchemy_connection, table=hotp_table)
 
 
 class MakeHOTPCallable(typing.Protocol):
@@ -127,7 +74,14 @@ def make_hotp(
             code_length=6,
             counter=counter,
         )
-        hotp.id = await hotp_factor.insert(hotp)
+        values = dataclasses.asdict(hotp)
+        del values["id"]
+        result = await hotp_factor.connection.execute(
+            insert(hotp_table).values(**values)
+        )
+        primary_key = result.inserted_primary_key
+        assert primary_key is not None
+        hotp.id = primary_key[0]
         return hotp
 
     return _make_hotp
@@ -188,6 +142,17 @@ class TestHOTPEnroll:
 
         with pytest.raises(AlreadyEnrolledHOTPException):
             await hotp_factor.enroll(identity_id)
+
+    async def test_enroll_translates_collision(
+        self, hotp_factor: SQLAlchemyHOTPFactor, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        collision = EnrollmentCollision()
+        monkeypatch.setattr(hotp_factor, "insert", AsyncMock(side_effect=collision))
+
+        with pytest.raises(AlreadyEnrolledHOTPException) as error:
+            await hotp_factor.enroll(123)
+
+        assert error.value.__cause__ is collision
 
     async def test_enroll_replaces_disabled(
         self, hotp_factor: SQLAlchemyHOTPFactor, make_hotp: MakeHOTPCallable

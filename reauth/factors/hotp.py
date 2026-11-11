@@ -12,7 +12,7 @@ from cryptography.hazmat.primitives.twofactor.hotp import HOTP as CryptoHOTP
 
 from reauth.amr import AuthenticationMethodReference
 from reauth.exceptions import ReauthException
-from reauth.factors.base import FactorBase
+from reauth.factors.base import EnrollmentCollision, FactorBase
 from reauth.logging import get_logger
 
 logger = get_logger(__name__)
@@ -167,7 +167,10 @@ class HOTPFactor(FactorBase[HOTPEnrollment], abc.ABC):
             counter=0,
             identity_id=identity_id,
         )
-        hotp.id = await self.insert(hotp)
+        try:
+            hotp.id = await self.insert(hotp)
+        except EnrollmentCollision as error:
+            raise AlreadyEnrolledHOTPException() from error
         logger.info(
             "HOTP enrollment created",
             extra={
@@ -322,10 +325,17 @@ class HOTPFactor(FactorBase[HOTPEnrollment], abc.ABC):
         Returns:
             The ID of the inserted HOTP factor.
 
+        Raises:
+            EnrollmentCollision: If an enrollment for the identity and configured
+                factor already exists.
+
         Abstract: Implementation contract
             Persist the supplied enrollment and return its record ID. Enforce
             uniqueness for the identity and configured factor, including concurrent
-            first enrollments. Leave commit and rollback to the caller.
+            first enrollments. On an integrity error caused by a duplicate identity
+            and configured factor, raise EnrollmentCollision without persisting the
+            conflicting enrollment and leave the transaction usable. Propagate
+            unrelated integrity errors. Leave commit and rollback to the caller.
         """
         ...
 

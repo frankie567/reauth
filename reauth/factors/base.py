@@ -2,11 +2,16 @@ import abc
 import typing
 
 from reauth.amr import AuthenticationMethodReference
+from reauth.exceptions import ReauthException
 from reauth.logging import get_logger
 
 logger = get_logger(__name__)
 
 _ADVANCE_BY_VALUE_ERROR = "advance_by must be at least 1"
+
+
+class EnrollmentCollision(ReauthException):
+    """Raised when persistence rejects a duplicate factor enrollment."""
 
 
 class FactorEnrollment(typing.Protocol):

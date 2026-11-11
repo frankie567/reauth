@@ -5,96 +5,39 @@ import time
 import types
 import typing
 from collections.abc import AsyncGenerator
+from unittest.mock import AsyncMock
 
 import pytest
 from sqlalchemy import (
-    Column,
-    Integer,
     MetaData,
-    String,
-    Table,
     insert,
-    select,
 )
 from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine
-from sqlalchemy.sql.expression import update
 
+from reauth.factors import EnrollmentCollision
 from reauth.factors.totp import (
     AlreadyEnabledTOTPException,
     AlreadyEnrolledTOTPException,
     InvalidTOTPCodeException,
     NotEnabledTOTPException,
     NotEnrolledTOTPException,
-    TOTPAlgorithm,
     TOTPEnrollment,
-    TOTPFactor,
+)
+from reauth.integrations.sqlalchemy import (
+    SQLAlchemyTOTPFactor,
+    create_totp_enrollment_table,
 )
 
 sqlalchemy_meta = MetaData()
-totp_table = Table(
-    "totps",
-    sqlalchemy_meta,
-    Column("id", Integer, primary_key=True),
-    Column("identity_id", Integer, nullable=False),
-    Column("enabled", Integer, nullable=False, default=0),
-    Column("secret", String(32), nullable=False),
-    Column("algorithm", String(16), nullable=False),
-    Column("code_length", Integer, nullable=False),
-    Column("time_step", Integer, nullable=False),
-    Column("last_verified_time_step", Integer, nullable=True),
-    sqlite_autoincrement=True,
-)
-
-
-class SQLAlchemyTOTPFactor(TOTPFactor):
-    """Concrete implementation of TOTPFactor using SQLAlchemy."""
-
-    def __init__(
-        self, connection: AsyncConnection, *, algorithm: TOTPAlgorithm = "sha256"
-    ) -> None:
-        self.connection = connection
-        super().__init__(algorithm=algorithm)
-
-    async def get_by_identity_id(self, identity_id: int) -> TOTPEnrollment | None:
-        """Retrieve the TOTP enrollment for a given identity, regardless of enabled state."""
-        result = await self.connection.execute(
-            select(totp_table).where(totp_table.c.identity_id == identity_id)
-        )
-        row = result.fetchone()
-        if row is None:
-            return None
-        return TOTPEnrollment(**row._asdict())
-
-    async def insert(self, totp: TOTPEnrollment) -> int:
-        """Insert a TOTP into the database."""
-        result = await self.connection.execute(
-            insert(totp_table)
-            .values(**dataclasses.asdict(totp))
-            .returning(totp_table.c.id)
-        )
-        return result.scalar_one()
-
-    async def update(self, totp: TOTPEnrollment) -> None:
-        """Update an existing TOTP in the database."""
-        await self.connection.execute(
-            update(totp_table)
-            .where(totp_table.c.id == totp.id)
-            .values(**dataclasses.asdict(totp))
-        )
-
-    async def delete(self, totp: TOTPEnrollment) -> None:
-        """Delete a TOTP from the database."""
-        await self.connection.execute(
-            totp_table.delete().where(totp_table.c.id == totp.id)
-        )
+totp_table = create_totp_enrollment_table(sqlalchemy_meta)
 
 
 @pytest.fixture
 async def sqlalchemy_connection(
-    sqlalchemy_engine: AsyncEngine,
+    sqlalchemy_integration_engine: AsyncEngine,
 ) -> AsyncGenerator[AsyncConnection]:
     """Fixture that creates tables and provides a connection for testing."""
-    async with sqlalchemy_engine.begin() as conn:
+    async with sqlalchemy_integration_engine.begin() as conn:
         await conn.run_sync(sqlalchemy_meta.create_all)
         yield conn
         await conn.run_sync(sqlalchemy_meta.drop_all)
@@ -107,7 +50,7 @@ def totp_factor(
 ) -> SQLAlchemyTOTPFactor:
     """Fixture that provides an instance of SQLAlchemyTOTPFactor."""
     return SQLAlchemyTOTPFactor(
-        connection=sqlalchemy_connection, algorithm=request.param
+        connection=sqlalchemy_connection, table=totp_table, algorithm=request.param
     )
 
 
@@ -142,7 +85,14 @@ def make_totp(
             time_step=30,
             last_verified_time_step=last_verified_time_step,
         )
-        totp.id = await totp_factor.insert(totp)
+        values = dataclasses.asdict(totp)
+        del values["id"]
+        result = await totp_factor.connection.execute(
+            insert(totp_table).values(**values)
+        )
+        primary_key = result.inserted_primary_key
+        assert primary_key is not None
+        totp.id = primary_key[0]
         return totp
 
     return _make_totp
@@ -203,6 +153,17 @@ class TestTOTPEnroll:
 
         with pytest.raises(AlreadyEnrolledTOTPException):
             await totp_factor.enroll(identity_id)
+
+    async def test_enroll_translates_collision(
+        self, totp_factor: SQLAlchemyTOTPFactor, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        collision = EnrollmentCollision()
+        monkeypatch.setattr(totp_factor, "insert", AsyncMock(side_effect=collision))
+
+        with pytest.raises(AlreadyEnrolledTOTPException) as error:
+            await totp_factor.enroll(123)
+
+        assert error.value.__cause__ is collision
 
     async def test_enroll_replaces_disabled(
         self, totp_factor: SQLAlchemyTOTPFactor, make_totp: MakeTOTPCallable
@@ -347,9 +308,10 @@ class TestTOTPVerify:
         monkeypatch.setattr(
             "reauth.factors.totp.time", types.SimpleNamespace(time=lambda: now)
         )
-        totp = await make_totp(enabled=True)
-        totp.last_verified_time_step = now // totp.time_step + 100
-        await totp_factor.update(totp)
+        totp = await make_totp(
+            enabled=True, last_verified_time_step=now // totp_factor.time_step + 100
+        )
+        assert totp.last_verified_time_step is not None
         future_code = totp._impl.generate(
             (totp.last_verified_time_step + 1) * totp.time_step
         ).decode("ascii")
