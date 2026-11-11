@@ -1,0 +1,20 @@
+reauth/integrations/sqlalchemy/exceptions.py
+  h_868de2c7aaf22e 14
+reauth/integrations/sqlalchemy/mixins.py
+  h_868de2c7aaf22e 89
+tests/integrations/sqlalchemy/test_hotp.py
+  h_868de2c7aaf22e 13,232
+tests/integrations/sqlalchemy/test_totp.py
+  h_868de2c7aaf22e 14,233
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "a741a9811ad45f1fbb52300be71178a07e9ec9c7",
+  "prompts": {},
+  "humans": {
+    "h_868de2c7aaf22e": {
+      "author": "François Voron <me@fvoron.com>"
+    }
+  }
+}
