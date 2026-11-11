@@ -6,9 +6,9 @@ from collections.abc import AsyncGenerator
 import anyio
 import pytest
 import sqlalchemy
+import sqlalchemy.exc
 from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine
 
-from reauth.factors import EnrollmentCollision
 from reauth.factors.hotp import HOTPEnrollment, InvalidHOTPCodeException
 from reauth.integrations.sqlalchemy import (
     MissingTransactionException,
@@ -229,7 +229,7 @@ class TestSQLAlchemyHOTP:
                 sqlalchemy.insert(table).values(**dataclasses.asdict(enrollment))
             )
         async with sqlalchemy_integration_engine.connect() as connection:
-            with pytest.raises(EnrollmentCollision):
+            with pytest.raises(sqlalchemy.exc.IntegrityError):
                 async with connection.begin():
                     await make_factor(connection, table).insert(
                         dataclasses.replace(enrollment, id=None)

@@ -9,7 +9,6 @@ import sqlalchemy
 import sqlalchemy.exc
 from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine
 
-from reauth.factors import EnrollmentCollision
 from reauth.factors.backup_codes import (
     AlreadyUsedBackupCodeException,
     BackupCodesEnrollment,
@@ -233,28 +232,11 @@ class TestSQLAlchemyBackupCodes:
             await connection.execute(
                 sqlalchemy.insert(table).values(**dataclasses.asdict(enrollment))
             )
-        async with sqlalchemy_integration_engine.begin() as connection:
-            factor = make_factor(connection, table)
-            with pytest.raises(EnrollmentCollision):
-                await factor.insert(dataclasses.replace(enrollment, id=None))
-            assert await factor.get_enrollment(1) == enrollment
-            await factor.insert(dataclasses.replace(enrollment, id=None, identity_id=2))
-
-    async def test_unrelated_integrity_error_preserves_transaction(
-        self,
-        sqlalchemy_integration_engine: AsyncEngine,
-        table: sqlalchemy.Table,
-    ) -> None:
-        enrollment = make_enrollment(id=42)
-        async with sqlalchemy_integration_engine.begin() as connection:
-            await connection.execute(
-                sqlalchemy.insert(table).values(**dataclasses.asdict(enrollment))
-            )
-        async with sqlalchemy_integration_engine.begin() as connection:
-            factor = make_factor(connection, table)
-            with pytest.raises(sqlalchemy.exc.IntegrityError):
-                await factor.insert(dataclasses.replace(enrollment, identity_id=2))
-            assert await factor.get_enrollment(1) == enrollment
+        with pytest.raises(sqlalchemy.exc.IntegrityError):
+            async with sqlalchemy_integration_engine.begin() as connection:
+                await make_factor(connection, table).insert(
+                    dataclasses.replace(enrollment, id=None)
+                )
 
     async def test_verify_rotates_verifier(
         self,

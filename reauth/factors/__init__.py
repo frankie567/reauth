@@ -1,3 +1,3 @@
-from reauth.factors.base import EnrollmentCollision, FactorBase
+from reauth.factors.base import FactorBase
 
-__all__ = ["EnrollmentCollision", "FactorBase"]
+__all__ = ["FactorBase"]
