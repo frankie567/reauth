@@ -104,17 +104,20 @@ When implementing abstract methods for data persistence (insert, update, delete)
 ```python
 # Example implementation
 async def insert(self, enrollment: Enrollment) -> int:
-    result = await self.connection.execute(
-        insert(table).values(**dataclasses.asdict(enrollment)).returning(table.c.id)
-    )
-    return result.scalar_one()
+    values = dataclasses.asdict(enrollment)
+    if enrollment.id is None:
+        del values["id"]
+    result = await self.connection.execute(insert(table).values(**values))
+    primary_key = result.inserted_primary_key
+    assert primary_key is not None
+    return primary_key[0]
 
 
 async def update(self, enrollment: Enrollment) -> None:
+    values = dataclasses.asdict(enrollment)
+    del values["id"]
     await self.connection.execute(
-        update(table)
-        .where(table.c.id == enrollment.id)
-        .values(**dataclasses.asdict(enrollment))
+        update(table).where(table.c.id == enrollment.id).values(**values)
     )
 
 
@@ -145,6 +148,16 @@ Every abstract method must include an `Abstract: Implementation contract` block 
         Leave commit and rollback to the caller.
     """
 ```
+
+## SQLAlchemy integration
+
+- Put adapters in `reauth.integrations.sqlalchemy`. Use generic SQLAlchemy Core constructs and return Reauth dataclasses.
+- Use [the authentication-session adapter](reauth/integrations/sqlalchemy/authentication_session.py) as a reference; follow each abstract method's locking, uniqueness, and atomicity contract.
+- Accept an application-owned table and connection with an active transaction. Leave commit and rollback to the caller, retaining protection until the transaction ends.
+- Derive integration exceptions from `ReauthSQLAlchemyException`; raise `MissingTransactionException` when no transaction is active.
+- Support generated IDs and extra application columns: omit unset IDs on insert, exclude IDs from updates, and select only Reauth fields. Prefer `inserted_primary_key` over `.returning()` for portability.
+- Use savepoints for recoverable insert failures. Translate identifier collisions without masking unrelated integrity errors or aborting the caller's transaction.
+- Reuse the shared `sqlalchemy_integration_engine` fixture and run `just test-db` for PostgreSQL, MySQL, and SQLite. SQLite requires `autocommit=False`; functional tests do not prove row-lock guarantees.
 
 ## Conventions
 
