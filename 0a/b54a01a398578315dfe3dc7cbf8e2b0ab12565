@@ -1,0 +1,27 @@
+reauth/integrations/sqlalchemy/__init__.py
+  s_db3501e07aac70::t_3611d5a07603c8 7-10,34,39
+reauth/integrations/sqlalchemy/backup_codes.py
+  s_db3501e07aac70::t_da698cefba5db9 1-114
+reauth/integrations/sqlalchemy/mixins.py
+  s_db3501e07aac70::t_37ff729f5fb9f5 11,29-31
+tests/factors/test_backup_codes.py
+  s_db3501e07aac70::t_b9422e896e9787 9,17-19,21,23-24,29,32,43-66,97-99,103,127-128,147-149,152,163-165,173-175,178,181-185,192-193,200-202,205,208-212,221-223,226,229-233
+tests/integrations/sqlalchemy/test_backup_codes.py
+  s_db3501e07aac70::t_423e0a599bda03 1-360
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "0ab54a01a398578315dfe3dc7cbf8e2b0ab12565",
+  "prompts": {},
+  "sessions": {
+    "s_db3501e07aac70": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1c9cb-c6fb-7af1-9b2b-1e83254d278d",
+        "model": "unknown"
+      },
+      "human_author": "François Voron <me@fvoron.com>"
+    }
+  }
+}
