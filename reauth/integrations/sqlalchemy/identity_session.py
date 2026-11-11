@@ -316,7 +316,6 @@ class SQLAlchemyIdentitySessionService(TransactionMixin, IdentitySessionService)
         existing_id = await self.connection.scalar(
             sqlalchemy.select(self.table.c.id)
             .where(sqlalchemy.or_(*conditions))
-            .with_for_update()
             .limit(1)
         )
         if existing_id is not None:

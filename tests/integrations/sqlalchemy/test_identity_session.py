@@ -2,6 +2,7 @@ import dataclasses
 import uuid
 from collections.abc import AsyncGenerator
 
+import anyio
 import pytest
 import sqlalchemy
 from sqlalchemy.exc import DBAPIError, IntegrityError
@@ -282,6 +283,36 @@ class TestSQLAlchemyIdentitySession:
             valid_id = await service.insert(valid)
             stored = await service.get_by_token_identifier(valid.token_identifier)
             assert stored is not None and stored.family_id == valid_id
+
+    @pytest.mark.parametrize("key", ["access", "refresh"])
+    async def test_collision_lookup_does_not_wait_for_conflicting_row_lock(
+        self,
+        sqlalchemy_integration_engine: AsyncEngine,
+        table: sqlalchemy.Table,
+        family: list[IdentitySession],
+        key: str,
+    ) -> None:
+        if sqlalchemy_integration_engine.dialect.name == "sqlite":
+            pytest.skip("SQLite does not support SELECT FOR UPDATE")
+        new = replacement(family[1])
+        if key == "access":
+            new.token_identifier = family[0].token_identifier
+        else:
+            new.refresh_token_identifier = family[0].refresh_token_identifier
+        integrity_error = IntegrityError(None, None, Exception("duplicate identifier"))
+        async with sqlalchemy_integration_engine.begin() as blocker:
+            await blocker.execute(
+                sqlalchemy.select(table.c.id)
+                .where(table.c.id == family[0].id)
+                .with_for_update()
+            )
+            async with sqlalchemy_integration_engine.begin() as connection:
+                service = make_service(connection, table)
+                # Isolate the diagnostic read from the INSERT's own uniqueness locks.
+                with anyio.fail_after(5):
+                    with pytest.raises(TokenIdentifierCollision) as error:
+                        await service._raise_identifier_collision(new, integrity_error)
+                assert error.value.__cause__ is integrity_error
 
     async def test_unrelated_integrity_error_preserves_transaction(
         self,
