@@ -8,6 +8,7 @@ import sqlalchemy.exc
 import sqlalchemy.ext.asyncio
 
 from reauth.factors import EnrollmentCollision
+from reauth.factors.backup_codes import BackupCodesEnrollment
 from reauth.factors.hotp import HOTPEnrollment
 from reauth.factors.totp import TOTPEnrollment
 from reauth.integrations.sqlalchemy.exceptions import (
@@ -25,7 +26,9 @@ class TransactionMixin:
             raise MissingTransactionException()
 
 
-class OTPEnrollmentMixin[ENROLLMENT: HOTPEnrollment | TOTPEnrollment](TransactionMixin):
+class OTPEnrollmentMixin[
+    ENROLLMENT: BackupCodesEnrollment | HOTPEnrollment | TOTPEnrollment
+](TransactionMixin):
     """Persist OTP enrollments within a caller-owned transaction."""
 
     table: sqlalchemy.Table
