@@ -37,11 +37,13 @@ uv run python <your_command_here>
 
 ### AI Review
 
-Before opening a pull request, run the AI review to check for potential issues and improvements. Use the following command:
+Before opening a pull request, run the AI review to check for potential issues and improvements. Pass the pull request's base branch:
 
 ```bash
-just ai-review
+just ai-review main
 ```
+
+For a stacked pull request, replace `main` with the previous branch in the stack to review only the current layer's changes.
 
 It can take a few minutes to complete. Once you get results, review the suggestions:
 
