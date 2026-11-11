@@ -1,0 +1,19 @@
+AGENTS.md
+  s_db3501e07aac70::t_85a15ada721925 38-50
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "843d67728fa2d08e1fb8db001cc834f1787f3c31",
+  "prompts": {},
+  "sessions": {
+    "s_db3501e07aac70": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1c9cb-c6fb-7af1-9b2b-1e83254d278d",
+        "model": "unknown"
+      },
+      "human_author": "François Voron <me@fvoron.com>"
+    }
+  }
+}
