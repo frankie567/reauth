@@ -1,0 +1,21 @@
+reauth/integrations/sqlalchemy/oauth2.py
+  s_db3501e07aac70::t_d7aeea1f243656 41-43,49-50,88-90
+tests/integrations/sqlalchemy/test_oauth2.py
+  s_db3501e07aac70::t_027593e285576e 254-314
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "a8767e1d7c2c17a5afc4694019852929ed644555",
+  "prompts": {},
+  "sessions": {
+    "s_db3501e07aac70": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1c9cb-c6fb-7af1-9b2b-1e83254d278d",
+        "model": "unknown"
+      },
+      "human_author": "François Voron <me@fvoron.com>"
+    }
+  }
+}
