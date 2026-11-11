@@ -6,12 +6,43 @@ permissions:
     contents: read
 
 jobs:
+    lint:
+        runs-on: ubuntu-latest
+        strategy:
+            fail-fast: false
+            matrix:
+                python_version: ['3.14', '3.15']
+
+        steps:
+            - name: Harden the runner (Audit all outbound calls)
+              uses: step-security/harden-runner@46b06cea07f9e64621fdf066ba77ac6915163d43 # v2.22.3
+              with:
+                egress-policy: audit
+
+            - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+              with:
+                  persist-credentials: false
+            - name: Set up Python
+              uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+              with:
+                  python-version: ${{ matrix.python_version }}
+            - name: Setup Just
+              uses: extractions/setup-just@53165ef7e734c5c07cb06b3c8e7b647c5aa16db3 # v4.0.0
+            - name: Install uv and set the Python version
+              uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+              with:
+                  python-version: ${{ matrix.python_version }}
+            - name: Install the project
+              run: uv sync --locked --all-extras --dev
+            - name: Lint and typecheck
+              run: just lint-check
+
     test:
         runs-on: ubuntu-latest
         strategy:
             fail-fast: false
             matrix:
-                python_version: ['3.14']
+                python_version: ['3.14', '3.15']
                 database: [postgresql, mysql, sqlite]
 
         services:
@@ -66,9 +97,6 @@ jobs:
                   python-version: ${{ matrix.python_version }}
             - name: Install the project
               run: uv sync --locked --all-extras --dev
-            - name: Lint and typecheck
-              run: |
-                  just lint-check
             - name: Test
               run: |
                   just test-cov-xml
@@ -87,7 +115,7 @@ jobs:
                   cd dist
                   sha256sum *.whl *.tar.gz *-release-notes.md > SHA256SUMS
             - name: Upload release assets
-              if: startsWith(github.ref, 'refs/tags/') && matrix.database == 'sqlite'
+              if: startsWith(github.ref, 'refs/tags/') && matrix.database == 'sqlite' && matrix.python_version == '3.14'
               uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
               with:
                   name: distributions
@@ -109,12 +137,14 @@ jobs:
     tests-passed:
         runs-on: ubuntu-latest
         permissions: {}
-        needs: test
+        needs: [lint, test]
         if: always()
         steps:
             - env:
+                  LINT_RESULT: ${{ needs.lint.result }}
                   TEST_RESULT: ${{ needs.test.result }}
               run: |
+                  test "$LINT_RESULT" = success
                   test "$TEST_RESULT" = success
 
     release:
