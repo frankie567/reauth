@@ -1,0 +1,27 @@
+reauth/integrations/sqlalchemy/__init__.py
+  s_db3501e07aac70::t_76aefacceecb27 8,22
+reauth/integrations/sqlalchemy/exceptions.py
+  s_db3501e07aac70::t_ed8231909a7a77 3-4,14-19
+reauth/integrations/sqlalchemy/hotp.py
+  s_db3501e07aac70::t_f499195c87097d 9,46,49-50,95,98,101
+reauth/integrations/sqlalchemy/mixins.py
+  s_db3501e07aac70::t_15a86427bced45 3-7,10-15,26-113
+reauth/integrations/sqlalchemy/totp.py
+  s_db3501e07aac70::t_f7b6c92a5b458f 9,49,52-53,101,104,107
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "fc102f78f8fa531fe9fca1a05c7fed406c57c6ad",
+  "prompts": {},
+  "sessions": {
+    "s_db3501e07aac70": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1c9cb-c6fb-7af1-9b2b-1e83254d278d",
+        "model": "unknown"
+      },
+      "human_author": "François Voron <me@fvoron.com>"
+    }
+  }
+}
