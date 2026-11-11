@@ -61,6 +61,12 @@ You can run all the tests with:
 just test
 ```
 
+By default, tests run against an in-memory SQLite database. To run tests against other DBMS, PostgreSQL and MySQL, you'll need a Docker installation. Then, run the tests with:
+
+```bash
+just test-db
+```
+
 ### Format the code
 
 Execute the following command to apply linting and check typing:

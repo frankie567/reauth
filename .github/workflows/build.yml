@@ -9,8 +9,41 @@ jobs:
     test:
         runs-on: ubuntu-latest
         strategy:
+            fail-fast: false
             matrix:
                 python_version: ['3.14']
+                database: [postgresql, mysql, sqlite]
+
+        services:
+            postgres:
+                image: ${{ matrix.database == 'postgresql' && 'postgres:18' || '' }}
+                env:
+                    POSTGRES_PASSWORD: reauth
+                    POSTGRES_DB: reauth
+                ports:
+                    - 5432:5432
+                options: >-
+                    --health-cmd pg_isready
+                    --health-interval 10s
+                    --health-timeout 5s
+                    --health-retries 5
+            mysql:
+                image: ${{ matrix.database == 'mysql' && 'mysql:8.4' || '' }}
+                env:
+                    MYSQL_ROOT_PASSWORD: reauth
+                    MYSQL_DATABASE: reauth
+                ports:
+                    - 3306:3306
+                options: >-
+                    --health-cmd "mysqladmin ping --host=127.0.0.1 --password=reauth"
+                    --health-interval 10s
+                    --health-timeout 5s
+                    --health-retries 10
+
+        env:
+            REAUTH_TEST_DATABASE: ${{ matrix.database }}
+            REAUTH_TEST_POSTGRESQL_URL: postgresql+asyncpg://postgres:reauth@localhost:5432/reauth
+            REAUTH_TEST_MYSQL_URL: mysql+asyncmy://root:reauth@127.0.0.1:3306/reauth
 
         steps:
             - name: Harden the runner (Audit all outbound calls)
@@ -54,7 +87,7 @@ jobs:
                   cd dist
                   sha256sum *.whl *.tar.gz *-release-notes.md > SHA256SUMS
             - name: Upload release assets
-              if: startsWith(github.ref, 'refs/tags/')
+              if: startsWith(github.ref, 'refs/tags/') && matrix.database == 'sqlite'
               uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
               with:
                   name: distributions
@@ -62,6 +95,7 @@ jobs:
                   if-no-files-found: error
             - uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1
               with:
+                  flags: database-${{ matrix.database }}
                   token: ${{ secrets.CODECOV_TOKEN }}
                   fail_ci_if_error: true
                   verbose: true
