@@ -1,7 +1,7 @@
 import dataclasses
 
 import pytest
-from sqlalchemy import insert, select, update
+from sqlalchemy import insert
 from sqlalchemy.ext.asyncio import AsyncConnection
 
 from reauth.factors.oauth2.base import (
@@ -17,11 +17,12 @@ from reauth.factors.oauth2.state import (
     InvalidStateException,
     OAuth2State,
 )
+from reauth.integrations.sqlalchemy import SQLAlchemyOAuth2Mixin
 
 from .conftest import SQLAlchemyOAuth2StateService, oauth2_enrollment_table
 
 
-class SQLAlchemyOAuth2Factor(OAuth2Factor):
+class SQLAlchemyOAuth2Factor(SQLAlchemyOAuth2Mixin, OAuth2Factor):
     """Concrete implementation of OAuth2Factor using SQLAlchemy for testing."""
 
     def __init__(
@@ -32,24 +33,13 @@ class SQLAlchemyOAuth2Factor(OAuth2Factor):
         identifier: str = "provider",
         client_id: str = "test-client-id",
     ) -> None:
-        self.connection = connection
         super().__init__(
+            connection,
+            oauth2_enrollment_table,
             identifier=identifier,
             client_id=client_id,
             state_service=state_service,
         )
-
-    async def get_enrollment(self, identity_id: int) -> OAuth2Enrollment | None:
-        """Get enrollment by identity_id."""
-        result = await self.connection.execute(
-            select(oauth2_enrollment_table).where(
-                oauth2_enrollment_table.c.identity_id == identity_id
-            )
-        )
-        row = result.fetchone()
-        if row is None:
-            return None
-        return OAuth2Enrollment(**row._asdict())
 
     async def get_request_authentication(
         self, *, token_endpoint: str
@@ -87,40 +77,6 @@ class SQLAlchemyOAuth2Factor(OAuth2Factor):
             refresh_token="test-refresh-token",
             refresh_token_expires_at=7200,
         )
-
-    async def insert(self, enrollment: OAuth2Enrollment) -> int:
-        """Insert an OAuth2 enrollment into the database."""
-        result = await self.connection.execute(
-            insert(oauth2_enrollment_table)
-            .values(**dataclasses.asdict(enrollment))
-            .returning(oauth2_enrollment_table.c.id)
-        )
-        return result.scalar_one()
-
-    async def update(self, enrollment: OAuth2Enrollment) -> None:
-        """Update an OAuth2 enrollment in the database."""
-        await self.connection.execute(
-            update(oauth2_enrollment_table)
-            .where(oauth2_enrollment_table.c.id == enrollment.id)
-            .values(**dataclasses.asdict(enrollment))
-        )
-
-    async def get_enrollment_by_provider_and_account(
-        self,
-        provider: str,
-        account_id: str,
-    ) -> OAuth2Enrollment | None:
-        """Get enrollment by provider and account_id."""
-        result = await self.connection.execute(
-            select(oauth2_enrollment_table).where(
-                oauth2_enrollment_table.c.provider == provider,
-                oauth2_enrollment_table.c.account_id == account_id,
-            )
-        )
-        row = result.fetchone()
-        if row is None:
-            return None
-        return OAuth2Enrollment(**row._asdict())
 
     async def get_profile(self, access_token: str) -> dict[str, object]:
         """Mock get_profile for testing - returns mock profile data."""
@@ -285,7 +241,7 @@ class TestOAuth2FactorCallback:
     ) -> None:
         """Test callback updates existing enrollment for same provider/account."""
         initial = OAuth2Enrollment(
-            id=None,
+            id=42,
             identity_id=456,
             provider="provider",
             account_id="test-account-id",
@@ -295,7 +251,9 @@ class TestOAuth2FactorCallback:
             refresh_token_expires_at=None,
             scope=["old_scope"],
         )
-        initial.id = await oauth2_factor.insert(initial)
+        await oauth2_factor.connection.execute(
+            insert(oauth2_enrollment_table).values(**dataclasses.asdict(initial))
+        )
 
         _, state_token, _ = await oauth2_factor.start(
             redirect_uri="https://example.com/callback",
@@ -320,7 +278,7 @@ class TestOAuth2FactorCallback:
     ) -> None:
         """Test callback raises error when state identity doesn't match existing enrollment."""
         enrollment = OAuth2Enrollment(
-            id=None,
+            id=42,
             identity_id=789,
             provider="provider",
             account_id="test-account-id",
@@ -330,7 +288,9 @@ class TestOAuth2FactorCallback:
             refresh_token_expires_at=None,
             scope=[],
         )
-        enrollment.id = await oauth2_factor.insert(enrollment)
+        await oauth2_factor.connection.execute(
+            insert(oauth2_enrollment_table).values(**dataclasses.asdict(enrollment))
+        )
 
         _, state_token, _ = await oauth2_factor.start(
             redirect_uri="https://example.com/callback",
@@ -368,7 +328,7 @@ class TestOAuth2FactorCallback:
     ) -> None:
         """Test callback uses existing enrollment's identity when state has no identity."""
         enrollment = OAuth2Enrollment(
-            id=None,
+            id=42,
             identity_id=111,
             provider="provider",
             account_id="test-account-id",
@@ -378,7 +338,9 @@ class TestOAuth2FactorCallback:
             refresh_token_expires_at=None,
             scope=[],
         )
-        enrollment.id = await oauth2_factor.insert(enrollment)
+        await oauth2_factor.connection.execute(
+            insert(oauth2_enrollment_table).values(**dataclasses.asdict(enrollment))
+        )
 
         _, state_token, _ = await oauth2_factor.start(
             redirect_uri="https://example.com/callback",

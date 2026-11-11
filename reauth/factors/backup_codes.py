@@ -198,17 +198,9 @@ class BackupCodesFactor(FactorBase[BackupCodesEnrollment], abc.ABC):
         """
         Insert a backup codes enrollment into a persistent store.
 
-        Raises:
-            EnrollmentCollision: If an enrollment for the identity and configured
-                factor already exists.
-
         Abstract: Implementation contract
             Persist the supplied enrollment and return its ID. Enforce uniqueness for
-            the identity and configured factor, including concurrent first enrollments.
-            On an integrity error caused by a duplicate identity and configured factor,
-            raise EnrollmentCollision without persisting the conflicting enrollment
-            and leave the transaction usable. Propagate unrelated integrity errors.
-            Leave commit and rollback to the caller.
+            the identity and configured factor. Leave commit and rollback to the caller.
         """
         ...
 

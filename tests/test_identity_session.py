@@ -1,22 +1,14 @@
 import dataclasses
 import datetime
 import hashlib
-import typing
 from collections.abc import AsyncGenerator
 
 import pytest
 from sqlalchemy import (
-    JSON,
-    Column,
-    Integer,
     MetaData,
-    String,
-    Table,
     insert,
-    select,
     update,
 )
-from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine
 
 from reauth.amr import AuthenticationMethodReference
@@ -24,16 +16,18 @@ from reauth.identity_session import (
     ExpiredRefreshTokenException,
     ExpiredSessionException,
     IdentitySession,
-    IdentitySessionService,
     InvalidRefreshTokenException,
     InvalidSessionTokenException,
     ReusedRefreshTokenException,
+)
+from reauth.integrations.sqlalchemy import (
+    SQLAlchemyIdentitySessionService,
+    create_identity_session_table,
 )
 from reauth.timestamp import get_current_timestamp
 from reauth.tokens import (
     ChecksummedTokenProvider,
     HMACTokenVerifier,
-    TokenIdentifierCollision,
 )
 from reauth.tokens.checksummed import _checksum
 
@@ -60,129 +54,20 @@ async def fixed_verifier(label: str) -> str:
 
 
 sqlalchemy_meta = MetaData()
-identity_session_table = Table(
-    "identity_sessions",
-    sqlalchemy_meta,
-    Column("id", Integer, primary_key=True),
-    Column("token_identifier", String(16), nullable=False, unique=True),
-    Column("token_verifier", String, nullable=False),
-    Column("expires_at", Integer, nullable=False),
-    Column("identity_id", Integer, nullable=False),
-    Column("amr", JSON, nullable=False),
-    Column("context", JSON, nullable=True),
-    Column("refresh_token_identifier", String(16), nullable=True, unique=True),
-    Column("refresh_token_verifier", String, nullable=True),
-    Column("refresh_token_expires_at", Integer, nullable=True),
-    Column("family_id", Integer, nullable=True, index=True),
-    Column("replaced_by_id", Integer, nullable=True),
-    Column("revoked_at", Integer, nullable=True),
-    sqlite_autoincrement=True,
-)
+identity_session_table = create_identity_session_table(sqlalchemy_meta)
 
 
-class SQLAlchemyIdentitySessionService(IdentitySessionService):
-    def __init__(self, connection: AsyncConnection, **kwargs: typing.Any) -> None:
-        self.connection = connection
-        super().__init__(**kwargs)
-
-    async def insert(self, identity_session: IdentitySession) -> int:
-        try:
-            async with self.connection.begin_nested():
-                result = await self.connection.execute(
-                    insert(identity_session_table)
-                    .values(**dataclasses.asdict(identity_session))
-                    .returning(identity_session_table.c.id)
-                )
-                session_id = result.scalar_one()
-                if identity_session.family_id is None:
-                    await self.connection.execute(
-                        update(identity_session_table)
-                        .where(identity_session_table.c.id == session_id)
-                        .values(family_id=session_id)
-                    )
-                return session_id
-        except IntegrityError as error:
-            raise TokenIdentifierCollision() from error
-
-    async def get_by_token_identifier(
-        self, token_identifier: str
-    ) -> IdentitySession | None:
-        result = await self.connection.execute(
-            select(identity_session_table).where(
-                identity_session_table.c.token_identifier == token_identifier
-            )
-        )
-        row = result.mappings().one_or_none()
-        return IdentitySession(**row) if row is not None else None
-
-    async def get_by_refresh_token_identifier(
-        self, refresh_token_identifier: str
-    ) -> IdentitySession | None:
-        result = await self.connection.execute(
-            select(identity_session_table).where(
-                identity_session_table.c.refresh_token_identifier
-                == refresh_token_identifier
-            )
-        )
-        row = result.mappings().one_or_none()
-        return IdentitySession(**row) if row is not None else None
-
-    async def update_verifier(self, identity_session: IdentitySession) -> None:
-        await self.connection.execute(
-            update(identity_session_table)
-            .where(identity_session_table.c.id == identity_session.id)
-            .values(token_verifier=identity_session.token_verifier)
-        )
-
-    async def replace(
-        self, previous_session: IdentitySession, new_session: IdentitySession
-    ) -> int | None:
-        async with self.connection.begin_nested() as transaction:
-            session_id = await self.insert(new_session)
-            root = identity_session_table.alias("root")
-            result = await self.connection.execute(
-                update(identity_session_table)
-                .where(
-                    identity_session_table.c.id == previous_session.id,
-                    identity_session_table.c.refresh_token_identifier
-                    == previous_session.refresh_token_identifier,
-                    identity_session_table.c.refresh_token_verifier
-                    == previous_session.refresh_token_verifier,
-                    identity_session_table.c.refresh_token_expires_at
-                    > get_current_timestamp(),
-                    identity_session_table.c.revoked_at.is_(None),
-                    identity_session_table.c.replaced_by_id.is_(None),
-                    select(root.c.id)
-                    .where(
-                        root.c.id == previous_session.family_id,
-                        root.c.revoked_at.is_(None),
-                    )
-                    .exists(),
-                )
-                .values(replaced_by_id=session_id)
-                .returning(identity_session_table.c.id)
-            )
-            if result.scalar_one_or_none() is None:
-                await transaction.rollback()
-                return None
-            return session_id
-
-    async def revoke_family(self, identity_session: IdentitySession) -> None:
-        await self.connection.execute(
-            update(identity_session_table)
-            .where(
-                identity_session_table.c.family_id == identity_session.family_id,
-                identity_session_table.c.revoked_at.is_(None),
-            )
-            .values(revoked_at=identity_session.revoked_at)
-        )
+async def store_session(connection: AsyncConnection, session: IdentitySession) -> None:
+    await connection.execute(
+        insert(identity_session_table).values(**dataclasses.asdict(session))
+    )
 
 
 @pytest.fixture
 async def sqlalchemy_connection(
-    sqlalchemy_engine: AsyncEngine,
+    sqlalchemy_integration_engine: AsyncEngine,
 ) -> AsyncGenerator[AsyncConnection]:
-    async with sqlalchemy_engine.begin() as connection:
+    async with sqlalchemy_integration_engine.begin() as connection:
         await connection.run_sync(sqlalchemy_meta.create_all)
         yield connection
         await connection.run_sync(sqlalchemy_meta.drop_all)
@@ -194,6 +79,7 @@ def identity_session_service(
 ) -> SQLAlchemyIdentitySessionService:
     return SQLAlchemyIdentitySessionService(
         connection=sqlalchemy_connection,
+        table=identity_session_table,
         token_provider=make_provider(),
         refresh_token_provider=make_provider("reauth_isr_"),
     )
@@ -202,7 +88,8 @@ def identity_session_service(
 @pytest.fixture
 async def session() -> IdentitySession:
     return IdentitySession(
-        id=None,
+        id=42,
+        family_id=42,
         token_identifier=make_provider().parse(fixed_token("access_token")).identifier,
         token_verifier=await fixed_verifier("access_token"),
         expires_at=get_current_timestamp() + 3600,
@@ -240,7 +127,13 @@ async def session_family(
         for session_id in range(1, 4)
     ]
     for member in family:
-        await identity_session_service.insert(member)
+        values = dataclasses.asdict(member)
+        del values["id"]
+        result = await identity_session_service.connection.execute(
+            insert(identity_session_table).values(**values)
+        )
+        assert result.inserted_primary_key is not None
+        assert result.inserted_primary_key[0] == member.id
     return family
 
 
@@ -329,6 +222,7 @@ class TestIdentitySessionIssue:
     ) -> None:
         service = SQLAlchemyIdentitySessionService(
             connection=sqlalchemy_connection,
+            table=identity_session_table,
             token_provider=make_provider("custom_"),
             refresh_token_provider=make_provider("custom_refresh_"),
             lifetime=datetime.timedelta(hours=1),
@@ -355,6 +249,7 @@ class TestIdentitySessionIssue:
     ) -> None:
         service = SQLAlchemyIdentitySessionService(
             connection=sqlalchemy_connection,
+            table=identity_session_table,
             token_provider=make_provider(),
             refresh_token_provider=make_provider("reauth_isr_"),
             refresh_token_lifetime=datetime.timedelta(hours=1),
@@ -376,7 +271,7 @@ class TestIdentitySessionValidate:
         session: IdentitySession,
         token: str,
     ) -> None:
-        await identity_session_service.insert(session)
+        await store_session(identity_session_service.connection, session)
 
         with pytest.raises(InvalidSessionTokenException):
             await identity_session_service.validate(token)
@@ -388,7 +283,9 @@ class TestIdentitySessionValidate:
         session: IdentitySession,
         state: dict[str, int],
     ) -> None:
-        await identity_session_service.insert(dataclasses.replace(session, **state))
+        await store_session(
+            identity_session_service.connection, dataclasses.replace(session, **state)
+        )
 
         with pytest.raises(InvalidSessionTokenException):
             await identity_session_service.validate(fixed_token("access_token"))
@@ -399,7 +296,7 @@ class TestIdentitySessionValidate:
         session: IdentitySession,
     ) -> None:
         session.expires_at = 0
-        await identity_session_service.insert(session)
+        await store_session(identity_session_service.connection, session)
 
         with pytest.raises(ExpiredSessionException):
             await identity_session_service.validate(fixed_token("access_token"))
@@ -409,7 +306,7 @@ class TestIdentitySessionValidate:
         identity_session_service: SQLAlchemyIdentitySessionService,
         session: IdentitySession,
     ) -> None:
-        session.id = await identity_session_service.insert(session)
+        await store_session(identity_session_service.connection, session)
         session.family_id = session.id
 
         validated = await identity_session_service.validate(fixed_token("access_token"))
@@ -425,7 +322,7 @@ class TestIdentitySessionRefresh:
         session: IdentitySession,
     ) -> None:
         session.expires_at = 0
-        session.id = await identity_session_service.insert(session)
+        await store_session(identity_session_service.connection, session)
 
         token, refresh_token, refreshed = await identity_session_service.refresh(
             fixed_token("refresh_token")
@@ -488,7 +385,7 @@ class TestIdentitySessionRefresh:
         identity_session_service: SQLAlchemyIdentitySessionService,
         session: IdentitySession,
     ) -> None:
-        session.id = await identity_session_service.insert(session)
+        await store_session(identity_session_service.connection, session)
 
         _, refresh_token, refreshed = await identity_session_service.refresh(
             fixed_token("refresh_token"), refresh_token=False
@@ -519,7 +416,7 @@ class TestIdentitySessionRefresh:
         session: IdentitySession,
         token: str,
     ) -> None:
-        await identity_session_service.insert(session)
+        await store_session(identity_session_service.connection, session)
 
         with pytest.raises(InvalidRefreshTokenException):
             await identity_session_service.refresh(token)
@@ -530,7 +427,7 @@ class TestIdentitySessionRefresh:
         session: IdentitySession,
     ) -> None:
         session.revoked_at = 0
-        await identity_session_service.insert(session)
+        await store_session(identity_session_service.connection, session)
 
         with pytest.raises(InvalidRefreshTokenException):
             await identity_session_service.refresh(fixed_token("refresh_token"))
@@ -541,7 +438,7 @@ class TestIdentitySessionRefresh:
         session: IdentitySession,
     ) -> None:
         session.refresh_token_expires_at = 0
-        await identity_session_service.insert(session)
+        await store_session(identity_session_service.connection, session)
 
         with pytest.raises(ExpiredRefreshTokenException):
             await identity_session_service.refresh(fixed_token("refresh_token"))
@@ -607,7 +504,7 @@ class TestIdentitySessionRevoke:
         session.expires_at = 0
         session.refresh_token_identifier = None
         session.refresh_token_expires_at = None
-        await identity_session_service.insert(session)
+        await store_session(identity_session_service.connection, session)
 
         await identity_session_service.revoke(fixed_token("access_token"))
 
@@ -635,7 +532,7 @@ class TestIdentitySessionRevoke:
         session: IdentitySession,
     ) -> None:
         session.revoked_at = 123
-        await identity_session_service.insert(session)
+        await store_session(identity_session_service.connection, session)
 
         await identity_session_service.revoke(fixed_token("access_token"))
 

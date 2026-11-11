@@ -5,7 +5,6 @@ import time
 import types
 import typing
 from collections.abc import AsyncGenerator
-from unittest.mock import AsyncMock
 
 import pytest
 from sqlalchemy import (
@@ -14,7 +13,6 @@ from sqlalchemy import (
 )
 from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine
 
-from reauth.factors import EnrollmentCollision
 from reauth.factors.totp import (
     AlreadyEnabledTOTPException,
     AlreadyEnrolledTOTPException,
@@ -153,17 +151,6 @@ class TestTOTPEnroll:
 
         with pytest.raises(AlreadyEnrolledTOTPException):
             await totp_factor.enroll(identity_id)
-
-    async def test_enroll_translates_collision(
-        self, totp_factor: SQLAlchemyTOTPFactor, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        collision = EnrollmentCollision()
-        monkeypatch.setattr(totp_factor, "insert", AsyncMock(side_effect=collision))
-
-        with pytest.raises(AlreadyEnrolledTOTPException) as error:
-            await totp_factor.enroll(123)
-
-        assert error.value.__cause__ is collision
 
     async def test_enroll_replaces_disabled(
         self, totp_factor: SQLAlchemyTOTPFactor, make_totp: MakeTOTPCallable

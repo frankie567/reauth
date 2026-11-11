@@ -13,7 +13,7 @@ from cryptography.hazmat.primitives.twofactor.totp import TOTP as CryptoTOTP
 
 from reauth.amr import AuthenticationMethodReference
 from reauth.exceptions import ReauthException
-from reauth.factors.base import EnrollmentCollision, FactorBase
+from reauth.factors.base import FactorBase
 from reauth.logging import get_logger
 
 logger = get_logger(__name__)
@@ -181,10 +181,7 @@ class TOTPFactor(FactorBase[TOTPEnrollment], abc.ABC):
             time_step=self.time_step,
             last_verified_time_step=None,
         )
-        try:
-            totp.id = await self.insert(totp)
-        except EnrollmentCollision as error:
-            raise AlreadyEnrolledTOTPException() from error
+        totp.id = await self.insert(totp)
         logger.info(
             "TOTP enrollment created",
             extra={
@@ -341,17 +338,10 @@ class TOTPFactor(FactorBase[TOTPEnrollment], abc.ABC):
         """
         Insert a TOTP factor into a persistent store.
 
-        Raises:
-            EnrollmentCollision: If an enrollment for the identity and configured
-                factor already exists.
-
         Abstract: Implementation contract
             Persist the supplied enrollment and return its record ID. Enforce
-            uniqueness for the identity and configured factor, including concurrent
-            first enrollments. On an integrity error caused by a duplicate identity
-            and configured factor, raise EnrollmentCollision without persisting the
-            conflicting enrollment and leave the transaction usable. Propagate
-            unrelated integrity errors. Leave commit and rollback to the caller.
+            uniqueness for the identity and configured factor.
+            Leave commit and rollback to the caller.
         """
         ...
 

@@ -4,10 +4,8 @@ import dataclasses
 import typing
 
 import sqlalchemy
-import sqlalchemy.exc
 import sqlalchemy.ext.asyncio
 
-from reauth.factors import EnrollmentCollision
 from reauth.factors.backup_codes import BackupCodesEnrollment
 from reauth.factors.hotp import HOTPEnrollment
 from reauth.factors.totp import TOTPEnrollment
@@ -64,33 +62,17 @@ class OTPEnrollmentMixin[
 
         Returns:
             The inserted record ID.
-
-        Raises:
-            EnrollmentCollision: If this identity already has an
-                enrollment. The caller's transaction remains usable.
-            sqlalchemy.exc.IntegrityError: If another integrity constraint fails.
         """
         self._require_transaction()
         values = dataclasses.asdict(enrollment)
         if enrollment.id is None:
             del values["id"]
-        try:
-            async with self.connection.begin_nested():
-                result = await self.connection.execute(
-                    sqlalchemy.insert(self.table).values(**values)
-                )
-                primary_key = result.inserted_primary_key
-                assert primary_key is not None
-                return primary_key[0]
-        except sqlalchemy.exc.IntegrityError as error:
-            existing_id = await self.connection.scalar(
-                sqlalchemy.select(self.table.c.id)
-                .where(self.table.c.identity_id == enrollment.identity_id)
-                .with_for_update()
-            )
-            if existing_id is not None:
-                raise EnrollmentCollision() from error
-            raise
+        result = await self.connection.execute(
+            sqlalchemy.insert(self.table).values(**values)
+        )
+        primary_key = result.inserted_primary_key
+        assert primary_key is not None
+        return primary_key[0]
 
     async def _update_enrollment(self, enrollment: ENROLLMENT) -> None:
         """Update a previously protected enrollment without committing."""
