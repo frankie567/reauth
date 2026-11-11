@@ -1,0 +1,49 @@
+reauth/factors/oauth2/base.py
+  s_db3501e07aac70::t_22b97ea2057937 663-664
+reauth/integrations/sqlalchemy/__init__.py
+  s_db3501e07aac70::t_ef8b71f13de2a6 29-41,52,56-57,60-63,70-71
+  s_db3501e07aac70::t_4ca95069603ec6 24-28,49,59,69
+reauth/integrations/sqlalchemy/oauth2.py
+  s_db3501e07aac70::t_422da3283ecf64 1-6,7-8,9-38,42-46,49-85,89-154,155-159,166-321
+reauth/integrations/sqlalchemy/oauth2_state.py
+  s_db3501e07aac70::t_4bda540b9b434f 1-144
+tests/factors/oauth2/conftest.py
+  s_db3501e07aac70::t_868c146edf4cfe 5,8-11,13,16-17,22,25,38-42
+tests/factors/oauth2/test_base.py
+  s_db3501e07aac70::t_99db77bb243091 4,20,25,37-38,244,254-256,281,291-293,331,341-343
+tests/integrations/sqlalchemy/test_oauth2.py
+  s_db3501e07aac70::t_2f84ca0772f9e2 1-10,11-253,261,263-266,270,278-279,281-283,287,299,313,318-321,324,325-326,330,337,338-459
+tests/integrations/sqlalchemy/test_oauth2_state.py
+  s_db3501e07aac70::t_fe3b968de35d2a 1-295
+justfile
+  h_868de2c7aaf22e 59
+reauth/identity_session.py
+  s_db3501e07aac70::t_f474832607ef89 453-455,489,512
+reauth/integrations/sqlalchemy/identity_session.py
+  s_db3501e07aac70::t_89ea433ab5acd1 1-323
+tests/integrations/sqlalchemy/test_identity_session.py
+  s_db3501e07aac70::t_e203613f5c9bf4 1-908
+tests/test_identity_session.py
+  s_db3501e07aac70::t_ec2ddf26063f32 23-26,57,60-63,68,70,82,91-92,130-136,225,252,274,286-288,299,309,325,388,419,430,441,507,535
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "57921a4abf7df5a819f28fee6a74250b47480257",
+  "prompts": {},
+  "humans": {
+    "h_868de2c7aaf22e": {
+      "author": "François Voron <me@fvoron.com>"
+    }
+  },
+  "sessions": {
+    "s_db3501e07aac70": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1c9cb-c6fb-7af1-9b2b-1e83254d278d",
+        "model": "unknown"
+      },
+      "human_author": "François Voron <me@fvoron.com>"
+    }
+  }
+}
