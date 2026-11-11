@@ -1,27 +1,18 @@
 import dataclasses
-import typing
 from collections.abc import AsyncGenerator
 
 import pytest
 from sqlalchemy import (
-    JSON,
-    Column,
-    Integer,
     MetaData,
-    String,
-    Table,
     delete,
     insert,
     select,
-    update,
 )
-from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine
 
 from reauth.amr import AuthenticationMethodReference
 from reauth.authentication_session import (
     AuthenticationSession,
-    AuthenticationSessionService,
     ExpiredSessionException,
     FactorsRemainingException,
     IdentityNotAttachedException,
@@ -29,12 +20,14 @@ from reauth.authentication_session import (
     UnavailableFactorException,
 )
 from reauth.factors import FactorBase
+from reauth.integrations.sqlalchemy import (
+    SQLAlchemyAuthenticationSessionService,
+    create_authentication_session_table,
+)
 from reauth.timestamp import get_current_timestamp
 from reauth.tokens import (
     ChecksummedTokenProvider,
     HMACTokenVerifier,
-    TokenIdentifierCollision,
-    TokenProvider,
 )
 
 
@@ -46,20 +39,7 @@ def make_provider(prefix: str = "reauth_as_") -> ChecksummedTokenProvider:
 
 
 sqlalchemy_meta = MetaData()
-authentication_session_table = Table(
-    "authentication_sessions",
-    sqlalchemy_meta,
-    Column("id", Integer, primary_key=True),
-    Column("token_identifier", String(16), nullable=False, unique=True),
-    Column("token_verifier", String, nullable=False),
-    Column("expires_at", Integer, nullable=False),
-    Column("identity_id", Integer, nullable=True),
-    Column("step", Integer, nullable=False, default=0),
-    Column("amr", JSON, nullable=False),
-    Column("used_factors", JSON, nullable=False),
-    Column("context", JSON, nullable=True),
-    sqlite_autoincrement=True,
-)
+authentication_session_table = create_authentication_session_table(sqlalchemy_meta)
 
 
 @dataclasses.dataclass
@@ -118,69 +98,12 @@ class DummyMFAFactor(FactorBase[DummyMFAFactorEnrollment]):
         return DummyMFAFactorEnrollment(id=1, identity_id=identity_id)
 
 
-class SQLAlchemyAuthenticationSession(AuthenticationSessionService):
-    """Concrete implementation of AuthenticationSessionService using SQLAlchemy."""
-
-    def __init__(
-        self,
-        connection: AsyncConnection,
-        *,
-        token_provider: TokenProvider,
-        factors: set[FactorBase[typing.Any]],
-    ) -> None:
-        self.connection = connection
-        super().__init__(token_provider=token_provider, factors=factors)
-
-    async def insert(self, authentication_session: AuthenticationSession) -> int:
-        """Insert an authentication session into the database."""
-        try:
-            async with self.connection.begin_nested():
-                result = await self.connection.execute(
-                    insert(authentication_session_table)
-                    .values(**dataclasses.asdict(authentication_session))
-                    .returning(authentication_session_table.c.id)
-                )
-                return result.scalar_one()
-        except IntegrityError as error:
-            raise TokenIdentifierCollision() from error
-
-    async def get_by_token_identifier(
-        self, token_identifier: str
-    ) -> AuthenticationSession | None:
-        """Retrieve an authentication session by its token identifier."""
-        result = await self.connection.execute(
-            select(authentication_session_table).where(
-                authentication_session_table.c.token_identifier == token_identifier
-            )
-        )
-        row = result.fetchone()
-        if row is None:
-            return None
-        return AuthenticationSession(**row._asdict())
-
-    async def update(self, authentication_session: AuthenticationSession) -> None:
-        """Update an existing authentication session in the database."""
-        await self.connection.execute(
-            update(authentication_session_table)
-            .where(authentication_session_table.c.id == authentication_session.id)
-            .values(**dataclasses.asdict(authentication_session))
-        )
-
-    async def delete(self, authentication_session: AuthenticationSession) -> None:
-        """Delete an AuthenticationSession from the database."""
-        await self.connection.execute(
-            delete(authentication_session_table).where(
-                authentication_session_table.c.id == authentication_session.id
-            )
-        )
-
-
 @pytest.fixture
 async def sqlalchemy_connection(
-    sqlalchemy_engine: AsyncEngine,
+    sqlalchemy_integration_engine: AsyncEngine,
 ) -> AsyncGenerator[AsyncConnection]:
     """Fixture that creates tables and provides a connection for testing."""
-    async with sqlalchemy_engine.begin() as conn:
+    async with sqlalchemy_integration_engine.begin() as conn:
         await conn.run_sync(sqlalchemy_meta.create_all)
         yield conn
         await conn.run_sync(sqlalchemy_meta.drop_all)
@@ -203,10 +126,11 @@ def authentication_session_service(
     sqlalchemy_connection: AsyncConnection,
     password_factor: DummyPasswordFactor,
     mfa_factor: DummyMFAFactor,
-) -> SQLAlchemyAuthenticationSession:
-    """Fixture that provides an instance of SQLAlchemyAuthenticationSession."""
-    return SQLAlchemyAuthenticationSession(
+) -> SQLAlchemyAuthenticationSessionService:
+    """Fixture that provides an instance of SQLAlchemyAuthenticationSessionService."""
+    return SQLAlchemyAuthenticationSessionService(
         connection=sqlalchemy_connection,
+        table=authentication_session_table,
         token_provider=make_provider(),
         factors={password_factor, mfa_factor},
     )
@@ -214,7 +138,7 @@ def authentication_session_service(
 
 @pytest.fixture
 async def authentication_session_data(
-    authentication_session_service: SQLAlchemyAuthenticationSession,
+    authentication_session_service: SQLAlchemyAuthenticationSessionService,
 ) -> tuple[str, AuthenticationSession]:
     generated = await authentication_session_service.token_provider.generate()
     return generated.token, AuthenticationSession(
@@ -229,7 +153,7 @@ async def authentication_session_data(
 @pytest.mark.anyio
 class TestAuthenticationSessionStart:
     async def test_returns_valid_session(
-        self, authentication_session_service: SQLAlchemyAuthenticationSession
+        self, authentication_session_service: SQLAlchemyAuthenticationSessionService
     ) -> None:
         token, session = await authentication_session_service.start()
         assert isinstance(session, AuthenticationSession)
@@ -244,7 +168,7 @@ class TestAuthenticationSessionStart:
         ) == (True, None)
 
     async def test_start_with_context(
-        self, authentication_session_service: SQLAlchemyAuthenticationSession
+        self, authentication_session_service: SQLAlchemyAuthenticationSessionService
     ) -> None:
         """Test that context can be passed to start() and stored in session."""
         _token, session = await authentication_session_service.start(
@@ -258,7 +182,7 @@ class TestAuthenticationSessionStart:
         }
 
     async def test_start_without_context(
-        self, authentication_session_service: SQLAlchemyAuthenticationSession
+        self, authentication_session_service: SQLAlchemyAuthenticationSessionService
     ) -> None:
         """Test that context is None when no context is passed."""
         _token, session = await authentication_session_service.start()
@@ -269,13 +193,13 @@ class TestAuthenticationSessionStart:
 @pytest.mark.anyio
 class TestAuthenticationSessionValidate:
     async def test_not_existing_session(
-        self, authentication_session_service: SQLAlchemyAuthenticationSession
+        self, authentication_session_service: SQLAlchemyAuthenticationSessionService
     ) -> None:
         with pytest.raises(InvalidSessionTokenException):
             await authentication_session_service.validate("token")
 
     async def test_expired_session(
-        self, authentication_session_service: SQLAlchemyAuthenticationSession
+        self, authentication_session_service: SQLAlchemyAuthenticationSessionService
     ) -> None:
         generated = await authentication_session_service.token_provider.generate()
         token = generated.token
@@ -294,7 +218,7 @@ class TestAuthenticationSessionValidate:
             await authentication_session_service.validate(token)
 
     async def test_valid_session(
-        self, authentication_session_service: SQLAlchemyAuthenticationSession
+        self, authentication_session_service: SQLAlchemyAuthenticationSessionService
     ) -> None:
         generated = await authentication_session_service.token_provider.generate()
         token = generated.token
@@ -316,7 +240,7 @@ class TestAuthenticationSessionValidate:
 @pytest.mark.anyio
 class TestGetAvailableFactors:
     async def test_no_identity_zero_factor(
-        self, authentication_session_service: SQLAlchemyAuthenticationSession
+        self, authentication_session_service: SQLAlchemyAuthenticationSessionService
     ) -> None:
         generated = await authentication_session_service.token_provider.generate()
         session = AuthenticationSession(
@@ -335,7 +259,7 @@ class TestGetAvailableFactors:
         assert isinstance(next(iter(factors)), DummyPasswordFactor)
 
     async def test_identity_one_factor_enrolled(
-        self, authentication_session_service: SQLAlchemyAuthenticationSession
+        self, authentication_session_service: SQLAlchemyAuthenticationSessionService
     ) -> None:
         generated = await authentication_session_service.token_provider.generate()
         session = AuthenticationSession(
@@ -357,7 +281,7 @@ class TestGetAvailableFactors:
         assert isinstance(next(iter(factors)), DummyMFAFactor)
 
     async def test_identity_one_factor_not_enrolled(
-        self, authentication_session_service: SQLAlchemyAuthenticationSession
+        self, authentication_session_service: SQLAlchemyAuthenticationSessionService
     ) -> None:
         generated = await authentication_session_service.token_provider.generate()
         session = AuthenticationSession(
@@ -382,7 +306,7 @@ class TestGetAvailableFactors:
 class TestAdvance:
     async def test_invalid_token(
         self,
-        authentication_session_service: SQLAlchemyAuthenticationSession,
+        authentication_session_service: SQLAlchemyAuthenticationSessionService,
         password_factor: DummyPasswordFactor,
     ) -> None:
         with pytest.raises(InvalidSessionTokenException):
@@ -390,7 +314,7 @@ class TestAdvance:
 
     async def test_expired_session(
         self,
-        authentication_session_service: SQLAlchemyAuthenticationSession,
+        authentication_session_service: SQLAlchemyAuthenticationSessionService,
         password_factor: DummyPasswordFactor,
         sqlalchemy_connection: AsyncConnection,
         authentication_session_data: tuple[str, AuthenticationSession],
@@ -411,7 +335,7 @@ class TestAdvance:
 
     async def test_uses_current_step(
         self,
-        authentication_session_service: SQLAlchemyAuthenticationSession,
+        authentication_session_service: SQLAlchemyAuthenticationSessionService,
         password_factor: DummyPasswordFactor,
         sqlalchemy_connection: AsyncConnection,
         authentication_session_data: tuple[str, AuthenticationSession],
@@ -435,7 +359,7 @@ class TestAdvance:
 
     async def test_no_identity_zero_factor(
         self,
-        authentication_session_service: SQLAlchemyAuthenticationSession,
+        authentication_session_service: SQLAlchemyAuthenticationSessionService,
         password_factor: DummyPasswordFactor,
     ) -> None:
         generated = await authentication_session_service.token_provider.generate()
@@ -465,8 +389,9 @@ class TestAdvance:
         mfa_factor: DummyMFAFactor,
     ) -> None:
         trusted_factor = DummySSOFactor()
-        authentication_session_service = SQLAlchemyAuthenticationSession(
+        authentication_session_service = SQLAlchemyAuthenticationSessionService(
             connection=sqlalchemy_connection,
+            table=authentication_session_table,
             token_provider=make_provider(),
             factors={trusted_factor, mfa_factor},
         )
@@ -484,7 +409,7 @@ class TestAdvance:
 
     async def test_identity_one_factor_enrolled(
         self,
-        authentication_session_service: SQLAlchemyAuthenticationSession,
+        authentication_session_service: SQLAlchemyAuthenticationSessionService,
         mfa_factor: DummyMFAFactor,
     ) -> None:
         generated = await authentication_session_service.token_provider.generate()
@@ -515,7 +440,7 @@ class TestAdvance:
 
     async def test_identity_one_factor_not_enrolled(
         self,
-        authentication_session_service: SQLAlchemyAuthenticationSession,
+        authentication_session_service: SQLAlchemyAuthenticationSessionService,
         mfa_factor: DummyMFAFactor,
     ) -> None:
         generated = await authentication_session_service.token_provider.generate()
@@ -540,14 +465,14 @@ class TestAdvance:
 @pytest.mark.anyio
 class TestComplete:
     async def test_invalid_token(
-        self, authentication_session_service: SQLAlchemyAuthenticationSession
+        self, authentication_session_service: SQLAlchemyAuthenticationSessionService
     ) -> None:
         with pytest.raises(InvalidSessionTokenException):
             await authentication_session_service.complete("unknown")
 
     async def test_expired_session(
         self,
-        authentication_session_service: SQLAlchemyAuthenticationSession,
+        authentication_session_service: SQLAlchemyAuthenticationSessionService,
         sqlalchemy_connection: AsyncConnection,
         authentication_session_data: tuple[str, AuthenticationSession],
     ) -> None:
@@ -569,7 +494,7 @@ class TestComplete:
 
     async def test_already_completed_session(
         self,
-        authentication_session_service: SQLAlchemyAuthenticationSession,
+        authentication_session_service: SQLAlchemyAuthenticationSessionService,
         sqlalchemy_connection: AsyncConnection,
         authentication_session_data: tuple[str, AuthenticationSession],
     ) -> None:
@@ -594,7 +519,7 @@ class TestComplete:
 
     async def test_returns_identity_and_amr(
         self,
-        authentication_session_service: SQLAlchemyAuthenticationSession,
+        authentication_session_service: SQLAlchemyAuthenticationSessionService,
         password_factor: DummyPasswordFactor,
         mfa_factor: DummyMFAFactor,
     ) -> None:
@@ -619,7 +544,7 @@ class TestComplete:
         assert deleted is None
 
     async def test_raises_identity_not_attached(
-        self, authentication_session_service: SQLAlchemyAuthenticationSession
+        self, authentication_session_service: SQLAlchemyAuthenticationSessionService
     ) -> None:
         token, _session = await authentication_session_service.start()
 
@@ -628,7 +553,7 @@ class TestComplete:
 
     async def test_raises_factors_remaining(
         self,
-        authentication_session_service: SQLAlchemyAuthenticationSession,
+        authentication_session_service: SQLAlchemyAuthenticationSessionService,
         password_factor: DummyPasswordFactor,
     ) -> None:
         token, _session = await authentication_session_service.start()
