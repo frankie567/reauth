@@ -660,7 +660,9 @@ class OAuth2Factor[EXTRA](FactorBase[OAuth2Enrollment], abc.ABC):
 
         Abstract: Implementation contract
             Persist the supplied enrollment and return its ID. Enforce uniqueness of
-            (provider, account_id) within the application's storage scope.
+            (identity_id, provider), allowing at most one enrollment per identity and
+            configured provider. Enforce uniqueness of (provider, account_id) within
+            the application's storage scope.
             Leave commit and rollback to the caller.
         """
         ...

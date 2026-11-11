@@ -1,15 +1,40 @@
-import datetime
+import dataclasses
 
 import pytest
-from sqlalchemy.ext.asyncio import AsyncConnection
+from sqlalchemy import insert, update
 
 from reauth.factors.oauth2.state import (
     ExpiredStateException,
     InvalidStateException,
     OAuth2State,
 )
+from reauth.timestamp import get_current_timestamp
 
-from .conftest import SQLAlchemyOAuth2StateService
+from .conftest import SQLAlchemyOAuth2StateService, oauth2_state_table
+
+
+@pytest.fixture
+async def state_data(
+    oauth2_state_service: SQLAlchemyOAuth2StateService,
+) -> tuple[str, OAuth2State]:
+    generated = await oauth2_state_service.token_provider.generate()
+    state = OAuth2State(
+        id=42,
+        token_identifier=generated.identifier,
+        token_verifier=generated.verifier,
+        provider="google",
+        redirect_uri="https://example.com/callback",
+        code_verifier="test_verifier",
+        nonce=None,
+        identity_id=None,
+        scope=None,
+        expires_at=get_current_timestamp() + 3600,
+        context={"auth_session_id": 789, "custom_data": "test"},
+    )
+    await oauth2_state_service.connection.execute(
+        insert(oauth2_state_table).values(**dataclasses.asdict(state))
+    )
+    return generated.token, state
 
 
 @pytest.mark.anyio
@@ -126,19 +151,13 @@ class TestOAuth2StateCreate:
 @pytest.mark.anyio
 class TestOAuth2StateConsume:
     async def test_consume_valid_state(
-        self, oauth2_state_service: SQLAlchemyOAuth2StateService
+        self,
+        oauth2_state_service: SQLAlchemyOAuth2StateService,
+        state_data: tuple[str, OAuth2State],
     ) -> None:
-        state_token, expected_state = await oauth2_state_service.create(
-            provider="google",
-            redirect_uri="https://example.com/callback",
-            code_verifier="test_verifier",
-        )
-
+        state_token, expected_state = state_data
         oauth2_state = await oauth2_state_service.consume(state_token)
-
-        assert oauth2_state.id == expected_state.id
-        assert oauth2_state.provider == "google"
-        assert oauth2_state.code_verifier == "test_verifier"
+        assert oauth2_state == expected_state
 
     async def test_consume_invalid_state(
         self, oauth2_state_service: SQLAlchemyOAuth2StateService
@@ -147,46 +166,42 @@ class TestOAuth2StateConsume:
             await oauth2_state_service.consume("invalid_state_token")
 
     async def test_consume_deletes_state(
-        self, oauth2_state_service: SQLAlchemyOAuth2StateService
+        self,
+        oauth2_state_service: SQLAlchemyOAuth2StateService,
+        state_data: tuple[str, OAuth2State],
     ) -> None:
-        state_token, _ = await oauth2_state_service.create(
-            provider="google",
-            redirect_uri="https://example.com/callback",
-        )
-
+        state_token, _ = state_data
         # First consume should succeed
-        oauth2_state = await oauth2_state_service.consume(state_token)
-        assert oauth2_state is not None
+        await oauth2_state_service.consume(state_token)
+        assert (
+            await oauth2_state_service.get_by_token_identifier(
+                state_data[1].token_identifier
+            )
+            is None
+        )
 
         # Second consume with same token should fail (already deleted)
         with pytest.raises(InvalidStateException):
             await oauth2_state_service.consume(state_token)
 
     async def test_consume_expired_state(
-        self, sqlalchemy_connection: AsyncConnection
+        self,
+        oauth2_state_service: SQLAlchemyOAuth2StateService,
+        state_data: tuple[str, OAuth2State],
     ) -> None:
-        service = SQLAlchemyOAuth2StateService(
-            connection=sqlalchemy_connection,
-            lifetime=datetime.timedelta(seconds=0),  # Expires immediately
+        state_token, _ = state_data
+        await oauth2_state_service.connection.execute(
+            update(oauth2_state_table)
+            .where(oauth2_state_table.c.id == state_data[1].id)
+            .values(expires_at=0)
         )
-
-        state_token, _ = await service.create(
-            provider="google",
-            redirect_uri="https://example.com/callback",
-        )
-
         with pytest.raises(ExpiredStateException):
-            await service.consume(state_token)
+            await oauth2_state_service.consume(state_token)
 
     async def test_consume_preserves_context(
-        self, oauth2_state_service: SQLAlchemyOAuth2StateService
+        self,
+        oauth2_state_service: SQLAlchemyOAuth2StateService,
+        state_data: tuple[str, OAuth2State],
     ) -> None:
-        state_token, _ = await oauth2_state_service.create(
-            provider="google",
-            redirect_uri="https://example.com/callback",
-            auth_session_id=789,
-            custom_data="test",
-        )
-
-        oauth2_state = await oauth2_state_service.consume(state_token)
+        oauth2_state = await oauth2_state_service.consume(state_data[0])
         assert oauth2_state.context == {"auth_session_id": 789, "custom_data": "test"}

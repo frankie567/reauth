@@ -21,6 +21,19 @@ from reauth.integrations.sqlalchemy.hotp import (
     SQLAlchemyHOTPFactor,
     create_hotp_enrollment_table,
 )
+from reauth.integrations.sqlalchemy.oauth2 import (
+    SQLAlchemyAppleOAuth2Factor,
+    SQLAlchemyGitHubOAuth2Factor,
+    SQLAlchemyGoogleOAuth2Factor,
+    SQLAlchemyOAuth2Mixin,
+    SQLAlchemyOIDCFactor,
+    SQLAlchemyPrivateKeyJWTOIDCFactor,
+    create_oauth2_enrollment_table,
+)
+from reauth.integrations.sqlalchemy.oauth2_state import (
+    SQLAlchemyOAuth2StateService,
+    create_oauth2_state_table,
+)
 from reauth.integrations.sqlalchemy.totp import (
     SQLAlchemyTOTPFactor,
     create_totp_enrollment_table,
@@ -30,14 +43,23 @@ __all__ = [
     "AuthenticationSessionNotFoundException",
     "MissingTransactionException",
     "ReauthSQLAlchemyException",
+    "SQLAlchemyAppleOAuth2Factor",
     "SQLAlchemyAuthenticationSessionService",
     "SQLAlchemyBackupCodesFactor",
     "SQLAlchemyEmailOTPFactor",
+    "SQLAlchemyGitHubOAuth2Factor",
+    "SQLAlchemyGoogleOAuth2Factor",
     "SQLAlchemyHOTPFactor",
+    "SQLAlchemyOAuth2Mixin",
+    "SQLAlchemyOAuth2StateService",
+    "SQLAlchemyOIDCFactor",
+    "SQLAlchemyPrivateKeyJWTOIDCFactor",
     "SQLAlchemyTOTPFactor",
     "create_authentication_session_table",
     "create_backup_codes_enrollment_table",
     "create_email_otp_table",
     "create_hotp_enrollment_table",
+    "create_oauth2_enrollment_table",
+    "create_oauth2_state_table",
     "create_totp_enrollment_table",
 ]
