@@ -7,6 +7,13 @@ Use warm ivory **#F3EEDF** or charcoal **#20231F** as the background.
 - `logotype.svg`: ink lettering for light backgrounds.
 - `logotype-dark.svg`: cream lettering for dark backgrounds.
 - `logo.svg` and `logo-dark.svg`: combined brick and lettering.
+- `open-graph.svg`: self-contained GitHub social preview, 1280 × 640, with outlined lettering.
+- `open-graph.png`: PNG render for upload to the repository's social preview settings.
+- `readme-header.svg` and `readme-header-dark.svg`: compact 1280 × 400 README banners,
+  selected by the README's `<picture>` element for light and dark themes.
+
+The social preview keeps important content inside the supplied GitHub template's
+80px safe area. Its background fills the entire image.
 
 Lettering is outlined from Space Grotesk SemiBold (600), with no external font dependency.
 The source font is [Space Grotesk](https://github.com/floriankarsten/space-grotesk), licensed under the SIL Open Font License.

@@ -1,21 +1,22 @@
-# Reauth
+<a href="https://frankie567.github.io/reauth/">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="brand/readme-header-dark.svg">
+    <img src="brand/readme-header.svg" alt="Reauth — The authentication toolkit for Python. Small pieces. Infinite possibilities." width="1280">
+  </picture>
+</a>
 
 <p align="center">
-    <em>The authentication toolkit for Python</em>
+  <strong><a href="https://frankie567.github.io/reauth/">Documentation</a></strong> ·
+  <strong><a href="https://frankie567.github.io/reauth/getting-started/">Getting started</a></strong> ·
+  <strong><a href="https://github.com/frankie567/reauth">Source code</a></strong>
 </p>
 
-[![build](https://github.com/frankie567/reauth/workflows/Build/badge.svg)](https://github.com/frankie567/reauth/actions)
-[![codecov](https://codecov.io/gh/frankie567/reauth/branch/master/graph/badge.svg)](https://codecov.io/gh/frankie567/reauth)
-[![PyPI version](https://badge.fury.io/py/reauth.svg)](https://badge.fury.io/py/reauth)
-[![OpenSSF Baseline](https://www.bestpractices.dev/projects/14975/baseline)](https://www.bestpractices.dev/projects/14975)
-
----
-
-**Documentation**: <a href="https://frankie567.github.io/reauth/" target="_blank">https://frankie567.github.io/reauth/</a>
-
-**Source Code**: <a href="https://github.com/frankie567/reauth" target="_blank">https://github.com/frankie567/reauth</a>
-
----
+<p align="center">
+  <a href="https://github.com/frankie567/reauth/actions"><img src="https://github.com/frankie567/reauth/workflows/Build/badge.svg" alt="build"></a>
+  <a href="https://codecov.io/gh/frankie567/reauth"><img src="https://codecov.io/gh/frankie567/reauth/branch/master/graph/badge.svg" alt="codecov"></a>
+  <a href="https://badge.fury.io/py/reauth"><img src="https://badge.fury.io/py/reauth.svg" alt="PyPI version"></a>
+  <a href="https://www.bestpractices.dev/projects/14975"><img src="https://www.bestpractices.dev/projects/14975/baseline" alt="OpenSSF Baseline"></a>
+</p>
 
 > [!WARNING]
 > This is an early-stage project with many moving parts and mostly missing documentation. The API is not yet stable and breaking changes are expected.
