@@ -1,0 +1,105 @@
+docs/images/favicon.svg
+  s_dd8408bc7c27cd::t_4dbfd85b144794 1-2
+zensical.toml
+  s_dd8408bc7c27cd::t_d15aabeee34e61 75,82
+  s_dd8408bc7c27cd::t_6cdde33597fe7a 73
+  s_dd8408bc7c27cd::t_c355d9f5081a10 8
+brand/logomark.svg
+  s_dd8408bc7c27cd::t_4dbfd85b144794 1-3
+tests/website/bricks.test.cjs
+  s_dd8408bc7c27cd::t_2119146c5a287e 6,10,28-39,92
+  s_dd8408bc7c27cd::t_4841e560b968cd 19-27
+  s_dd8408bc7c27cd::t_8a2a094da6d33d 14-18,40-82
+  s_dd8408bc7c27cd::t_95c3bbae3df5bf 3,83-91
+  s_dd8408bc7c27cd::t_4070a4a78339af 1-2
+  s_dd8408bc7c27cd::t_00e25e6b55913f 4-5
+  s_dd8408bc7c27cd::t_891f6afb180fa6 7-9
+  s_dd8408bc7c27cd::t_839f9b9d9424cf 11-13
+brand/logotype-dark.svg
+  s_dd8408bc7c27cd::t_4dbfd85b144794 1-9
+brand/logotype.svg
+  s_dd8408bc7c27cd::t_4dbfd85b144794 1-9
+docs/index.md
+  s_dd8408bc7c27cd::t_d15aabeee34e61 11-12,20-21,40
+  s_dd8408bc7c27cd::t_d0d6b3ce07f5e0 25-26,28-34,37-39
+  s_dd8408bc7c27cd::t_7032bcf2cb6565 24,35
+  s_dd8408bc7c27cd::t_7e5767f7accc08 23,27
+docs/overrides/main.html
+  s_dd8408bc7c27cd::t_6cdde33597fe7a 1-7
+brand/logo-dark.svg
+  s_dd8408bc7c27cd::t_4dbfd85b144794 1-12
+docs/javascripts/bricks.js
+  s_dd8408bc7c27cd::t_32c20755bbe74b 119
+  s_dd8408bc7c27cd::t_e422e9f3817ede 4,12,14-52,67-68,70,84,93-113,117-118,121,144-152,154-173,180,191
+  s_dd8408bc7c27cd::t_2119146c5a287e 122-131,133-137,142,153
+  s_dd8408bc7c27cd::t_95c3bbae3df5bf 13,72,90
+  s_dd8408bc7c27cd::t_4841e560b968cd 2-3,5-7,75,87,132,181-190
+  s_dd8408bc7c27cd::t_a64f575e277c67 53-65,115
+  s_dd8408bc7c27cd::t_a7928b5ff41ddc 78-80
+  s_dd8408bc7c27cd::t_498ecf97acd713 1
+  s_dd8408bc7c27cd::t_b8ac3e6371076b 8-11
+  s_dd8408bc7c27cd::t_672a22dd53c4d7 66
+  s_dd8408bc7c27cd::t_9fd2b18850856a 69
+  s_dd8408bc7c27cd::t_c54075a2820d71 71
+  s_dd8408bc7c27cd::t_a85c9ae771b48e 73-74
+  s_dd8408bc7c27cd::t_cca14c17075830 76-77
+  s_dd8408bc7c27cd::t_a7954d49349ffb 81-83
+  s_dd8408bc7c27cd::t_ba966c57cfb23e 85-86
+  s_dd8408bc7c27cd::t_46a67dec2014b6 88-89
+  s_dd8408bc7c27cd::t_54697c8fd84750 91-92
+  s_dd8408bc7c27cd::t_2dfc77b19ce2a2 114
+  s_dd8408bc7c27cd::t_6a907a9d26cb8a 116
+  s_dd8408bc7c27cd::t_32b2ae4b88cb10 120
+  s_dd8408bc7c27cd::t_ebdf7de0234d9d 138-141
+  s_dd8408bc7c27cd::t_60ee27aeecea6a 143
+  s_dd8408bc7c27cd::t_ada9cb07ce4738 174-179
+  s_dd8408bc7c27cd::t_ee68c7128beae2 192-194
+  s_6049949a03a692::t_3e879a6c39ff76 195
+brand/logo.svg
+  s_dd8408bc7c27cd::t_4dbfd85b144794 1-12
+docs/stylesheets/landing.css
+  s_dd8408bc7c27cd::t_d0d6b3ce07f5e0 97,123
+  s_dd8408bc7c27cd::t_7032bcf2cb6565 93-96
+  s_dd8408bc7c27cd::t_2119146c5a287e 124-128,130-131
+  s_dd8408bc7c27cd::t_b70c65154bc9be 120
+  s_dd8408bc7c27cd::t_ee3de7865be7e8 122
+  s_dd8408bc7c27cd::t_4841e560b968cd 92
+  s_dd8408bc7c27cd::t_1c5f6cfa8e3eac 8,10-17,20-28,30-33,36-41,44-46,48,59,64-67,69-85,89-91,98-99,101-102,105-107,110-111,113
+  s_dd8408bc7c27cd::t_e82f3527caea01 117-119
+  s_dd8408bc7c27cd::t_5cc6c84995500b 121
+docs/stylesheets/extra.css
+  s_dd8408bc7c27cd::t_94373e51bdaf9a 1-8,10-24,28-42,50,54-62,64,69-78,81-84,88,94-95,107-108,112,114,117,119-123,126,128-129,132,139-140,144,147-151
+  s_dd8408bc7c27cd::t_eed8b330264ba0 185,196-198
+  s_dd8408bc7c27cd::t_cad260761ec401 143
+  s_dd8408bc7c27cd::t_a43be946958429 161,187,202
+  s_dd8408bc7c27cd::t_0310f7a5640ffd 141,154-157,160,162-184,186,188-192,194-195,199
+  s_dd8408bc7c27cd::t_d7cddc474b957b 200-201
+brand/README.md
+  s_dd8408bc7c27cd::t_19fc2c89937efc 1-16
+justfile
+  s_dd8408bc7c27cd::t_d2541b6964c237 124-126
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "866f45bd74d2dd66e15be7d1391284359ad4850b",
+  "prompts": {},
+  "sessions": {
+    "s_6049949a03a692": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1da09-d104-7ff1-b403-8dfd259cd77e",
+        "model": "unknown"
+      },
+      "human_author": "François Voron <me@fvoron.com>"
+    },
+    "s_dd8408bc7c27cd": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1d9e7-81dd-7b83-9edf-43575cf97021",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "François Voron <me@fvoron.com>"
+    }
+  }
+}
