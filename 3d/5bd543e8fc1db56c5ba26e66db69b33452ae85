@@ -1,0 +1,19 @@
+.github/workflows/build.yml
+  s_b779c6aec5550c::t_8bb1186694e786 178-181,183-186
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "3d5bd543e8fc1db56c5ba26e66db69b33452ae85",
+  "prompts": {},
+  "sessions": {
+    "s_b779c6aec5550c": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1d92f-0a82-7010-98fa-9bd08da83bc4",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "François Voron <me@fvoron.com>"
+    }
+  }
+}
