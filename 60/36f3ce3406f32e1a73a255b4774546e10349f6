@@ -1,0 +1,20 @@
+docs/stylesheets/extra.css
+  s_dd8408bc7c27cd::t_3ac2bd01031486 76
+  s_dd8408bc7c27cd::t_48bdc5acf75137 71-74,84
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "6036f3ce3406f32e1a73a255b4774546e10349f6",
+  "prompts": {},
+  "sessions": {
+    "s_dd8408bc7c27cd": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1d9e7-81dd-7b83-9edf-43575cf97021",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "François Voron <me@fvoron.com>"
+    }
+  }
+}
