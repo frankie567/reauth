@@ -66,15 +66,14 @@ code, kbd, pre {
   box-shadow: none;
 }
 
-.md-logo img.reauth-logo { display: none; }
-.md-nav__title .md-nav__button.md-logo img.reauth-logo { display: none; }
 .md-header__button.md-logo { display: block; }
 .md-header__button.md-logo img { height: 1.8rem; width: auto; }
-.md-header__button.md-logo .reauth-logomark { display: none; }
-.md-header__button.md-logo .reauth-logo--light { display: block; }
-[data-md-color-scheme="slate"] .md-header__button.md-logo .reauth-logo--light { display: none; }
-[data-md-color-scheme="slate"] .md-header__button.md-logo .reauth-logo--dark { display: block; }
+.md-nav .md-nav__title[for="__drawer"] .md-logo { height: 1.8rem; width: auto; }
+[data-md-color-scheme] .md-logo img.reauth-logo.reauth-logo--dark { display: none; }
+[data-md-color-scheme="slate"] .md-logo img.reauth-logo.reauth-logo--light { display: none; }
+[data-md-color-scheme="slate"] .md-logo img.reauth-logo.reauth-logo--dark { display: block; }
 .md-header__topic:first-child { visibility: hidden; }
+.md-header__ellipsis { top: .2rem; }
 
 .md-nav__title, .md-tabs__link {
   font-size: var(--reauth-label-size);
@@ -82,6 +81,7 @@ code, kbd, pre {
   letter-spacing: 0;
   text-transform: none;
 }
+.md-nav .md-nav__title[for="__drawer"] { font-size: 0; }
 
 .md-typeset :is(h1, h2, h3) {
   color: var(--md-primary-fg-color);
