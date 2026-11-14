@@ -8,15 +8,9 @@ on:
 permissions:
     contents: read
 
-# Allow one concurrent deployment
 concurrency:
     group: "pages"
     cancel-in-progress: true
-
-# Default to bash
-defaults:
-    run:
-        shell: bash
 
 jobs:
     build:
@@ -24,15 +18,13 @@ jobs:
 
         steps:
             - name: Harden the runner (Audit all outbound calls)
-              uses: step-security/harden-runner@46b06cea07f9e64621fdf066ba77ac6915163d43 # v2.22.3
+              uses: step-security/harden-runner@1d88384fd173af6ecb012dfd0264a306b711241a # v2.22.4
               with:
                 egress-policy: audit
 
             - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-            - name: Set up Python
-              uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
               with:
-                  python-version: '3.14'
+                  persist-credentials: false
             - name: Setup Just
               uses: extractions/setup-just@53165ef7e734c5c07cb06b3c8e7b647c5aa16db3 # v4.0.0
             - name: Install uv and set the Python version
@@ -40,7 +32,7 @@ jobs:
               with:
                   python-version: '3.14'
             - name: Install the project
-              run: uv sync --all-extras --dev
+              run: uv sync --locked
             - name: Build
               run: just docs-build
             - name: Upload artifact
@@ -59,7 +51,7 @@ jobs:
         needs: build
         steps:
             - name: Harden the runner (Audit all outbound calls)
-              uses: step-security/harden-runner@46b06cea07f9e64621fdf066ba77ac6915163d43 # v2.22.3
+              uses: step-security/harden-runner@1d88384fd173af6ecb012dfd0264a306b711241a # v2.22.4
               with:
                 egress-policy: audit
 

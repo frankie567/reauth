@@ -53,6 +53,8 @@ Our vision is to build a comprehensive, flexible authentication toolkit for Pyth
 
 We use [uv](https://docs.astral.sh/uv/) to manage the development environment and production build, and [just](https://github.com/casey/just) to manage command shortcuts. Ensure they are installed on your system.
 
+Run `just install` to install the development dependencies and pre-commit hooks.
+
 ### Run unit tests
 
 You can run all the tests with:
@@ -75,25 +77,19 @@ Execute the following command to apply linting and check typing:
 just lint
 ```
 
-### Publish a new version
+### Publishing a release
 
-You can bump the version, create a commit and associated tag with one command:
+1. Commit the release entries under `Unreleased` in [CHANGELOG.md](CHANGELOG.md).
+   From a clean release branch with Git signing configured, run `just version patch`,
+   `just version minor`, or `just version major`. The recipe updates the version,
+   changelog, and lockfile and creates a signed commit.
+2. Preview the release body with `just release-notes <version>`, then push the branch
+   and merge the release PR into `main`.
+3. With the GitHub CLI authenticated, run `just release <PR number>`. This signs and
+   pushes a tag for the exact commit that landed, even if `main` has advanced.
+   After the checks pass, CI publishes to PyPI and then publishes the GitHub release.
 
-```bash
-just version patch
-```
-
-```bash
-just version minor
-```
-
-```bash
-just version major
-```
-
-Your default Git text editor will open so you can add information about the release.
-
-When you push the tag on GitHub, the workflow will automatically publish it on PyPi and a GitHub release will be created as draft.
+The PyPI Trusted Publisher must match `build.yml` and the GitHub `release` environment.
 
 ## Serve the documentation
 

@@ -3,7 +3,8 @@
 Add curated entries under `Unreleased`, using [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 categories. From a clean checkout, run `just version patch` (or `minor`, `major`,
 or an explicit version) to update the package version and changelog, open the
-commit editor, and create a signed commit and tag. Review before pushing.
+commit editor, and create a signed commit. After the release PR merges into `main`,
+run `just release <PR number>` to sign and push the release tag.
 Use `just release-notes <version>` to preview the GitHub release body.
 Public security details must follow coordinated disclosure.
 Earlier release notes are in [GitHub Releases](https://github.com/frankie567/reauth/releases).
