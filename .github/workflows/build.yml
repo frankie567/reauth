@@ -12,34 +12,28 @@ permissions:
 jobs:
     lint:
         runs-on: ubuntu-latest
-        strategy:
-            fail-fast: false
-            matrix:
-                python_version: ['3.14', '3.15']
 
         steps:
             - name: Harden the runner (Audit all outbound calls)
-              uses: step-security/harden-runner@46b06cea07f9e64621fdf066ba77ac6915163d43 # v2.22.3
+              uses: step-security/harden-runner@1d88384fd173af6ecb012dfd0264a306b711241a # v2.22.4
               with:
                 egress-policy: audit
 
             - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
               with:
                   persist-credentials: false
-            - name: Set up Python
-              uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
-              with:
-                  python-version: ${{ matrix.python_version }}
             - name: Setup Just
               uses: extractions/setup-just@53165ef7e734c5c07cb06b3c8e7b647c5aa16db3 # v4.0.0
             - name: Install uv and set the Python version
               uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
               with:
-                  python-version: ${{ matrix.python_version }}
+                  python-version: '3.14'
             - name: Install the project
-              run: uv sync --locked --all-extras --dev
+              run: uv sync --locked
             - name: Lint and typecheck
               run: just lint-check
+            - name: Build documentation
+              run: just docs-build
 
     test:
         runs-on: ubuntu-latest
@@ -82,17 +76,14 @@ jobs:
 
         steps:
             - name: Harden the runner (Audit all outbound calls)
-              uses: step-security/harden-runner@46b06cea07f9e64621fdf066ba77ac6915163d43 # v2.22.3
+              uses: step-security/harden-runner@1d88384fd173af6ecb012dfd0264a306b711241a # v2.22.4
               with:
                 egress-policy: audit
 
             - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
               with:
                   persist-credentials: false
-            - name: Set up Python
-              uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
-              with:
-                  python-version: ${{ matrix.python_version }}
+                  fetch-depth: ${{ startsWith(github.ref, 'refs/tags/') && matrix.database == 'sqlite' && matrix.python_version == '3.14' && '0' || '1' }}
             - name: Setup Just
               uses: extractions/setup-just@53165ef7e734c5c07cb06b3c8e7b647c5aa16db3 # v4.0.0
             - name: Install uv and set the Python version
@@ -100,19 +91,23 @@ jobs:
               with:
                   python-version: ${{ matrix.python_version }}
             - name: Install the project
-              run: uv sync --locked --all-extras --dev
+              run: uv sync --locked
             - name: Test
-              run: |
-                  just test-cov-xml
+              run: just test-cov-xml
             - name: Validate release tag
-              if: startsWith(github.ref, 'refs/tags/')
+              if: startsWith(github.ref, 'refs/tags/') && matrix.database == 'sqlite' && matrix.python_version == '3.14'
               run: |
                   [[ "$GITHUB_REF_NAME" =~ ^v[0-9]+\.[0-9]+\.[0-9]+([ab][0-9]+|rc[0-9]+)?$ ]]
                   test "$GITHUB_REF_NAME" = "v$(uv run --locked python -c 'import reauth; print(reauth.__version__)')"
+                  if ! git merge-base --is-ancestor HEAD origin/main; then
+                      echo "::error::The release tag must point to a commit on main."
+                      exit 1
+                  fi
             - name: Build distributions
+              if: matrix.database == 'sqlite' && matrix.python_version == '3.14'
               run: just build
             - name: Prepare release notes and hashes
-              if: startsWith(github.ref, 'refs/tags/')
+              if: startsWith(github.ref, 'refs/tags/') && matrix.database == 'sqlite' && matrix.python_version == '3.14'
               run: |
                   just release-notes "${GITHUB_REF_NAME#v}" > "dist/reauth-${GITHUB_REF_NAME}-release-notes.md"
                   test -s "dist/reauth-${GITHUB_REF_NAME}-release-notes.md"
@@ -126,6 +121,7 @@ jobs:
                   path: dist/
                   if-no-files-found: error
             - uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1
+              if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
               with:
                   flags: database-${{ matrix.database }}
                   token: ${{ secrets.CODECOV_TOKEN }}
@@ -163,7 +159,7 @@ jobs:
 
         steps:
             - name: Harden the runner (Audit all outbound calls)
-              uses: step-security/harden-runner@46b06cea07f9e64621fdf066ba77ac6915163d43 # v2.22.3
+              uses: step-security/harden-runner@1d88384fd173af6ecb012dfd0264a306b711241a # v2.22.4
               with:
                 egress-policy: audit
 
@@ -172,18 +168,23 @@ jobs:
               with:
                   name: distributions
                   path: dist/
+            - name: Verify release checksums
+              working-directory: dist
+              run: sha256sum --check SHA256SUMS
             - name: Attest release assets
               uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
               with:
                   subject-path: dist/*
             - name: Install uv
               uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+              with:
+                  enable-cache: false
             - name: Publish on PyPI
               run: uv publish --trusted-publishing always dist/*.whl dist/*.tar.gz
-            - name: Create release
+            - name: Publish GitHub release
               uses: ncipollo/release-action@339a81892b84b4eeb0f6e744e4574d79d0d9b8dd # v1.21.0
               with:
-                  draft: true
+                  draft: false
                   bodyFile: dist/reauth-${{ github.ref_name }}-release-notes.md
                   artifacts: dist/*
                   token: ${{ secrets.GITHUB_TOKEN }}
