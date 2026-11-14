@@ -12,12 +12,13 @@
   const overlaps = (a, b) => Math.abs(a.x - b.x) < 130 - 0.01 && Math.abs(a.y - b.y) < 44 - 0.01;
   const compareDepth = (a, b) => Math.abs(a.y - b.y) < 0.01 ? a.x - b.x : b.y - a.y;
 
-  function stackAbove(brick, bricks) {
+  function collectStack(brick, bricks, includeBelow = false) {
     const stack = [brick];
     for (const lower of stack) {
       for (const upper of bricks) {
         const dx = Math.abs(upper.x - lower.x);
-        if (!stack.includes(upper) && Math.abs(lower.y - upper.y - 44) < 0.01
+        const dy = lower.y - upper.y;
+        if (!stack.includes(upper) && Math.abs((includeBelow ? Math.abs(dy) : dy) - 44) < 0.01
           && (dx < 0.01 || Math.abs(dx - 65) < 0.01)) stack.push(upper);
       }
     }
@@ -69,7 +70,7 @@
     return result;
   }
 
-  if (typeof module !== 'undefined') module.exports = { canvasBounds, constrain, snap, stackAbove, moveStack, stackOffsets, compareDepth };
+  if (typeof module !== 'undefined') module.exports = { canvasBounds, constrain, snap, collectStack, moveStack, stackOffsets, compareDepth };
   if (typeof document === 'undefined') return;
 
   let resizeObserver;
@@ -92,7 +93,7 @@
         svg.append(brick.element);
       }
     }
-    function settle(brick, stack = stackAbove(brick, bricks)) {
+    function settle(brick, stack) {
       const position = snap(brick, bricks.filter(other => !stack.includes(other)), bounds, stackOffsets(stack));
       const connected = position !== brick;
       moveStack(stack, position, bounds);
@@ -116,23 +117,25 @@
       } else {
         settle(current.brick, current.stack);
       }
-      current.brick.element.focus({ preventScroll: true });
       if (svg.hasPointerCapture(current.pointerId)) svg.releasePointerCapture(current.pointerId);
     }
     svg.parentElement.addEventListener('contextmenu', event => {
       event.preventDefault();
       if (drag) return;
+      const cursor = point(event);
+      const position = constrain({ x: cursor.x - 65, y: cursor.y - 22 }, bounds);
+      if (bricks.some(brick => overlaps(brick, position))) {
+        status.textContent = 'No room for a brick here.';
+        return;
+      }
       const element = bricks[0].element.cloneNode(true);
       element.querySelectorAll('text').forEach(text => text.remove());
       element.classList.remove('is-dragging');
       element.classList.add('brick-grey');
       element.dataset.brick = 'Grey brick';
-      element.setAttribute('aria-label', 'Move grey brick');
-      const cursor = point(event);
-      const brick = { element, ...constrain({ x: cursor.x - 65, y: cursor.y - 22 }, bounds) };
+      const brick = { element, ...position };
       bricks.push(brick);
       render();
-      element.focus({ preventScroll: true });
       status.textContent = 'Grey brick added.';
     });
     svg.addEventListener('pointerdown', event => {
@@ -140,8 +143,7 @@
       const brick = bricks.find(item => item.element === event.target.closest('[data-brick]'));
       if (!brick) return;
       event.preventDefault();
-      brick.element.focus({ preventScroll: true });
-      const stack = stackAbove(brick, bricks);
+      const stack = collectStack(brick, bricks);
       drag = { brick, stack, pointerId: event.pointerId, origin: point(event), start: stack.map(({ x, y }) => ({ x, y })) };
       for (const item of stack) item.element.classList.add('is-dragging');
       svg.setPointerCapture(event.pointerId);
@@ -162,29 +164,18 @@
     });
     svg.addEventListener('pointercancel', () => finish(true));
     svg.addEventListener('lostpointercapture', () => finish(true));
-    svg.addEventListener('keydown', event => {
-      if (event.key === 'Escape') { finish(true); return; }
-      const brick = bricks.find(item => item.element === event.target);
-      if (!brick || drag) return;
-      const moves = { ArrowLeft: [-10, 0], ArrowRight: [10, 0], ArrowUp: [0, -10], ArrowDown: [0, 10] };
-      if (moves[event.key]) {
-        event.preventDefault();
-        const [x, y] = moves[event.key];
-        moveStack(stackAbove(brick, bricks), { x: brick.x + x, y: brick.y + y }, bounds);
-        render();
-        brick.element.focus({ preventScroll: true });
-      } else if (event.key === 'Enter' || event.key === ' ') {
-        event.preventDefault();
-        settle(brick);
-        brick.element.focus({ preventScroll: true });
-      }
-    });
     resizeObserver = new ResizeObserver(([entry]) => {
       const { width, height } = entry.contentRect;
       if (!width || !height) return;
       finish(true);
       bounds = canvasBounds(width, height);
-      for (const brick of bricks) Object.assign(brick, constrain(brick, bounds));
+      const remaining = new Set(bricks);
+      while (remaining.size) {
+        const brick = remaining.values().next().value;
+        const stack = collectStack(brick, [...remaining], true);
+        moveStack(stack, brick, bounds);
+        for (const item of stack) remaining.delete(item);
+      }
       render();
     });
     resizeObserver.observe(svg);

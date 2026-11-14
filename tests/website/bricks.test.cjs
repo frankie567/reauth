@@ -1,6 +1,6 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const { canvasBounds, constrain, snap, stackAbove, moveStack, stackOffsets, compareDepth } = require('../../docs/javascripts/bricks.js');
+const { canvasBounds, constrain, snap, collectStack, moveStack, stackOffsets, compareDepth } = require('../../docs/javascripts/bricks.js');
 
 test('snaps above and below a nearby brick, but leaves distant bricks alone', () => {
   const other = { x: 100, y: 220 };
@@ -56,9 +56,9 @@ test('carries all connected bricks above the selected brick, including branches'
   const top = { x: 100, y: 212 };
   const loose = { x: 100, y: 100 };
   const bricks = [top, left, loose, right, base];
-  const stack = stackAbove(base, bricks);
+  const stack = collectStack(base, bricks);
   assert.deepEqual(new Set(stack), new Set([base, left, right, top]));
-  assert.deepEqual(stackAbove(top, bricks), [top]);
+  assert.deepEqual(collectStack(top, bricks), [top]);
   moveStack(stack, { x: 110, y: 280 });
   assert.deepEqual([base, left, right, top, loose], [
     { x: 110, y: 280 }, { x: 45, y: 236 }, { x: 175, y: 236 },

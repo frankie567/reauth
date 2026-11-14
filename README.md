@@ -1,9 +1,9 @@
-<a href="https://frankie567.github.io/reauth/">
+<h1><a href="https://frankie567.github.io/reauth/">
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="brand/readme-header-dark.svg">
-    <img src="brand/readme-header.svg" alt="Reauth — The authentication toolkit for Python. Small pieces. Infinite possibilities." width="1280">
+    <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/frankie567/reauth/main/brand/readme-header-dark.svg">
+    <img src="https://raw.githubusercontent.com/frankie567/reauth/main/brand/readme-header.svg" alt="Reauth — The authentication toolkit for Python. Small pieces. Infinite possibilities." width="1280">
   </picture>
-</a>
+</a></h1>
 
 <p align="center">
   <strong><a href="https://frankie567.github.io/reauth/">Documentation</a></strong> ·

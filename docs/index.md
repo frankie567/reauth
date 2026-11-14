@@ -20,7 +20,7 @@ hide:
 <figure class="hero-art" aria-label="Authentication assembled from factors, MFA, and sessions">
 <div class="art-heading"><span>Assembly / 001</span><span>Reauth systems</span></div>
 <div class="auth-bricks">
-<svg class="auth-assembly" viewBox="0 0 420 420" xmlns="http://www.w3.org/2000/svg" aria-label="Interactive authentication bricks">
+<svg class="auth-assembly" viewBox="0 0 420 420" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Authentication building blocks: Factors, MFA, and Sessions">
 <defs><g id="auth-brick-shape">
 <path class="brick-side" d="M130 0L169 -48.1V-4.1L130 44Z"/>
 <path class="brick-top" d="M0 0L39 -48.1H169L130 0Z"/>
@@ -29,13 +29,12 @@ hide:
 <g transform="translate(126.75 -41.075)"><path class="brick-side" d="M-15.66 1.595 L15.66 -1.595 L15.66 3.405 C15.66 6.341 8.649 9.435 0 10.316 C-8.649 11.197 -15.66 9.531 -15.66 6.595 Z"/><circle class="brick-top" r="15" transform="matrix(1 0 .3 -.37 0 0)"/></g>
 <g transform="translate(42.25 -17.025)"><path class="brick-side" d="M-15.66 1.595 L15.66 -1.595 L15.66 3.405 C15.66 6.341 8.649 9.435 0 10.316 C-8.649 11.197 -15.66 9.531 -15.66 6.595 Z"/><circle class="brick-top" r="15" transform="matrix(1 0 .3 -.37 0 0)"/></g>
 <g transform="translate(107.25 -17.025)"><path class="brick-side" d="M-15.66 1.595 L15.66 -1.595 L15.66 3.405 C15.66 6.341 8.649 9.435 0 10.316 C-8.649 11.197 -15.66 9.531 -15.66 6.595 Z"/><circle class="brick-top" r="15" transform="matrix(1 0 .3 -.37 0 0)"/></g>
-</g></defs><g class="auth-brick" data-brick="Factors" data-x="95" data-y="358" transform="translate(95 358)" tabindex="0" role="button" aria-label="Move Factors brick" aria-describedby="brick-instructions"><use href="#auth-brick-shape"/><text class="brick-label brick-name" x="65" y="27" text-anchor="middle">Factors</text></g>
-<g class="auth-brick" data-brick="MFA" data-x="125" data-y="228" transform="translate(125 228)" tabindex="0" role="button" aria-label="Move MFA brick" aria-describedby="brick-instructions"><use href="#auth-brick-shape"/><text class="brick-label brick-name" x="65" y="27" text-anchor="middle">MFA</text></g>
-<g class="auth-brick" data-brick="Sessions" data-x="155" data-y="98" transform="translate(155 98)" tabindex="0" role="button" aria-label="Move Sessions brick" aria-describedby="brick-instructions"><use href="#auth-brick-shape"/><text class="brick-label brick-name" x="65" y="27" text-anchor="middle">Sessions</text></g>
+</g></defs><g class="auth-brick" data-brick="Factors" data-x="95" data-y="358" transform="translate(95 358)"><use href="#auth-brick-shape"/><text class="brick-label brick-name" x="65" y="27" text-anchor="middle">Factors</text></g>
+<g class="auth-brick" data-brick="MFA" data-x="125" data-y="228" transform="translate(125 228)"><use href="#auth-brick-shape"/><text class="brick-label brick-name" x="65" y="27" text-anchor="middle">MFA</text></g>
+<g class="auth-brick" data-brick="Sessions" data-x="155" data-y="98" transform="translate(155 98)"><use href="#auth-brick-shape"/><text class="brick-label brick-name" x="65" y="27" text-anchor="middle">Sessions</text></g>
 </svg>
 </div>
 <figcaption class="art-coordinate"><span>Fig. A — Auth, block by block.</span><span>↑ Build your way</span></figcaption>
-<span class="md-visually-hidden" id="brick-instructions">Drag to connect. Arrow keys move; Enter snaps.</span>
 <span class="md-visually-hidden" id="brick-status" aria-live="polite"></span>
 </figure>
 </section>

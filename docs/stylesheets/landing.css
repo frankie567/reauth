@@ -115,9 +115,8 @@
   .landing-closing { align-items: flex-start; flex-direction: column; }
 }
 
-.auth-brick { cursor: grab; touch-action: none; outline: none; }
+.auth-brick { cursor: grab; touch-action: none; }
 .auth-brick.is-dragging { cursor: grabbing; }
-.auth-brick:focus-visible use { stroke: var(--md-default-fg-color); stroke-width: 2px; }
 .art-coordinate { align-items: center; }
 
 .auth-brick use { stroke: #633722; stroke-width: 1; stroke-linejoin: round; }
@@ -128,4 +127,3 @@
   --reauth-brick-side: #777b70;
 }
 .auth-brick.brick-grey use { stroke: #50564c; }
-.auth-brick.brick-grey:focus-visible use { stroke: var(--md-default-fg-color); }
