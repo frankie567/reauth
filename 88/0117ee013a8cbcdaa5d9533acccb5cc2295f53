@@ -1,0 +1,38 @@
+README.md
+  s_dd8408bc7c27cd::t_404b425d2bb221 9-11,14-19
+  s_6049949a03a692::t_20fc854a16545a 1-6
+brand/readme-header-dark.svg
+  s_dd8408bc7c27cd::t_de6667ad680e02 36,39,42
+  s_dd8408bc7c27cd::t_5586ea604dfc1e 1-35,37-38,40-41,43-46
+brand/readme-header.svg
+  s_dd8408bc7c27cd::t_de6667ad680e02 36,39,42
+  s_dd8408bc7c27cd::t_5586ea604dfc1e 1-35,37-38,40-41,43-46
+brand/README.md
+  s_dd8408bc7c27cd::t_427ce4e3d1e98e 10-16
+brand/open-graph.svg
+  s_dd8408bc7c27cd::t_2b19513f2120e8 1-50
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "880117ee013a8cbcdaa5d9533acccb5cc2295f53",
+  "prompts": {},
+  "sessions": {
+    "s_6049949a03a692": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1da09-d104-7ff1-b403-8dfd259cd77e",
+        "model": "unknown"
+      },
+      "human_author": "François Voron <me@fvoron.com>"
+    },
+    "s_dd8408bc7c27cd": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1d9e7-81dd-7b83-9edf-43575cf97021",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "François Voron <me@fvoron.com>"
+    }
+  }
+}
