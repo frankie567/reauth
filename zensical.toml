@@ -71,8 +71,8 @@ name = "Reauth on GitHub"
 
 [project.theme]
 custom_dir = "docs/overrides"
-favicon = "images/favicon.svg"
-logo = "images/favicon.svg"
+favicon = "images/logomark.svg"
+logo = "images/logo.svg"
 features = ["navigation.tabs", "navigation.tabs.sticky", "navigation.path", "content.code.copy"]
 
 [project.theme.icon]

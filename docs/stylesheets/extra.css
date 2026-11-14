@@ -66,17 +66,15 @@ code, kbd, pre {
   box-shadow: none;
 }
 
-.md-header__topic:first-child {
-  font-size: 1.6rem;
-  font-weight: 600;
-  letter-spacing: -.1rem;
-  text-transform: lowercase;
-}
-
-.md-header__topic:first-child .md-ellipsis::after {
-  content: ".";
-  color: var(--reauth-orange);
-}
+.md-logo img.reauth-logo { display: none; }
+.md-nav__title .md-nav__button.md-logo img.reauth-logo { display: none; }
+.md-header__button.md-logo { display: block; }
+.md-header__button.md-logo img { height: 1.8rem; width: auto; }
+.md-header__button.md-logo .reauth-logomark { display: none; }
+.md-header__button.md-logo .reauth-logo--light { display: block; }
+[data-md-color-scheme="slate"] .md-header__button.md-logo .reauth-logo--light { display: none; }
+[data-md-color-scheme="slate"] .md-header__button.md-logo .reauth-logo--dark { display: block; }
+.md-header__topic:first-child { visibility: hidden; }
 
 .md-nav__title, .md-tabs__link {
   font-size: var(--reauth-label-size);

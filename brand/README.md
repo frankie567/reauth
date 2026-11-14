@@ -20,4 +20,5 @@ The source font is [Space Grotesk](https://github.com/floriankarsten/space-grote
 
 Website typography uses Space Grotesk Regular (400) and SemiBold (600).
 IBM Plex Mono is reserved for code. Labels use sentence case.
-The website favicon at `docs/images/favicon.svg` is a copy of `logomark.svg`.
+The website favicon at `docs/images/logomark.svg` is a copy of `logomark.svg`.
+The website header uses copies of `logo.svg` and `logo-dark.svg` in `docs/images/`.
