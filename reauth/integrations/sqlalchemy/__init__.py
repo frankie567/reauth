@@ -39,6 +39,7 @@ from reauth.integrations.sqlalchemy.oauth2_state import (
     SQLAlchemyOAuth2StateService,
     create_oauth2_state_table,
 )
+from reauth.integrations.sqlalchemy.password import SQLAlchemyPasswordFactor
 from reauth.integrations.sqlalchemy.totp import (
     SQLAlchemyTOTPFactor,
     create_totp_enrollment_table,
@@ -60,6 +61,7 @@ __all__ = [
     "SQLAlchemyOAuth2Mixin",
     "SQLAlchemyOAuth2StateService",
     "SQLAlchemyOIDCFactor",
+    "SQLAlchemyPasswordFactor",
     "SQLAlchemyPrivateKeyJWTOIDCFactor",
     "SQLAlchemyTOTPFactor",
     "create_authentication_session_table",

@@ -31,7 +31,7 @@ Our vision is to build a comprehensive, flexible authentication toolkit for Pyth
     - [x] Email OTP
     - [x] HOTP
     - [x] TOTP
-    - [ ] Passwords
+    - [x] Passwords
     - [ ] Security keys
     - [ ] Passkeys
     - [x] Social Login

@@ -14,6 +14,9 @@ dependencies = ["anyio", "cryptography>=50.0.0", "httpx>=0.28.1", "pyjwt>=2.12.1
 
 [project.optional-dependencies]
 sqlalchemy = ["sqlalchemy[asyncio]>=2.0.49"]
+password = [
+    "pwdlib[argon2]>=0.4.2",
+]
 
 [project.urls]
 Documentation = "https://frankie567.github.io/reauth/"
@@ -41,6 +44,7 @@ dev = [
     "pre-commit>=4.6.2",
     "hatchling>=1.32.3",
     "keepachangelog>=2.0.0",
+    "pwdlib[argon2]>=0.4.2",
 ]
 
 [tool.ruff]
@@ -58,3 +62,4 @@ addopts = "--cov=reauth/ --cov-report=term-missing"
 [tool.uv]
 default-groups = ["dev"]
 exclude-newer = "7 days"
+exclude-newer-package = { pwdlib = "0 days" }
