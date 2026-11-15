@@ -1,0 +1,25 @@
+pyproject.toml
+  s_29f1c1f5632167::t_b957775b0ab1bf 18,47
+tests/factors/password/test_pwdlib.py
+  s_29f1c1f5632167::t_b957775b0ab1bf 36
+reauth/factors/password/pwdlib.py
+  s_29f1c1f5632167::t_b957775b0ab1bf 36,54,74
+uv.lock
+  s_29f1c1f5632167::t_6bec12631ea70d 845,847,849,1030,1045
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "4955194a4fbbaac6d1682f218179829568284e64",
+  "prompts": {},
+  "sessions": {
+    "s_29f1c1f5632167": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1df15-9a61-7a33-83a1-81552c13534b",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "François Voron <me@fvoron.com>"
+    }
+  }
+}
