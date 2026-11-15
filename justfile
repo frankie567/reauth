@@ -121,3 +121,6 @@ release pr:
 
 release-notes version:
     @uv run --locked keepachangelog show {{quote(version)}}
+
+test-website:
+    node --test tests/website/*.test.cjs

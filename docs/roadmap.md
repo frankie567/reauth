@@ -15,7 +15,7 @@ capabilities.
     - [x] Email OTP
     - [x] HOTP
     - [x] TOTP
-    - [ ] Passwords
+    - [x] Passwords
     - [ ] Security keys
     - [ ] Passkeys
     - [x] Social login

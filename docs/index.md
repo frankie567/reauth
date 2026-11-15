@@ -8,7 +8,8 @@ hide:
 <div class="landing" id="__skip" tabindex="-1">
 <section class="landing-hero" aria-labelledby="hero-title">
 <div class="hero-copy">
-<h1 id="hero-title">The authentication<br>toolkit for <span>Python.</span></h1>
+<p class="eyebrow">The authentication toolkit for Python</p>
+<h1 id="hero-title">Small pieces.<br>Infinite<br><span>possibilities.</span></h1>
 <p class="hero-description">Your application. Your identities. Your rules.<br>Composable authentication, from the first factor to the final session.</p>
 <div class="hero-actions">
 <a class="md-button md-button--primary" href="getting-started/">Start building <span aria-hidden="true">→</span></a>
@@ -16,17 +17,26 @@ hide:
 </div>
 <button class="install-command" type="button" data-clipboard-text="uv add reauth" aria-label="Copy install command" title="Copy install command"><span aria-hidden="true">$</span> <code>uv add reauth</code><svg class="install-copy-icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1"/></svg></button>
 </div>
-<div class="hero-art">
-<div class="auth-scene" aria-hidden="true">
+<figure class="hero-art" aria-label="Authentication assembled from factors, MFA, and sessions">
+<div class="art-heading"><span>Assembly / 001</span><span>Reauth systems</span></div>
 <div class="auth-bricks">
-<div class="auth-brick brick-identities"><div class="brick-face brick-front">Identities</div><div class="brick-face brick-back"></div><div class="brick-face brick-right"></div><div class="brick-face brick-left"></div><div class="brick-face brick-upper"><i></i><i></i><i></i><i></i><i></i><i></i></div><div class="brick-face brick-bottom"></div></div>
-<div class="auth-brick brick-base"><div class="brick-face brick-front">Factors</div><div class="brick-face brick-back"></div><div class="brick-face brick-right"></div><div class="brick-face brick-left"></div><div class="brick-face brick-upper"><i></i><i></i><i></i><i></i><i></i><i></i></div><div class="brick-face brick-bottom"></div></div>
-<div class="auth-brick brick-middle"><div class="brick-face brick-front">MFA</div><div class="brick-face brick-back"></div><div class="brick-face brick-right"></div><div class="brick-face brick-left"></div><div class="brick-face brick-upper"><i></i><i></i><i></i><i></i><i></i><i></i></div><div class="brick-face brick-bottom"></div></div>
-<div class="auth-brick brick-top"><div class="brick-face brick-front">Sessions</div><div class="brick-face brick-back"></div><div class="brick-face brick-right"></div><div class="brick-face brick-left"></div><div class="brick-face brick-upper"><i></i><i></i><i></i><i></i><i></i><i></i></div><div class="brick-face brick-bottom"></div></div>
+<svg class="auth-assembly" viewBox="0 0 420 420" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Authentication building blocks: Factors, MFA, and Sessions">
+<defs><g id="auth-brick-shape">
+<path class="brick-side" d="M130 0L169 -48.1V-4.1L130 44Z"/>
+<path class="brick-top" d="M0 0L39 -48.1H169L130 0Z"/>
+<path class="brick-front" d="M0 0H130V44H0Z"/>
+<g transform="translate(61.75 -41.075)"><path class="brick-side" d="M-15.66 1.595 L15.66 -1.595 L15.66 3.405 C15.66 6.341 8.649 9.435 0 10.316 C-8.649 11.197 -15.66 9.531 -15.66 6.595 Z"/><circle class="brick-top" r="15" transform="matrix(1 0 .3 -.37 0 0)"/></g>
+<g transform="translate(126.75 -41.075)"><path class="brick-side" d="M-15.66 1.595 L15.66 -1.595 L15.66 3.405 C15.66 6.341 8.649 9.435 0 10.316 C-8.649 11.197 -15.66 9.531 -15.66 6.595 Z"/><circle class="brick-top" r="15" transform="matrix(1 0 .3 -.37 0 0)"/></g>
+<g transform="translate(42.25 -17.025)"><path class="brick-side" d="M-15.66 1.595 L15.66 -1.595 L15.66 3.405 C15.66 6.341 8.649 9.435 0 10.316 C-8.649 11.197 -15.66 9.531 -15.66 6.595 Z"/><circle class="brick-top" r="15" transform="matrix(1 0 .3 -.37 0 0)"/></g>
+<g transform="translate(107.25 -17.025)"><path class="brick-side" d="M-15.66 1.595 L15.66 -1.595 L15.66 3.405 C15.66 6.341 8.649 9.435 0 10.316 C-8.649 11.197 -15.66 9.531 -15.66 6.595 Z"/><circle class="brick-top" r="15" transform="matrix(1 0 .3 -.37 0 0)"/></g>
+</g></defs><g class="auth-brick" data-brick="Factors" data-x="95" data-y="358" transform="translate(95 358)"><use href="#auth-brick-shape"/><text class="brick-label brick-name" x="65" y="27" text-anchor="middle">Factors</text></g>
+<g class="auth-brick" data-brick="MFA" data-x="125" data-y="228" transform="translate(125 228)"><use href="#auth-brick-shape"/><text class="brick-label brick-name" x="65" y="27" text-anchor="middle">MFA</text></g>
+<g class="auth-brick" data-brick="Sessions" data-x="155" data-y="98" transform="translate(155 98)"><use href="#auth-brick-shape"/><text class="brick-label brick-name" x="65" y="27" text-anchor="middle">Sessions</text></g>
+</svg>
 </div>
-</div>
-<span class="art-coordinate" aria-hidden="true">Fig. 01 — Auth, block by block</span>
-</div>
+<figcaption class="art-coordinate"><span>Fig. A — Auth, block by block.</span><span>↑ Build your way</span></figcaption>
+<span class="md-visually-hidden" id="brick-status" aria-live="polite"></span>
+</figure>
 </section>
 <section class="landing-features" aria-labelledby="features-title">
 <div class="section-heading"><p class="eyebrow">Small pieces. Strong foundations.</p><h2 id="features-title">Authentication, on your terms.</h2><p>Use the building blocks you need. Keep control of how they come together.</p></div>

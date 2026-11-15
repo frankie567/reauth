@@ -5,6 +5,7 @@ site_url = "https://frankie567.github.io/reauth/"
 repo_url = "https://github.com/frankie567/reauth"
 repo_name = "frankie567/reauth"
 extra_css = ["stylesheets/extra.css", "stylesheets/landing.css"]
+extra_javascript = ["javascripts/bricks.js"]
 watch = ["reauth", "SECURITY.md"]
 nav = [
     { "Home" = "index.md" },
@@ -18,6 +19,7 @@ nav = [
         { "Factors" = [
             { "Base" = "reference/factors/base.md" },
             { "Email OTP" = "reference/factors/email_otp.md" },
+            { "Password" = "reference/factors/password.md" },
             { "HOTP" = "reference/factors/hotp.md" },
             { "TOTP" = "reference/factors/totp.md" },
             { "Backup codes" = "reference/factors/backup_codes.md" },
@@ -69,15 +71,16 @@ link = "https://github.com/frankie567/reauth"
 name = "Reauth on GitHub"
 
 [project.theme]
-favicon = "images/favicon.svg"
+custom_dir = "docs/overrides"
+favicon = "images/logomark.svg"
+logo = "images/logo.svg"
 features = ["navigation.tabs", "navigation.tabs.sticky", "navigation.path", "content.code.copy"]
 
 [project.theme.icon]
-logo = "lucide/toy-brick"
 repo = "fontawesome/brands/github"
 
 [project.theme.font]
-text = "Manrope"
+text = "Space Grotesk"
 code = "IBM Plex Mono"
 
 [[project.theme.palette]]

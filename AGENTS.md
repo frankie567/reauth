@@ -172,6 +172,7 @@ Every abstract method must include an `Abstract: Implementation contract` block 
 - Derive integration exceptions from `ReauthSQLAlchemyException`; raise `MissingTransactionException` when no transaction is active.
 - Support generated IDs and extra application columns: omit unset IDs on insert, exclude IDs from updates, and select only Reauth fields. Prefer `inserted_primary_key` over `.returning()` for portability.
 - Use savepoints for recoverable insert failures. Translate generated token identifier collisions without masking unrelated integrity errors or aborting the caller's transaction.
+- Accepted trade-off: after an integrity error, adapters may use a diagnostic lookup to classify a token identifier collision. If the proposed identifier already exists, an unrelated constraint failure may be reported as `TokenIdentifierCollision`. This ambiguity is accepted; do not add backend-specific constraint inspection or flag it as a review finding. When no conflicting identifier is found, propagate the original error.
 - Do not recover from concurrent enrollment races. Keep ordinary already-enrolled prechecks and database uniqueness constraints, but let enrollment integrity errors propagate. Do not add enrollment collision exceptions, diagnostic queries, or recovery savepoints; callers own rollback after a failed insert.
 - Reuse the shared `sqlalchemy_integration_engine` fixture and run `just test-db` for PostgreSQL, MySQL, and SQLite. SQLite requires `autocommit=False`; functional tests do not prove row-lock guarantees.
 
