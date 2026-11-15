@@ -1,0 +1,16 @@
+README.md
+  h_868de2c7aaf22e 34
+docs/roadmap.md
+  h_868de2c7aaf22e 18
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "c46d0ee88658f7482656aac2a40c8dc14f84c2ab",
+  "prompts": {},
+  "humans": {
+    "h_868de2c7aaf22e": {
+      "author": "François Voron <me@fvoron.com>"
+    }
+  }
+}
