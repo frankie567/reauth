@@ -1,4 +1,3 @@
-import argon2.exceptions
 import pwdlib.exceptions
 import pytest
 
@@ -34,7 +33,7 @@ def test_invalid_hash(method):
 )
 def test_hashing_failure(monkeypatch, method, exception):
     hasher = PwdlibPasswordHash()
-    error = argon2.exceptions.HashingError("hashing failed")
+    error = pwdlib.exceptions.HashGenerationError()
 
     def fail(*args, **kwargs):
         raise error

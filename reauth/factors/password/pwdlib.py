@@ -1,4 +1,3 @@
-import argon2.exceptions
 import pwdlib
 import pwdlib.exceptions
 
@@ -34,11 +33,7 @@ class PwdlibPasswordHash:
         """
         try:
             return self._impl.hash(password, salt=salt)
-        except (
-            pwdlib.exceptions.PwdlibError,
-            argon2.exceptions.HashingError,
-            UnicodeError,
-        ) as exc:
+        except (pwdlib.exceptions.PwdlibError, UnicodeError) as exc:
             raise PasswordHashGenerationException() from exc
 
     def verify(self, password: str | bytes, hash: str | bytes) -> bool:
@@ -56,10 +51,7 @@ class PwdlibPasswordHash:
         """
         try:
             return self._impl.verify(password, hash)
-        except (
-            pwdlib.exceptions.PwdlibError,
-            UnicodeError,
-        ) as exc:
+        except (pwdlib.exceptions.PwdlibError, UnicodeError) as exc:
             raise PasswordHashVerificationException() from exc
 
     def verify_and_update(
@@ -79,9 +71,5 @@ class PwdlibPasswordHash:
         """
         try:
             return self._impl.verify_and_update(password, hash)
-        except (
-            pwdlib.exceptions.PwdlibError,
-            argon2.exceptions.HashingError,
-            UnicodeError,
-        ) as exc:
+        except (pwdlib.exceptions.PwdlibError, UnicodeError) as exc:
             raise PasswordHashVerificationException() from exc
