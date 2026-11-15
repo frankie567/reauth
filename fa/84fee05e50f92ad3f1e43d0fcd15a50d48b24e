@@ -1,0 +1,32 @@
+docs/stylesheets/extra.css
+  s_47cc22a9df7905::t_0ee24dbeb3cfc3 152-165
+zensical.toml
+  s_47cc22a9df7905::t_fe88116b15647f 13-16
+  s_47cc22a9df7905::t_cc4c0d53c9c552 50
+docs/guide/installation.md
+  s_47cc22a9df7905::t_fe88116b15647f 1-41
+README.md
+  s_47cc22a9df7905::t_fe88116b15647f 10
+docs/index.md
+  s_47cc22a9df7905::t_fe88116b15647f 15,49
+docs/guide/index.md
+  s_47cc22a9df7905::t_fe88116b15647f 1-8,14-16,18-101,103-117,123-128
+  s_47cc22a9df7905::t_1a0b93f2f9b117 118-122
+  s_47cc22a9df7905::t_195019520490dd 9-13,17,102
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "fa84fee05e50f92ad3f1e43d0fcd15a50d48b24e",
+  "prompts": {},
+  "sessions": {
+    "s_47cc22a9df7905": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1df6c-c580-7680-917f-9d14e37a767a",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "François Voron <me@fvoron.com>"
+    }
+  }
+}
