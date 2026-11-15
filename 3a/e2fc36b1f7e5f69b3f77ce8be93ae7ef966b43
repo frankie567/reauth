@@ -1,0 +1,49 @@
+docs/reference/integrations/sqlalchemy/identity_session.md
+  s_47cc22a9df7905::t_78e55fcec9f42f 1-3
+docs/reference/index.md
+  s_47cc22a9df7905::t_59750f5c21b312 11
+docs/reference/integrations/sqlalchemy/password.md
+  s_47cc22a9df7905::t_78e55fcec9f42f 1-3
+docs/reference/integrations/sqlalchemy/hotp.md
+  s_47cc22a9df7905::t_78e55fcec9f42f 1-3
+docs/reference/integrations/sqlalchemy/exceptions.md
+  s_47cc22a9df7905::t_78e55fcec9f42f 1-3
+docs/reference/integrations/sqlalchemy/totp.md
+  s_47cc22a9df7905::t_78e55fcec9f42f 1-3
+docs/reference/integrations/sqlalchemy/email_otp.md
+  s_47cc22a9df7905::t_78e55fcec9f42f 1-3
+docs/reference/integrations/sqlalchemy/backup_codes.md
+  s_47cc22a9df7905::t_78e55fcec9f42f 1-3
+docs/guide/index.md
+  s_47cc22a9df7905::t_2b9c1237c26a28 127
+docs/reference/integrations/sqlalchemy/index.md
+  s_47cc22a9df7905::t_78e55fcec9f42f 1-5
+docs/guide/plan-your-integration.md
+  s_47cc22a9df7905::t_ea67be950bd4f8 1-60,68,75,78-137
+  s_47cc22a9df7905::t_59750f5c21b312 61-67,69-74,76-77
+docs/reference/integrations/sqlalchemy/authentication_session.md
+  s_47cc22a9df7905::t_78e55fcec9f42f 1-3
+zensical.toml
+  s_47cc22a9df7905::t_78e55fcec9f42f 40-52
+  s_47cc22a9df7905::t_2b9c1237c26a28 15
+docs/reference/integrations/sqlalchemy/oauth2.md
+  s_47cc22a9df7905::t_78e55fcec9f42f 1-3
+docs/reference/integrations/sqlalchemy/oauth2_state.md
+  s_47cc22a9df7905::t_78e55fcec9f42f 1-3
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "3ae2fc36b1f7e5f69b3f77ce8be93ae7ef966b43",
+  "prompts": {},
+  "sessions": {
+    "s_47cc22a9df7905": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1df6c-c580-7680-917f-9d14e37a767a",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "François Voron <me@fvoron.com>"
+    }
+  }
+}
