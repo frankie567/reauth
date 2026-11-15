@@ -19,6 +19,7 @@ nav = [
         { "Factors" = [
             { "Base" = "reference/factors/base.md" },
             { "Email OTP" = "reference/factors/email_otp.md" },
+            { "Password" = "reference/factors/password.md" },
             { "HOTP" = "reference/factors/hotp.md" },
             { "TOTP" = "reference/factors/totp.md" },
             { "Backup codes" = "reference/factors/backup_codes.md" },
