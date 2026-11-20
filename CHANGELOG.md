@@ -11,6 +11,10 @@ Earlier release notes are in [GitHub Releases](https://github.com/frankie567/rea
 
 ## [Unreleased]
 
+### Added
+
+- WebAuthn factor with multiple credentials per identity, attestation policy, single-use ceremony state, and SQLAlchemy storage.
+
 ### Changed
 
 - `FactorBase` now uses `get_enrollments()` to support multiple enrollments per identity. Custom factors with a singular `get_enrollment()` can inherit from `SingleEnrollmentFactorBase`.

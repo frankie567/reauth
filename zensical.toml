@@ -22,6 +22,7 @@ nav = [
             { "Password" = "reference/factors/password.md" },
             { "HOTP" = "reference/factors/hotp.md" },
             { "TOTP" = "reference/factors/totp.md" },
+            { "WebAuthn" = "reference/factors/webauthn.md" },
             { "Backup codes" = "reference/factors/backup_codes.md" },
             { "OAuth 2.0 / OpenID Connect" = [
                 { "Base" = "reference/factors/oauth2/base.md" },

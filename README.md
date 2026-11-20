@@ -27,13 +27,13 @@ Our vision is to build a comprehensive, flexible authentication toolkit for Pyth
 
 ### Short-term: Core Foundation
 
-- [ ] Factor primitives — building blocks for authentication factors
+- [x] Factor primitives — building blocks for authentication factors
     - [x] Email OTP
     - [x] HOTP
     - [x] TOTP
     - [x] Passwords
-    - [ ] Security keys
-    - [ ] Passkeys
+    - [x] Security keys
+    - [x] Passkeys
     - [x] Social Login
 - [x] MFA authentication management — multi-factor authentication workflows
 

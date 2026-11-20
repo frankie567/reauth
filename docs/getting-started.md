@@ -23,12 +23,15 @@ Add Reauth to your project with [uv](https://docs.astral.sh/uv/) or pip:
     pip install reauth
     ```
 
+For passkeys and security keys, install the `webauthn` extra with `uv add 'reauth[webauthn]'`.
+Add the `sqlalchemy` extra as well to use the built-in credential and ceremony-state adapters.
+
 ## Explore the toolkit
 
 Reauth provides authentication building blocks that you integrate with your
 application and data storage:
 
-- **Factors**: email OTP, HOTP, TOTP, backup codes, and OAuth 2.0 / OpenID Connect login.
+- **Factors**: email OTP, HOTP, TOTP, backup codes, [WebAuthn](reference/factors/webauthn.md), and OAuth 2.0 / OpenID Connect login.
 - **Authentication sessions**: coordinate multi-factor authentication workflows.
 - **Identity sessions**: manage sessions after authentication.
 
