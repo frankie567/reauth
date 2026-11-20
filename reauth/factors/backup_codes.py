@@ -5,7 +5,7 @@ import typing
 
 from reauth.amr import AuthenticationMethodReference
 from reauth.exceptions import ReauthException
-from reauth.factors.base import FactorBase
+from reauth.factors.base import SingleEnrollmentFactorBase
 from reauth.logging import get_logger
 from reauth.tokens import TokenVerifier
 
@@ -47,7 +47,7 @@ class AlreadyEnrolledBackupCodesException(BackupCodesException):
 DEFAULT_CHARS: str = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
 
 
-class BackupCodesFactor(FactorBase[BackupCodesEnrollment], abc.ABC):
+class BackupCodesFactor(SingleEnrollmentFactorBase[BackupCodesEnrollment], abc.ABC):
     """
     Factor for backup codes authentication.
 

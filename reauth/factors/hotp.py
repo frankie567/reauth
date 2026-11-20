@@ -12,7 +12,7 @@ from cryptography.hazmat.primitives.twofactor.hotp import HOTP as CryptoHOTP
 
 from reauth.amr import AuthenticationMethodReference
 from reauth.exceptions import ReauthException
-from reauth.factors.base import FactorBase
+from reauth.factors.base import SingleEnrollmentFactorBase
 from reauth.logging import get_logger
 
 logger = get_logger(__name__)
@@ -89,7 +89,7 @@ class NotEnrolledHOTPException(HOTPException):
     """Raised when trying to enable or verify an HOTP factor for an identity with no enrollment."""
 
 
-class HOTPFactor(FactorBase[HOTPEnrollment], abc.ABC):
+class HOTPFactor(SingleEnrollmentFactorBase[HOTPEnrollment], abc.ABC):
     AMR: typing.ClassVar[AuthenticationMethodReference] = (
         AuthenticationMethodReference.OTP
     )

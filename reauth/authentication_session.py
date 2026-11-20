@@ -204,10 +204,10 @@ class AuthenticationSessionService(abc.ABC):
                 continue
             # Enrolled for the identity in the session (if any)?
             if authentication_session.identity_id is not None:
-                factor_enrollment = await factor.get_enrollment(
+                factor_enrollments = await factor.get_enrollments(
                     authentication_session.identity_id
                 )
-                if factor_enrollment is None:
+                if not factor_enrollments:
                     continue
             available.add(factor)
         return available

@@ -19,7 +19,7 @@ from reauth.authentication_session import (
     InvalidSessionTokenException,
     UnavailableFactorException,
 )
-from reauth.factors import FactorBase
+from reauth.factors import FactorBase, SingleEnrollmentFactorBase
 from reauth.integrations.sqlalchemy import (
     SQLAlchemyAuthenticationSessionService,
     create_authentication_session_table,
@@ -48,7 +48,7 @@ class DummyPasswordFactorEnrollment:
     identity_id: int
 
 
-class DummyPasswordFactor(FactorBase[DummyPasswordFactorEnrollment]):
+class DummyPasswordFactor(SingleEnrollmentFactorBase[DummyPasswordFactorEnrollment]):
     """Dummy factor for testing purposes that simulates a password-based authentication method."""
 
     AMR = AuthenticationMethodReference.PWD
@@ -64,7 +64,7 @@ class DummyPasswordFactor(FactorBase[DummyPasswordFactorEnrollment]):
         return DummyPasswordFactorEnrollment(id=1, identity_id=identity_id)
 
 
-class DummySSOFactor(FactorBase[DummyPasswordFactorEnrollment]):
+class DummySSOFactor(SingleEnrollmentFactorBase[DummyPasswordFactorEnrollment]):
     AMR = AuthenticationMethodReference.OAUTH2
 
     def __init__(self) -> None:
@@ -92,10 +92,13 @@ class DummyMFAFactor(FactorBase[DummyMFAFactorEnrollment]):
     def __init__(self) -> None:
         super().__init__(identifier="dummy_mfa", step=1)
 
-    async def get_enrollment(self, identity_id: int) -> DummyMFAFactorEnrollment | None:
+    async def get_enrollments(self, identity_id: int) -> list[DummyMFAFactorEnrollment]:
         if identity_id != 1:
-            return None
-        return DummyMFAFactorEnrollment(id=1, identity_id=identity_id)
+            return []
+        return [
+            DummyMFAFactorEnrollment(id=1, identity_id=identity_id),
+            DummyMFAFactorEnrollment(id=2, identity_id=identity_id),
+        ]
 
 
 @pytest.fixture
@@ -119,6 +122,19 @@ def password_factor() -> DummyPasswordFactor:
 def mfa_factor() -> DummyMFAFactor:
     """Fixture that provides an instance of DummyMFAFactor."""
     return DummyMFAFactor()
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize(
+    ("identity_id", "expected"),
+    [(1, [DummyPasswordFactorEnrollment(id=1, identity_id=1)]), (2, [])],
+)
+async def test_single_enrollment_factor_get_enrollments(
+    password_factor: DummyPasswordFactor,
+    identity_id: int,
+    expected: list[DummyPasswordFactorEnrollment],
+) -> None:
+    assert await password_factor.get_enrollments(identity_id) == expected
 
 
 @pytest.fixture
@@ -258,8 +274,10 @@ class TestGetAvailableFactors:
         assert len(factors) == 1
         assert isinstance(next(iter(factors)), DummyPasswordFactor)
 
-    async def test_identity_one_factor_enrolled(
-        self, authentication_session_service: SQLAlchemyAuthenticationSessionService
+    async def test_factor_with_two_enrollments_is_available_once(
+        self,
+        authentication_session_service: SQLAlchemyAuthenticationSessionService,
+        mfa_factor: DummyMFAFactor,
     ) -> None:
         generated = await authentication_session_service.token_provider.generate()
         session = AuthenticationSession(
@@ -277,8 +295,7 @@ class TestGetAvailableFactors:
 
         factors = await authentication_session_service.get_available_factors(session)
 
-        assert len(factors) == 1
-        assert isinstance(next(iter(factors)), DummyMFAFactor)
+        assert factors == {mfa_factor}
 
     async def test_identity_one_factor_not_enrolled(
         self, authentication_session_service: SQLAlchemyAuthenticationSessionService
