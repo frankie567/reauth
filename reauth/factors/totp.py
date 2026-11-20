@@ -13,7 +13,7 @@ from cryptography.hazmat.primitives.twofactor.totp import TOTP as CryptoTOTP
 
 from reauth.amr import AuthenticationMethodReference
 from reauth.exceptions import ReauthException
-from reauth.factors.base import FactorBase
+from reauth.factors.base import SingleEnrollmentFactorBase
 from reauth.logging import get_logger
 
 logger = get_logger(__name__)
@@ -100,7 +100,7 @@ class NotEnrolledTOTPException(TOTPException):
     """Raised when trying to enable or verify a TOTP factor for an identity with no enrollment."""
 
 
-class TOTPFactor(FactorBase[TOTPEnrollment], abc.ABC):
+class TOTPFactor(SingleEnrollmentFactorBase[TOTPEnrollment], abc.ABC):
     AMR: typing.ClassVar[AuthenticationMethodReference] = (
         AuthenticationMethodReference.OTP
     )

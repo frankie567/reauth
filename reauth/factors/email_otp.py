@@ -8,7 +8,7 @@ import typing
 
 from reauth.amr import AuthenticationMethodReference
 from reauth.exceptions import ReauthException
-from reauth.factors.base import FactorBase
+from reauth.factors.base import SingleEnrollmentFactorBase
 from reauth.logging import get_logger
 from reauth.timestamp import get_current_timestamp
 from reauth.tokens import TokenVerifier
@@ -66,7 +66,7 @@ class ExpiredOTPException(EmailOTPException):
     """Raised when an OTP code has expired."""
 
 
-class EmailOTPFactor(FactorBase[EmailOTPEnrollment], abc.ABC):
+class EmailOTPFactor(SingleEnrollmentFactorBase[EmailOTPEnrollment], abc.ABC):
     AMR: typing.ClassVar[AuthenticationMethodReference] = (
         AuthenticationMethodReference.EMAIL
     )

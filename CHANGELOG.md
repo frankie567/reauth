@@ -13,6 +13,7 @@ Earlier release notes are in [GitHub Releases](https://github.com/frankie567/rea
 
 ### Changed
 
+- `FactorBase` now uses `get_enrollments()` to support multiple enrollments per identity. Custom factors with a singular `get_enrollment()` can inherit from `SingleEnrollmentFactorBase`.
 - Manage curated changelog entries with keepachangelog and use each version's entry for GitHub release notes.
 
 ## [0.4.2] - 2026-09-26

@@ -57,20 +57,53 @@ class FactorBase[ENROLLMENT: FactorEnrollment](abc.ABC):
         self.advance_by = advance_by
 
     @abc.abstractmethod
-    async def get_enrollment(self, identity_id: typing.Any) -> ENROLLMENT | None:
+    async def get_enrollments(self, identity_id: typing.Any) -> list[ENROLLMENT]:
         """
-        Get the enrollment information for a given identity.
+        Get the enrollments usable for authentication with this factor.
 
         Args:
-            identity_id: The ID of the identity to get the factor configuration for.
+            identity_id: The ID of the identity whose enrollments to get.
 
         Returns:
-            The enrollment information for the factor,
-            or None if the factor is not enrolled for the identity.
+            The usable enrollments for the identity, or an empty list.
 
         Abstract: Implementation contract
-            Scope the lookup to the requested identity and this factor. Acquire
-            protection before reading and retain it after returning. Leave commit
-            and rollback to the caller.
+            Scope the lookup to the requested identity and this configured factor.
+            Acquire protection for matching records before reading and retain it
+            until the transaction ends. Leave commit and rollback to the caller.
+        """
+        ...
+
+
+class SingleEnrollmentFactorBase[ENROLLMENT: FactorEnrollment](FactorBase[ENROLLMENT]):
+    """Base abstract class for factors with at most one enrollment per identity."""
+
+    async def get_enrollments(self, identity_id: typing.Any) -> list[ENROLLMENT]:
+        """Get the enrollments usable for authentication with this factor.
+
+        Args:
+            identity_id: The ID of the identity whose enrollment to get.
+
+        Returns:
+            A list with the usable enrollment, or an empty list.
+        """
+        enrollment = await self.get_enrollment(identity_id)
+        return [] if enrollment is None else [enrollment]
+
+    @abc.abstractmethod
+    async def get_enrollment(self, identity_id: typing.Any) -> ENROLLMENT | None:
+        """
+        Get the enrollment usable for authentication with this factor.
+
+        Args:
+            identity_id: The ID of the identity whose enrollment to get.
+
+        Returns:
+            The usable enrollment for the identity, or None if there is none.
+
+        Abstract: Implementation contract
+            Scope the lookup to the requested identity and this configured factor.
+            Acquire protection for a matching record before reading and retain it
+            until the transaction ends. Leave commit and rollback to the caller.
         """
         ...

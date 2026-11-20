@@ -4,7 +4,7 @@ import typing
 
 from reauth.amr import AuthenticationMethodReference
 from reauth.exceptions import ReauthException
-from reauth.factors.base import FactorBase
+from reauth.factors.base import SingleEnrollmentFactorBase
 from reauth.factors.oauth2.pkce import (
     CodeChallengeMethod,
     generate_code_challenge,
@@ -208,7 +208,7 @@ RFC_6749_TOKEN_ERROR_MAP: dict[str, type[OAuth2TokenException]] = {
 }
 
 
-class OAuth2Factor[EXTRA](FactorBase[OAuth2Enrollment], abc.ABC):
+class OAuth2Factor[EXTRA](SingleEnrollmentFactorBase[OAuth2Enrollment], abc.ABC):
     AMR: typing.ClassVar[AuthenticationMethodReference] = (
         AuthenticationMethodReference.OAUTH2
     )

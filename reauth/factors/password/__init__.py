@@ -5,7 +5,7 @@ import typing
 
 from reauth.amr import AuthenticationMethodReference
 from reauth.exceptions import ReauthException
-from reauth.factors.base import FactorBase
+from reauth.factors.base import SingleEnrollmentFactorBase
 from reauth.factors.password.hashing import (
     PasswordHash,
     PasswordHashException,
@@ -53,7 +53,7 @@ class InvalidPasswordResetTokenException(PasswordException):
     """The reset token is invalid, expired, or already consumed."""
 
 
-class PasswordFactor(FactorBase[PasswordEnrollment], abc.ABC):
+class PasswordFactor(SingleEnrollmentFactorBase[PasswordEnrollment], abc.ABC):
     AMR: typing.ClassVar[AuthenticationMethodReference] = (
         AuthenticationMethodReference.PWD
     )
