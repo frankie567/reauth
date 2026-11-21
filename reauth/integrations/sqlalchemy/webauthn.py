@@ -147,6 +147,22 @@ class SQLAlchemyWebAuthnFactor(TransactionMixin, WebAuthnFactor):
         )
         return [WebAuthnEnrollment(**row) for row in rows.mappings()]
 
+    async def credential_exists(self, credential_id: bytes) -> bool:
+        """Check for an existing registration across all factors for this relying party.
+
+        Args:
+            credential_id: The raw credential ID supplied by the authenticator.
+
+        Returns:
+            True if the credential is already registered with this relying party.
+        """
+        self._require_transaction()
+        query = sqlalchemy.select(self.table.c.id).where(
+            self.table.c.rp_id == self.rp_id,
+            self.table.c.credential_id == credential_id,
+        )
+        return await self.connection.scalar(query) is not None
+
     async def get_by_credential_id(
         self, credential_id: bytes
     ) -> WebAuthnEnrollment | None:

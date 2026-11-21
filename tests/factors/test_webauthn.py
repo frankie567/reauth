@@ -103,6 +103,35 @@ async def test_finish_enrollment(webauthn_factor, webauthn_tables, reject):
 
 
 @pytest.mark.anyio
+@pytest.mark.parametrize("existing_rp", [RP, "other.example"])
+async def test_registration_with_credential_id_from_another_factor(
+    webauthn_factor, webauthn_tables, existing_rp
+):
+    enrollments, _ = webauthn_tables
+    await webauthn_factor.connection.execute(
+        enrollments.insert().values(
+            identity_id=17,
+            rp_id=existing_rp,
+            factor_identifier="other-factor",
+            credential_id=CREDENTIAL_ID,
+            public_key=PUBLIC_KEY,
+            sign_count=7,
+        )
+    )
+    token = await seed_state(webauthn_factor, webauthn_tables, "enrollment", 42)
+    registration = webauthn_factor.finish_enrollment(
+        state_token=token, session_id=5, credential=response(registration=True)
+    )
+    if existing_rp == RP:
+        with pytest.raises(InvalidRegistrationException):
+            await registration
+    else:
+        enrollment = await registration
+        assert enrollment.rp_id == RP
+        assert enrollment.identity_id == 42
+
+
+@pytest.mark.anyio
 async def test_invalid_registration(webauthn_factor, webauthn_tables):
     token = await seed_state(webauthn_factor, webauthn_tables, "enrollment", 42)
     with pytest.raises(InvalidRegistrationException):

@@ -247,9 +247,8 @@ class WebAuthnFactor(FactorBase[WebAuthnEnrollment]):
                 extra={"identity_id": state.identity_id},
             )
             raise InvalidRegistrationException() from error
-        if (
-            len(registration.credential_id) > 1023
-            or await self.get_by_credential_id(registration.credential_id) is not None
+        if len(registration.credential_id) > 1023 or await self.credential_exists(
+            registration.credential_id
         ):
             logger.warning(
                 "WebAuthn credential ID invalid or already enrolled",
@@ -430,6 +429,23 @@ class WebAuthnFactor(FactorBase[WebAuthnEnrollment]):
             },
         )
         return enrollment
+
+    @abc.abstractmethod
+    async def credential_exists(self, credential_id: bytes) -> bool:
+        """Check whether a credential is already registered with this relying party.
+
+        Args:
+            credential_id: The raw credential ID supplied by the authenticator.
+
+        Returns:
+            True if any enrollment for this relying party uses the credential ID.
+
+        Abstract: Implementation contract
+            Match the configured RP and exact credential ID across all identities and
+            factors. This precheck does not reserve the ID for a subsequent insert.
+            Leave commit and rollback to the caller.
+        """
+        ...
 
     @abc.abstractmethod
     async def get_by_credential_id(
