@@ -11,8 +11,8 @@ import sqlalchemy.exc
 from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine
 
 from reauth.factors.totp import InvalidTOTPCodeException, TOTPEnrollment
-from reauth.integrations.sqlalchemy import (
-    MissingTransactionException,
+from reauth.integrations.sqlalchemy.exceptions import MissingTransactionException
+from reauth.integrations.sqlalchemy.totp import (
     SQLAlchemyTOTPFactor,
     create_totp_enrollment_table,
 )

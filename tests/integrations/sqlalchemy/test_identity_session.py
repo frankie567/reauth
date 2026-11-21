@@ -10,9 +10,9 @@ from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine
 
 from reauth.amr import AuthenticationMethodReference
 from reauth.identity_session import IdentitySession, ReusedRefreshTokenException
-from reauth.integrations.sqlalchemy import (
+from reauth.integrations.sqlalchemy.exceptions import MissingTransactionException
+from reauth.integrations.sqlalchemy.identity_session import (
     InvalidSessionFamilyException,
-    MissingTransactionException,
     SQLAlchemyIdentitySessionService,
     create_identity_session_table,
 )

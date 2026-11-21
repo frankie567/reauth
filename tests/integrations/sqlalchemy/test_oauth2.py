@@ -9,16 +9,18 @@ from sqlalchemy.exc import DBAPIError, IntegrityError
 from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine
 
 from reauth.factors.oauth2.base import OAuth2Enrollment
-from reauth.integrations.sqlalchemy import (
-    MissingTransactionException,
+from reauth.integrations.sqlalchemy.exceptions import MissingTransactionException
+from reauth.integrations.sqlalchemy.oauth2 import (
     SQLAlchemyAppleOAuth2Factor,
     SQLAlchemyGitHubOAuth2Factor,
     SQLAlchemyGoogleOAuth2Factor,
     SQLAlchemyOAuth2Mixin,
-    SQLAlchemyOAuth2StateService,
     SQLAlchemyOIDCFactor,
     SQLAlchemyPrivateKeyJWTOIDCFactor,
     create_oauth2_enrollment_table,
+)
+from reauth.integrations.sqlalchemy.oauth2_state import (
+    SQLAlchemyOAuth2StateService,
     create_oauth2_state_table,
 )
 from reauth.tokens import ChecksummedTokenProvider, HMACTokenVerifier

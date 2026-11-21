@@ -17,7 +17,7 @@ from reauth.factors.oauth2.state import (
     InvalidStateException,
     OAuth2State,
 )
-from reauth.integrations.sqlalchemy import SQLAlchemyOAuth2Mixin
+from reauth.integrations.sqlalchemy.oauth2 import SQLAlchemyOAuth2Mixin
 
 from .conftest import SQLAlchemyOAuth2StateService, oauth2_enrollment_table
 

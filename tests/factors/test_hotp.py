@@ -19,7 +19,7 @@ from reauth.factors.hotp import (
     NotEnabledHOTPException,
     NotEnrolledHOTPException,
 )
-from reauth.integrations.sqlalchemy import (
+from reauth.integrations.sqlalchemy.hotp import (
     SQLAlchemyHOTPFactor,
     create_hotp_enrollment_table,
 )

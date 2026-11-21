@@ -11,13 +11,17 @@ from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine
 
 from reauth.authentication_session import AuthenticationSession
 from reauth.factors.email_otp import EmailOTP, EmailOTPEnrollment, InvalidOTPException
-from reauth.integrations.sqlalchemy import (
+from reauth.integrations.sqlalchemy.authentication_session import (
+    create_authentication_session_table,
+)
+from reauth.integrations.sqlalchemy.email_otp import (
     AuthenticationSessionNotFoundException,
+    SQLAlchemyEmailOTPFactor,
+    create_email_otp_table,
+)
+from reauth.integrations.sqlalchemy.exceptions import (
     MissingTransactionException,
     ReauthSQLAlchemyException,
-    SQLAlchemyEmailOTPFactor,
-    create_authentication_session_table,
-    create_email_otp_table,
 )
 from reauth.timestamp import get_current_timestamp
 from reauth.tokens import HMACTokenVerifier

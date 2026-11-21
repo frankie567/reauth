@@ -14,7 +14,7 @@ from reauth.factors.password import (
     PasswordEnrollment,
 )
 from reauth.factors.password.hashing import PasswordHashGenerationException
-from reauth.integrations.sqlalchemy import SQLAlchemyPasswordFactor
+from reauth.integrations.sqlalchemy.password import SQLAlchemyPasswordFactor
 from reauth.timestamp import get_current_timestamp
 from reauth.tokens import ChecksummedTokenProvider, HMACTokenVerifier, TokenParts
 

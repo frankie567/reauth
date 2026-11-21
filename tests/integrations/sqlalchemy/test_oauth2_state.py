@@ -8,8 +8,8 @@ from sqlalchemy.exc import DBAPIError, IntegrityError
 from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine
 
 from reauth.factors.oauth2.state import InvalidStateException, OAuth2State
-from reauth.integrations.sqlalchemy import (
-    MissingTransactionException,
+from reauth.integrations.sqlalchemy.exceptions import MissingTransactionException
+from reauth.integrations.sqlalchemy.oauth2_state import (
     SQLAlchemyOAuth2StateService,
     create_oauth2_state_table,
 )

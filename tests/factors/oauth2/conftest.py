@@ -5,9 +5,9 @@ import pytest
 from sqlalchemy import MetaData
 from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine
 
-from reauth.integrations.sqlalchemy import (
+from reauth.integrations.sqlalchemy.oauth2 import create_oauth2_enrollment_table
+from reauth.integrations.sqlalchemy.oauth2_state import (
     SQLAlchemyOAuth2StateService,
-    create_oauth2_enrollment_table,
     create_oauth2_state_table,
 )
 from reauth.tokens import ChecksummedTokenProvider, HMACTokenVerifier

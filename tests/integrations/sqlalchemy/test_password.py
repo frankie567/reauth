@@ -11,10 +11,8 @@ from reauth.factors.password import (
     InvalidPasswordResetTokenException,
     PasswordEnrollment,
 )
-from reauth.integrations.sqlalchemy import (
-    MissingTransactionException,
-    SQLAlchemyPasswordFactor,
-)
+from reauth.integrations.sqlalchemy.exceptions import MissingTransactionException
+from reauth.integrations.sqlalchemy.password import SQLAlchemyPasswordFactor
 from reauth.tokens import (
     ChecksummedTokenProvider,
     HMACTokenVerifier,

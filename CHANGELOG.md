@@ -17,6 +17,7 @@ Earlier release notes are in [GitHub Releases](https://github.com/frankie567/rea
 
 ### Changed
 
+- Import SQLAlchemy adapters, table factories, and exceptions from their defining submodules. For example, use `from reauth.integrations.sqlalchemy.totp import SQLAlchemyTOTPFactor, create_totp_enrollment_table`. Package-level re-exports have been removed.
 - `FactorBase` now uses `get_enrollments()` to support multiple enrollments per identity. Custom factors with a singular `get_enrollment()` can inherit from `SingleEnrollmentFactorBase`.
 - Manage curated changelog entries with keepachangelog and use each version's entry for GitHub release notes.
 
