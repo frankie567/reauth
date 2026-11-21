@@ -10,8 +10,8 @@ import sqlalchemy.exc
 from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine
 
 from reauth.factors.hotp import HOTPEnrollment, InvalidHOTPCodeException
-from reauth.integrations.sqlalchemy import (
-    MissingTransactionException,
+from reauth.integrations.sqlalchemy.exceptions import MissingTransactionException
+from reauth.integrations.sqlalchemy.hotp import (
     SQLAlchemyHOTPFactor,
     create_hotp_enrollment_table,
 )

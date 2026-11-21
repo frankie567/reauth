@@ -5,6 +5,8 @@ from collections.abc import AsyncGenerator
 import pytest
 from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
 
+pytest_plugins = ["tests.webauthn"]
+
 
 @pytest.fixture(
     params=os.environ.get("REAUTH_TEST_DATABASE", "postgresql,mysql,sqlite").split(",")

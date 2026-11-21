@@ -10,11 +10,13 @@ from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine
 from reauth.amr import AuthenticationMethodReference
 from reauth.authentication_session import AuthenticationSession
 from reauth.exceptions import ReauthException
-from reauth.integrations.sqlalchemy import (
-    MissingTransactionException,
-    ReauthSQLAlchemyException,
+from reauth.integrations.sqlalchemy.authentication_session import (
     SQLAlchemyAuthenticationSessionService,
     create_authentication_session_table,
+)
+from reauth.integrations.sqlalchemy.exceptions import (
+    MissingTransactionException,
+    ReauthSQLAlchemyException,
 )
 from reauth.tokens import (
     ChecksummedTokenProvider,

@@ -20,7 +20,7 @@ from reauth.identity_session import (
     InvalidSessionTokenException,
     ReusedRefreshTokenException,
 )
-from reauth.integrations.sqlalchemy import (
+from reauth.integrations.sqlalchemy.identity_session import (
     SQLAlchemyIdentitySessionService,
     create_identity_session_table,
 )

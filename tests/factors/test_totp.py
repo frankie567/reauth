@@ -21,7 +21,7 @@ from reauth.factors.totp import (
     NotEnrolledTOTPException,
     TOTPEnrollment,
 )
-from reauth.integrations.sqlalchemy import (
+from reauth.integrations.sqlalchemy.totp import (
     SQLAlchemyTOTPFactor,
     create_totp_enrollment_table,
 )

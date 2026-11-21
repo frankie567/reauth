@@ -17,9 +17,11 @@ from reauth.factors.email_otp import (
     ExpiredOTPException,
     InvalidOTPException,
 )
-from reauth.integrations.sqlalchemy import (
-    SQLAlchemyEmailOTPFactor,
+from reauth.integrations.sqlalchemy.authentication_session import (
     create_authentication_session_table,
+)
+from reauth.integrations.sqlalchemy.email_otp import (
+    SQLAlchemyEmailOTPFactor,
     create_email_otp_table,
 )
 from reauth.timestamp import get_current_timestamp

@@ -14,7 +14,7 @@ from reauth.factors.backup_codes import (
     InvalidBackupCodeException,
     NotEnrolledBackupCodesException,
 )
-from reauth.integrations.sqlalchemy import (
+from reauth.integrations.sqlalchemy.backup_codes import (
     SQLAlchemyBackupCodesFactor,
     create_backup_codes_enrollment_table,
 )

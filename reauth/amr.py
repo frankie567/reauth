@@ -47,6 +47,9 @@ class AuthenticationMethodReference(StrEnum):
     """Password-based authentication."""
 
     # Possession-based methods
+    POP = "pop"
+    """Proof-of-possession of a key."""
+
     HWK = "hwk"
     """Proof-of-Possession of a hardware-secured key."""
 

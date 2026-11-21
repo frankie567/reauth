@@ -20,7 +20,7 @@ from reauth.authentication_session import (
     UnavailableFactorException,
 )
 from reauth.factors import FactorBase, SingleEnrollmentFactorBase
-from reauth.integrations.sqlalchemy import (
+from reauth.integrations.sqlalchemy.authentication_session import (
     SQLAlchemyAuthenticationSessionService,
     create_authentication_session_table,
 )

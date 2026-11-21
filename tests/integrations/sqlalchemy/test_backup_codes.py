@@ -13,11 +13,11 @@ from reauth.factors.backup_codes import (
     AlreadyUsedBackupCodeException,
     BackupCodesEnrollment,
 )
-from reauth.integrations.sqlalchemy import (
-    MissingTransactionException,
+from reauth.integrations.sqlalchemy.backup_codes import (
     SQLAlchemyBackupCodesFactor,
     create_backup_codes_enrollment_table,
 )
+from reauth.integrations.sqlalchemy.exceptions import MissingTransactionException
 from reauth.tokens import HMACTokenVerifier
 
 
