@@ -1,0 +1,62 @@
+tests/factors/oauth2/conftest.py
+  s_a5201e7f92f54d::t_6ff807daaa4527 8
+  s_a5201e7f92f54d::t_4febd48139a5b0 9
+CHANGELOG.md
+  s_a5201e7f92f54d::t_5ea62230dc9597 20
+tests/factors/test_email_otp.py
+  s_a5201e7f92f54d::t_4febd48139a5b0 20,22-24
+tests/test_authentication_session.py
+  s_a5201e7f92f54d::t_4febd48139a5b0 23
+tests/factors/test_backup_codes.py
+  s_a5201e7f92f54d::t_4febd48139a5b0 17
+tests/integrations/sqlalchemy/test_backup_codes.py
+  s_a5201e7f92f54d::t_6ff807daaa4527 20
+  s_a5201e7f92f54d::t_4febd48139a5b0 16
+tests/integrations/sqlalchemy/test_password.py
+  s_a5201e7f92f54d::t_6ff807daaa4527 14-15
+tests/factors/test_totp.py
+  s_a5201e7f92f54d::t_4febd48139a5b0 24
+tests/integrations/sqlalchemy/test_oauth2.py
+  s_a5201e7f92f54d::t_6ff807daaa4527 12
+  s_a5201e7f92f54d::t_4febd48139a5b0 13,21-23
+tests/factors/oauth2/test_base.py
+  s_a5201e7f92f54d::t_6ff807daaa4527 20
+tests/integrations/sqlalchemy/test_oauth2_state.py
+  s_a5201e7f92f54d::t_4febd48139a5b0 12
+  s_a5201e7f92f54d::t_6ff807daaa4527 11
+tests/factors/password/test_factor.py
+  s_a5201e7f92f54d::t_6ff807daaa4527 17
+tests/factors/test_hotp.py
+  s_a5201e7f92f54d::t_4febd48139a5b0 22
+tests/integrations/sqlalchemy/test_email_otp.py
+  s_a5201e7f92f54d::t_4febd48139a5b0 14-17,22-25
+tests/integrations/sqlalchemy/test_totp.py
+  s_a5201e7f92f54d::t_6ff807daaa4527 14
+  s_a5201e7f92f54d::t_4febd48139a5b0 15
+tests/integrations/sqlalchemy/test_authentication_session.py
+  s_a5201e7f92f54d::t_4febd48139a5b0 13,17-20
+tests/integrations/sqlalchemy/test_hotp.py
+  s_a5201e7f92f54d::t_6ff807daaa4527 13
+  s_a5201e7f92f54d::t_4febd48139a5b0 14
+tests/integrations/sqlalchemy/test_identity_session.py
+  s_a5201e7f92f54d::t_6ff807daaa4527 13
+  s_a5201e7f92f54d::t_4febd48139a5b0 14
+tests/test_identity_session.py
+  s_a5201e7f92f54d::t_4febd48139a5b0 23
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "de847b8381aff19c34f5fa7448bdb308b5925bfd",
+  "prompts": {},
+  "sessions": {
+    "s_a5201e7f92f54d": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1f8a2-2a06-7082-aa18-7b73f588e996",
+        "model": "gpt-6.2-astra"
+      },
+      "human_author": "François Voron <me@fvoron.com>"
+    }
+  }
+}
