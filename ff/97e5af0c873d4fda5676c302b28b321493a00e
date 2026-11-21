@@ -1,0 +1,26 @@
+reauth/factors/webauthn/__init__.py
+  s_a5201e7f92f54d::t_abce9a7b95664c 250-251
+  s_a5201e7f92f54d::t_efa2cc2a374ff5 433-448
+  s_a5201e7f92f54d::t_007bd531c9fb82 449
+reauth/integrations/sqlalchemy/webauthn.py
+  s_a5201e7f92f54d::t_e5a5e4f27594cd 150-165
+tests/factors/test_webauthn.py
+  s_a5201e7f92f54d::t_5475b84377a2b1 106-133
+  s_a5201e7f92f54d::t_24aab4f2308091 105
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "ff97e5af0c873d4fda5676c302b28b321493a00e",
+  "prompts": {},
+  "sessions": {
+    "s_a5201e7f92f54d": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1f8a2-2a06-7082-aa18-7b73f588e996",
+        "model": "gpt-6.2-astra"
+      },
+      "human_author": "François Voron <me@fvoron.com>"
+    }
+  }
+}
