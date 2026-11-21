@@ -1,0 +1,21 @@
+reauth/integrations/sqlalchemy/webauthn.py
+  s_a5201e7f92f54d::t_d2f527c94efeba 193-198
+reauth/factors/webauthn/__init__.py
+  s_a5201e7f92f54d::t_d2f527c94efeba 209-211,222-223
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "1531318a8bfc29ad48c6ffae3c06a1e759129e53",
+  "prompts": {},
+  "sessions": {
+    "s_a5201e7f92f54d": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1f8a2-2a06-7082-aa18-7b73f588e996",
+        "model": "gpt-6.2-astra"
+      },
+      "human_author": "François Voron <me@fvoron.com>"
+    }
+  }
+}
