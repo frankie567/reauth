@@ -1,4 +1,5 @@
 from collections.abc import AsyncGenerator
+from unittest.mock import AsyncMock, Mock
 
 import pytest
 import sqlalchemy
@@ -111,8 +112,25 @@ class TestPasswordVerify:
         assert (await factor.verify(1, "original")).identity_id == 1
         with pytest.raises(InvalidPasswordException):
             await factor.verify(1, "wrong")
+
+    @pytest.mark.parametrize("identity_id", [None, 2, 3])
+    async def test_verify_without_enrollment(self, factor, monkeypatch, identity_id):
+        hash_password = Mock(return_value="discarded")
+        lookup = AsyncMock(wraps=factor.get_by_identity_id)
+        update = AsyncMock()
+        monkeypatch.setattr(factor.password_hash, "hash", hash_password)
+        monkeypatch.setattr(factor, "get_by_identity_id", lookup)
+        monkeypatch.setattr(factor, "update", update)
+
         with pytest.raises(NotEnrolledPasswordException):
-            await factor.verify(2, "wrong")
+            await factor.verify(identity_id, "wrong")
+
+        hash_password.assert_called_once_with("wrong")
+        if identity_id is None:
+            lookup.assert_not_awaited()
+        else:
+            lookup.assert_awaited_once_with(identity_id)
+        update.assert_not_awaited()
 
     async def test_verify_rehash(self, factor):
         old = Argon2Hasher(time_cost=1).hash("original")

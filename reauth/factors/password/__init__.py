@@ -154,20 +154,35 @@ class PasswordFactor(SingleEnrollmentFactorBase[PasswordEnrollment], abc.ABC):
     ) -> PasswordEnrollment:
         """Verify the password and persist any hash upgrade.
 
+        Call this method even when an account lookup fails. If no password
+        enrollment is available, the configured backend hashes the supplied
+        password and discards the result to reduce timing differences.
+
         Args:
-            identity_id: The ID of the identity whose password state is accessed.
+            identity_id: The identity ID, or None if the account lookup failed.
+                None skips the enrollment lookup.
             password: The plaintext password.
 
         Returns:
             The verified enrollment.
 
         Raises:
+            NotEnrolledPasswordException: The identity is missing or has no password.
             InvalidPasswordException: The password does not match.
         """
         logger.debug(
             "Password verification attempted", extra={"identity_id": identity_id}
         )
-        enrollment = await self._require_enrollment(identity_id)
+        enrollment = (
+            await self.get_enrollment(identity_id) if identity_id is not None else None
+        )
+        if enrollment is None:
+            self.password_hash.hash(password)
+            logger.warning(
+                "Password verification failed: not enrolled",
+                extra={"identity_id": identity_id},
+            )
+            raise NotEnrolledPasswordException()
         assert enrollment.password_hash is not None
         valid, replacement = self.password_hash.verify_and_update(
             password, enrollment.password_hash
