@@ -206,7 +206,9 @@ class WebAuthnFactor(FactorBase[WebAuthnEnrollment]):
 
         Catch InvalidRegistrationException or AttestationRejectedException inside
         the caller's transaction and commit the state deletion before reporting
-        the failure.
+        the failure. If a concurrent registration inserts the same credential after
+        the duplicate check, the storage adapter's integrity error propagates.
+        Roll back the transaction in that case.
 
         Args:
             state_token: The opaque token returned by start_enrollment.
@@ -217,7 +219,8 @@ class WebAuthnFactor(FactorBase[WebAuthnEnrollment]):
             The newly persisted enrollment.
 
         Raises:
-            InvalidRegistrationException: If verification fails or the credential is already enrolled.
+            InvalidRegistrationException: If verification fails or the duplicate check
+                finds an existing enrollment.
                 State consumption is pending in the caller's transaction and must
                 be committed despite this exception.
             AttestationRejectedException: If the application declines the registration.

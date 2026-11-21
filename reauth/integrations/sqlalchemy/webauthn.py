@@ -190,7 +190,12 @@ class SQLAlchemyWebAuthnFactor(TransactionMixin, WebAuthnFactor):
 
         Returns:
             The enrollment's record ID.
-        """
+
+        Raises:
+            sqlalchemy.exc.IntegrityError: If the insert violates a constraint, including
+                when a concurrent registration inserts the same credential for the RP.
+                The caller must roll back the transaction.
+        """  # noqa: DOC502
         self._require_transaction()
         values = dataclasses.asdict(enrollment)
         if enrollment.id is None:
