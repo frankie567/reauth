@@ -1,0 +1,22 @@
+reauth/factors/password/__init__.py
+  s_993bd300495fae::t_00d25d9dd5ac46 157-158,160,162-163,170,176-185
+  s_993bd300495fae::t_16a7e6c1205d93 159
+tests/factors/password/test_factor.py
+  s_993bd300495fae::t_3dafd7512b9dd2 2,115-124,126-133
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "6147bfa648d68b34651597e4415dece881534cfe",
+  "prompts": {},
+  "sessions": {
+    "s_993bd300495fae": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1fe3a-5543-7f91-86da-b2267886700a",
+        "model": "gpt-6.2-sol"
+      },
+      "human_author": "François Voron <me@fvoron.com>"
+    }
+  }
+}
