@@ -2,9 +2,14 @@ import asyncio
 import dataclasses
 
 import pytest
+import sqlalchemy as sa
 from sqlalchemy.exc import IntegrityError
 
-from reauth.factors.webauthn import WebAuthnEnrollment
+from reauth.factors.webauthn import (
+    InvalidAuthenticationException,
+    InvalidRegistrationException,
+    WebAuthnEnrollment,
+)
 from reauth.factors.webauthn.state import InvalidStateException
 from reauth.tokens import TokenIdentifierCollision
 from tests.webauthn import make_factor, response, seed_enrollment, seed_state
@@ -40,6 +45,39 @@ async def test_state_identifier_collision(webauthn_factor, webauthn_tables):
         )
         == state
     )
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("ceremony", ["enrollment", "authentication"])
+@pytest.mark.parametrize("commit", [True, False])
+async def test_rejected_ceremony_transaction_ownership(
+    sqlalchemy_integration_engine, webauthn_tables, ceremony, commit
+):
+    async with sqlalchemy_integration_engine.begin() as connection:
+        factor = make_factor(connection, webauthn_tables)
+        token = await seed_state(factor, webauthn_tables, ceremony, identity_id=42)
+
+    async with sqlalchemy_integration_engine.connect() as connection:
+        transaction = await connection.begin()
+        factor = make_factor(connection, webauthn_tables)
+        if ceremony == "enrollment":
+            with pytest.raises(InvalidRegistrationException):
+                await factor.finish_enrollment(
+                    state_token=token, session_id=5, credential={}
+                )
+        else:
+            with pytest.raises(InvalidAuthenticationException):
+                await factor.finish_authentication(
+                    state_token=token, session_id=5, credential={}
+                )
+        if commit:
+            await transaction.commit()
+        else:
+            await transaction.rollback()
+
+    async with sqlalchemy_integration_engine.connect() as connection:
+        state_id = await connection.scalar(sa.select(webauthn_tables[1].c.id))
+        assert (state_id is None) == commit
 
 
 @pytest.mark.anyio

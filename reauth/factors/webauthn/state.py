@@ -49,6 +49,12 @@ class WebAuthnStateService(abc.ABC):
         token_provider: TokenProvider,
         lifetime: datetime.timedelta = datetime.timedelta(minutes=5),
     ) -> None:
+        """Configure single-use ceremony state.
+
+        Args:
+            token_provider: Provider used to issue and verify opaque state tokens.
+            lifetime: How long a ceremony may remain pending.
+        """
         self.token_provider = token_provider
         self.lifetime = lifetime
 
@@ -64,6 +70,16 @@ class WebAuthnStateService(abc.ABC):
         allowed_credential_ids: list[str] | None = None,
     ) -> tuple[str, WebAuthnState]:
         """Store the challenge and its request context and return the opaque state token.
+
+        Args:
+            rp_id: The relying party's domain.
+            factor_identifier: The configured factor that started the ceremony.
+            ceremony: Whether the request starts enrollment or authentication.
+            session_id: The ID of the session that initiated the ceremony.
+            identity_id: The application identity, or None for discoverable authentication.
+            challenge: The raw challenge included in the browser options.
+            allowed_credential_ids: The base64url credential IDs offered for account-bound
+                authentication, or None when no allow list was sent.
 
         Returns:
             The opaque token and pending ceremony state.
@@ -117,6 +133,13 @@ class WebAuthnStateService(abc.ABC):
     ) -> WebAuthnState:
         """Validate and delete state bound to the current factor, ceremony and session.
 
+        Args:
+            token: The opaque state token returned by create.
+            rp_id: The expected relying party domain.
+            factor_identifier: The identifier of the factor handling the response.
+            ceremony: The type of ceremony being completed.
+            session_id: The current session's ID.
+
         Returns:
             The consumed state. Deletion becomes durable on commit.
 
@@ -169,6 +192,9 @@ class WebAuthnStateService(abc.ABC):
     ) -> WebAuthnState | None:
         """Look up state, including expired state.
 
+        Args:
+            token_identifier: The identifier parsed from the opaque state token.
+
         Abstract: Implementation contract
             Match the token identifier exactly. Protect the row before reading and
             retain protection until the transaction ends. Leave commit and rollback to the caller.
@@ -178,6 +204,9 @@ class WebAuthnStateService(abc.ABC):
     @abc.abstractmethod
     async def insert(self, state: WebAuthnState) -> typing.Any:
         """Insert state and return its ID.
+
+        Args:
+            state: The pending ceremony state to persist.
 
         Abstract: Implementation contract
             Enforce uniqueness of the token identifier. Raise TokenIdentifierCollision
@@ -189,6 +218,9 @@ class WebAuthnStateService(abc.ABC):
     @abc.abstractmethod
     async def delete(self, state: WebAuthnState) -> None:
         """Consume the protected state.
+
+        Args:
+            state: The pending ceremony state to delete.
 
         Abstract: Implementation contract
             Delete the supplied row by ID in the transaction protecting it. Concurrent

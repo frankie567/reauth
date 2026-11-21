@@ -118,6 +118,9 @@ class WebAuthnFactor(FactorBase[WebAuthnEnrollment]):
     async def get_user_handle(self, identity_id: typing.Any) -> bytes:
         """Return the WebAuthn user handle for an application identity.
 
+        Args:
+            identity_id: The application's stable identifier for the account.
+
         Abstract: Implementation contract
             Supply 1–64 opaque bytes, unique per account and stable across all credentials
             and factors for the same RP. Exclude personally identifying information.
@@ -126,6 +129,9 @@ class WebAuthnFactor(FactorBase[WebAuthnEnrollment]):
 
     async def accept_attestation(self, registration: VerifiedRegistration) -> bool:
         """Decide whether to enroll a registration after Duo's verification succeeds.
+
+        Args:
+            registration: The verified registration to evaluate against the attestation policy.
 
         Returns:
             True to admit the credential. Override to enforce an attestation policy.
@@ -141,6 +147,12 @@ class WebAuthnFactor(FactorBase[WebAuthnEnrollment]):
         display_name: str | None = None,
     ) -> tuple[str, PublicKeyCredentialCreationOptions]:
         """Start registration for the account authorized by the initiating session.
+
+        Args:
+            identity_id: The application identity that will own the credential.
+            session_id: The ID of the session authorizing enrollment.
+            user_name: The account name shown in the authenticator's account selector.
+            display_name: An optional human-readable name for the account.
 
         Returns:
             The opaque state token and browser creation options.
@@ -192,12 +204,25 @@ class WebAuthnFactor(FactorBase[WebAuthnEnrollment]):
     ) -> WebAuthnEnrollment:
         """Verify a browser registration, apply the application policy and enroll it.
 
+        Catch InvalidRegistrationException or AttestationRejectedException inside
+        the caller's transaction and commit the state deletion before reporting
+        the failure.
+
+        Args:
+            state_token: The opaque token returned by start_enrollment.
+            session_id: The current session's ID, which must match the initiating session.
+            credential: The browser's registration response as a JSON string or dictionary.
+
         Returns:
             The newly persisted enrollment.
 
         Raises:
             InvalidRegistrationException: If verification fails or the credential is already enrolled.
+                State consumption is pending in the caller's transaction and must
+                be committed despite this exception.
             AttestationRejectedException: If the application declines the registration.
+                State consumption is pending in the caller's transaction and must
+                be committed despite this exception.
         """
         state = await self.state_service.consume(
             state_token,
@@ -264,6 +289,11 @@ class WebAuthnFactor(FactorBase[WebAuthnEnrollment]):
     ) -> tuple[str, PublicKeyCredentialRequestOptions]:
         """Start an account-bound or discoverable authentication ceremony.
 
+        Args:
+            session_id: The ID of the session requesting authentication.
+            identity_id: The account to authenticate. Omit to let the user select a
+                discoverable credential.
+
         Returns:
             The opaque state token and browser request options.
 
@@ -313,11 +343,21 @@ class WebAuthnFactor(FactorBase[WebAuthnEnrollment]):
     ) -> WebAuthnEnrollment:
         """Verify the assertion and return its owning enrollment for session advancement.
 
+        Catch InvalidAuthenticationException inside the caller's transaction and
+        commit the state deletion before reporting the failure.
+
+        Args:
+            state_token: The opaque token returned by start_authentication.
+            session_id: The current session's ID, which must match the initiating session.
+            credential: The browser's assertion response as a JSON string or dictionary.
+
         Returns:
             The verified enrollment with its updated signature counter.
 
         Raises:
             InvalidAuthenticationException: If the assertion or account binding is invalid.
+                State consumption is pending in the caller's transaction and must
+                be committed despite this exception.
         """
         state = await self.state_service.consume(
             state_token,
@@ -397,6 +437,9 @@ class WebAuthnFactor(FactorBase[WebAuthnEnrollment]):
     ) -> WebAuthnEnrollment | None:
         """Find the credential eligible for this configured factor.
 
+        Args:
+            credential_id: The raw credential ID supplied by the authenticator.
+
         Abstract: Implementation contract
             Match the RP, factor identifier and exact credential ID. Acquire protection before
             reading and retain it through the transaction. Leave commit and rollback to the caller.
@@ -406,6 +449,9 @@ class WebAuthnFactor(FactorBase[WebAuthnEnrollment]):
     @abc.abstractmethod
     async def insert(self, enrollment: WebAuthnEnrollment) -> typing.Any:
         """Insert a verified credential and return its record ID.
+
+        Args:
+            enrollment: The verified enrollment to persist.
 
         Abstract: Implementation contract
             Enforce credential ID uniqueness across all accounts and factors within the RP.
@@ -417,6 +463,9 @@ class WebAuthnFactor(FactorBase[WebAuthnEnrollment]):
     async def update(self, enrollment: WebAuthnEnrollment) -> None:
         """Persist the signature counter for the verified credential.
 
+        Args:
+            enrollment: The existing enrollment with its updated signature counter.
+
         Abstract: Implementation contract
             Update the protected enrollment by ID in the same transaction and retain
             protection until it ends. Leave commit and rollback to the caller.
@@ -426,6 +475,9 @@ class WebAuthnFactor(FactorBase[WebAuthnEnrollment]):
     @abc.abstractmethod
     async def delete(self, enrollment: WebAuthnEnrollment) -> None:
         """Revoke an enrollment.
+
+        Args:
+            enrollment: The credential enrollment to revoke.
 
         Abstract: Implementation contract
             Delete the supplied enrollment by ID in the transaction protecting it.
