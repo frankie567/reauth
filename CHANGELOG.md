@@ -15,7 +15,7 @@ Earlier release notes are in [GitHub Releases](https://github.com/frankie567/rea
 
 - WebAuthn factor with multiple credentials per identity, attestation policy, single-use ceremony state, and SQLAlchemy storage.
 - Password factor with enrollment, verification, password changes, and single-use reset tokens. The `password` extra provides Argon2 hashing through pwdlib.
-- SQLAlchemy adapters and table factories for authentication and identity sessions, backup codes, email OTP, HOTP, TOTP, OAuth2 enrollments and state, and password enrollments.
+- SQLAlchemy adapters and table factories for authentication and identity sessions, backup codes, email OTP, HOTP, TOTP, and OAuth2 enrollments and state. `SQLAlchemyPasswordFactor` stores password state in the application's identity table.
 
 ### Changed
 
