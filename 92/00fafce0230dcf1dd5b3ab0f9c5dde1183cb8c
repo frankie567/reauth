@@ -1,0 +1,19 @@
+CHANGELOG.md
+  s_8e41171b0296be::t_fd0cebdd0d80ed 18
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "9200fafce0230dcf1dd5b3ab0f9c5dde1183cb8c",
+  "prompts": {},
+  "sessions": {
+    "s_8e41171b0296be": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a207e2-726f-7490-9a4d-6b340cf0e20d",
+        "model": "gpt-6.2-sol"
+      },
+      "human_author": "François Voron <me@fvoron.com>"
+    }
+  }
+}
