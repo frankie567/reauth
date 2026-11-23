@@ -14,12 +14,32 @@ Earlier release notes are in [GitHub Releases](https://github.com/frankie567/rea
 ### Added
 
 - WebAuthn factor with multiple credentials per identity, attestation policy, single-use ceremony state, and SQLAlchemy storage.
+- Password factor with enrollment, verification, password changes, and single-use reset tokens. The `password` extra provides Argon2 hashing through pwdlib.
+- SQLAlchemy adapters and table factories for authentication and identity sessions, backup codes, email OTP, HOTP, TOTP, OAuth2 enrollments and state, and password enrollments.
 
 ### Changed
 
-- Import SQLAlchemy adapters, table factories, and exceptions from their defining submodules. For example, use `from reauth.integrations.sqlalchemy.totp import SQLAlchemyTOTPFactor, create_totp_enrollment_table`. Package-level re-exports have been removed.
 - `FactorBase` now uses `get_enrollments()` to support multiple enrollments per identity. Custom factors with a singular `get_enrollment()` can inherit from `SingleEnrollmentFactorBase`.
-- Manage curated changelog entries with keepachangelog and use each version's entry for GitHub release notes.
+- Replace `reauth.crypto` with injectable token providers and verifiers in `reauth.tokens`, including checksummed tokens and an HMAC verifier with key rotation. Update custom persistence to store token identifiers and verifiers for sessions and OAuth2 state, and code verifiers for email OTP and backup codes.
+- `AuthenticationSessionService.advance()` and `complete()` now take the session token and validate it before changing the session.
+- `OAuth2Factor.callback()` now requires `expected_state`. Save the state returned by `start()` in the initiating browser's flow and pass the saved value to the callback.
+- Callers own transaction commits and rollbacks for identity session storage. Commit any session-family revocation triggered by `ReusedRefreshTokenException` before handling the failure outside the transaction.
+
+### Fixed
+
+- Raise `InvalidIDTokenException` for malformed OpenID Connect ID tokens.
+
+## [0.5.0] - 2026-10-27
+
+### Changed
+
+- GitHub OAuth2's `get_primary_email()` now returns the primary email address and its verification status as a tuple.
+
+### Fixed
+
+- Keep TOTP verification within the configured clock drift window.
+
+Source: [v0.5.0 release notes](https://github.com/frankie567/reauth/releases/tag/v0.5.0).
 
 ## [0.4.2] - 2026-09-26
 
@@ -29,5 +49,6 @@ Earlier release notes are in [GitHub Releases](https://github.com/frankie567/rea
 
 Source: [v0.4.2 release notes](https://github.com/frankie567/reauth/releases/tag/v0.4.2).
 
-[Unreleased]: https://github.com/frankie567/reauth/compare/v0.4.2...HEAD
+[Unreleased]: https://github.com/frankie567/reauth/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/frankie567/reauth/releases/tag/v0.5.0
 [0.4.2]: https://github.com/frankie567/reauth/releases/tag/v0.4.2
