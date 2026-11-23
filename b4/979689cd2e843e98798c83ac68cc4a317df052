@@ -1,0 +1,47 @@
+AGENTS.md
+  s_f1a83cd6b2391b::t_d7b2c40ed7eada 116
+tests/factors/test_webauthn.py
+  s_f1a83cd6b2391b::t_d7b2c40ed7eada 3,12,26,33-41,245-249,253-255,267
+  s_f1a83cd6b2391b::t_956e49f8d7110b 43-45,86-88,127-129,156-158,174-177,212-217,238-240,250-252,260-262,272-278
+  s_f1a83cd6b2391b::t_240293b95174b9 52,54,58
+  s_f1a83cd6b2391b::t_8bb5178c9defe2 92,130,178
+tests/integrations/sqlalchemy/test_email_otp.py
+  s_f1a83cd6b2391b::t_8bb5178c9defe2 145,251,325
+  s_f1a83cd6b2391b::t_956e49f8d7110b 119-122,179-182,198-201,214-216,230-233,279-282,374-377
+tests/webauthn.py
+  s_f1a83cd6b2391b::t_956e49f8d7110b 93-95,120-122,134,136-140
+  s_f1a83cd6b2391b::t_8bb5178c9defe2 123,141
+  s_f1a83cd6b2391b::t_d7b2c40ed7eada 17
+tests/factors/password/test_factor.py
+  s_f1a83cd6b2391b::t_956e49f8d7110b 119-124,156-158,173-178,202-207,222-224
+  s_f1a83cd6b2391b::t_8bb5178c9defe2 99,113,142,211
+  s_f1a83cd6b2391b::t_d7b2c40ed7eada 2
+  s_f1a83cd6b2391b::t_63314204fb61ee 103,165,231
+tests/integrations/sqlalchemy/test_webauthn.py
+  s_f1a83cd6b2391b::t_956e49f8d7110b 20-22,38-40,60-63,93-96
+  s_f1a83cd6b2391b::t_8bb5178c9defe2 64,104
+  s_f1a83cd6b2391b::t_d7b2c40ed7eada 7,14,16,45
+tests/integrations/sqlalchemy/test_password.py
+  s_f1a83cd6b2391b::t_8bb5178c9defe2 132,167-168,227-228,246
+  s_f1a83cd6b2391b::t_956e49f8d7110b 91-93,108-110,128-131,197-199,210-212
+tests/factors/password/test_pwdlib.py
+  s_f1a83cd6b2391b::t_8bb5178c9defe2 14,24,43,53,59,63
+  s_f1a83cd6b2391b::t_956e49f8d7110b 37-39
+  s_f1a83cd6b2391b::t_d7b2c40ed7eada 1-2,7
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "b4979689cd2e843e98798c83ac68cc4a317df052",
+  "prompts": {},
+  "sessions": {
+    "s_f1a83cd6b2391b": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a207a3-d923-76e0-8f85-1dc638f6ad40",
+        "model": "gpt-6.2-sol"
+      },
+      "human_author": "François Voron <me@fvoron.com>"
+    }
+  }
+}
