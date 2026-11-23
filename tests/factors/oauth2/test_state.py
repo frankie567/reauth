@@ -1,40 +1,13 @@
-import dataclasses
-
 import pytest
-from sqlalchemy import insert, update
+from sqlalchemy import update
 
 from reauth.factors.oauth2.state import (
     ExpiredStateException,
     InvalidStateException,
     OAuth2State,
 )
-from reauth.timestamp import get_current_timestamp
 
 from .conftest import SQLAlchemyOAuth2StateService, oauth2_state_table
-
-
-@pytest.fixture
-async def state_data(
-    oauth2_state_service: SQLAlchemyOAuth2StateService,
-) -> tuple[str, OAuth2State]:
-    generated = await oauth2_state_service.token_provider.generate()
-    state = OAuth2State(
-        id=42,
-        token_identifier=generated.identifier,
-        token_verifier=generated.verifier,
-        provider="google",
-        redirect_uri="https://example.com/callback",
-        code_verifier="test_verifier",
-        nonce=None,
-        identity_id=None,
-        scope=None,
-        expires_at=get_current_timestamp() + 3600,
-        context={"auth_session_id": 789, "custom_data": "test"},
-    )
-    await oauth2_state_service.connection.execute(
-        insert(oauth2_state_table).values(**dataclasses.asdict(state))
-    )
-    return generated.token, state
 
 
 @pytest.mark.anyio

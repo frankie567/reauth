@@ -1,5 +1,6 @@
 import abc
 import dataclasses
+import hmac
 import typing
 
 from reauth.amr import AuthenticationMethodReference
@@ -10,7 +11,11 @@ from reauth.factors.oauth2.pkce import (
     generate_code_challenge,
     generate_code_verifier,
 )
-from reauth.factors.oauth2.state import OAuth2State, OAuth2StateService
+from reauth.factors.oauth2.state import (
+    InvalidStateException,
+    OAuth2State,
+    OAuth2StateService,
+)
 from reauth.logging import get_logger
 
 logger = get_logger(__name__)
@@ -257,8 +262,9 @@ class OAuth2Factor[EXTRA](SingleEnrollmentFactorBase[OAuth2Enrollment], abc.ABC)
 
         Returns:
             A tuple of (authorization_url, state_token, oauth2_state).
-            The state_token must be stored by the caller and presented
-            during the callback phase.
+            Save state_token with the initiating flow, for example in the user
+            agent's session or a short-lived cookie. Pass that saved copy as
+            expected_state to callback().
         """
         logger.debug("OAuth2 start attempted", extra={"provider": self.identifier})
         # Generate PKCE values if enabled
@@ -308,6 +314,7 @@ class OAuth2Factor[EXTRA](SingleEnrollmentFactorBase[OAuth2Enrollment], abc.ABC)
         *,
         code: str | None = None,
         state: str,
+        expected_state: str | None,
         error: str | None = None,
         error_description: str | None = None,
         error_uri: str | None = None,
@@ -333,7 +340,10 @@ class OAuth2Factor[EXTRA](SingleEnrollmentFactorBase[OAuth2Enrollment], abc.ABC)
 
         Args:
             code: The authorization code from the callback.
-            state: The state token from the callback (must match start() state).
+            state: The state token from the provider's response.
+            expected_state: The state token saved for the initiating user agent,
+                retrieved independently of the provider's response. Pass None if
+                the saved token is missing to reject the callback.
             error: OAuth2 error code if the request was denied (RFC 6749 Section 4.1.2.1).
             error_description: Human-readable error description.
             error_uri: URI for more information about the error.
@@ -344,7 +354,8 @@ class OAuth2Factor[EXTRA](SingleEnrollmentFactorBase[OAuth2Enrollment], abc.ABC)
             returned as the third element, containing the original context passed to start().
 
         Raises:
-            InvalidStateException: If the state token is invalid or expired.
+            InvalidStateException: If the state token is invalid or the saved
+                state token is missing or does not match.
             ExpiredStateException: If the state token has expired.
             OAuth2CallbackException: RFC 6749 auth error or unsupported error code.
             OAuth2AccessDeniedException: RFC 6749 auth error: access_denied.
@@ -359,6 +370,16 @@ class OAuth2Factor[EXTRA](SingleEnrollmentFactorBase[OAuth2Enrollment], abc.ABC)
             OAuth2IdentityMismatchException: If state identity does not match existing enrollment.
         """  # noqa: DOC502
         logger.debug("OAuth2 callback attempted", extra={"provider": self.identifier})
+        if not expected_state or not hmac.compare_digest(
+            state.encode(errors="surrogatepass"),
+            expected_state.encode(errors="surrogatepass"),
+        ):
+            logger.warning(
+                "OAuth2 callback state binding failed",
+                extra={"provider": self.identifier},
+            )
+            raise InvalidStateException()
+
         # Step 1: Consume the state first (validates and deletes atomically)
         oauth2_state = await self.state_service.consume(state)
 
