@@ -19,6 +19,10 @@ class AppleOAuth2Factor(OIDCFactorBase, abc.ABC):
     Note: Apple does NOT support a userinfo endpoint. Profile data must be
     extracted from the id_token using get_id_token_claims().
 
+    Apple returns a cross-site POST when requesting the name or email scope.
+    If you save the OAuth state in a cookie, set SameSite=None, Secure, and
+    HttpOnly on the short-lived state cookie so it reaches the callback.
+
     References:
         - Apple: https://developer.apple.com/documentation/accountorganizationaldatasharing/creating-a-client-secret
     """

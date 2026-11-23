@@ -1,4 +1,5 @@
 import dataclasses
+from unittest.mock import AsyncMock
 
 import pytest
 from sqlalchemy import insert
@@ -184,6 +185,7 @@ class TestOAuth2FactorCallback:
             await oauth2_factor.callback(
                 code="some-code",
                 state=state_token,
+                expected_state=state_token,
                 error=error,
                 error_description=error_description,
             )
@@ -200,6 +202,7 @@ class TestOAuth2FactorCallback:
             await oauth2_factor.callback(
                 code=None,
                 state=state_token,
+                expected_state=state_token,
             )
 
     async def test_invalid_state_error(
@@ -210,7 +213,36 @@ class TestOAuth2FactorCallback:
             await oauth2_factor.callback(
                 code="some-code",
                 state="invalid-state-token",
+                expected_state="invalid-state-token",
             )
+
+    @pytest.mark.parametrize("expected_state", [None, "", "other-state"])
+    async def test_rejects_unbound_callback_without_consuming_state(
+        self,
+        oauth2_factor: SQLAlchemyOAuth2Factor,
+        monkeypatch: pytest.MonkeyPatch,
+        state_data: tuple[str, OAuth2State],
+        expected_state: str | None,
+    ) -> None:
+        state_token, _ = state_data
+        exchange_code = AsyncMock(wraps=oauth2_factor.exchange_code)
+        monkeypatch.setattr(oauth2_factor, "exchange_code", exchange_code)
+
+        with pytest.raises(InvalidStateException):
+            await oauth2_factor.callback(
+                code="test-code",
+                state=state_token,
+                expected_state=expected_state,
+            )
+
+        exchange_code.assert_not_awaited()
+        _, account, _ = await oauth2_factor.callback(
+            code="test-code",
+            state=state_token,
+            expected_state=state_token,
+        )
+        assert account is not None
+        exchange_code.assert_awaited_once()
 
     async def test_creates_new_enrollment(
         self, oauth2_factor: SQLAlchemyOAuth2Factor
@@ -225,6 +257,7 @@ class TestOAuth2FactorCallback:
         enrollment, account, returned_state = await oauth2_factor.callback(
             code="test-code",
             state=state_token,
+            expected_state=state_token,
         )
 
         assert enrollment is not None
@@ -263,6 +296,7 @@ class TestOAuth2FactorCallback:
         enrollment, account, returned_state = await oauth2_factor.callback(
             code="test-code",
             state=state_token,
+            expected_state=state_token,
         )
 
         assert enrollment is not None
@@ -301,6 +335,7 @@ class TestOAuth2FactorCallback:
             await oauth2_factor.callback(
                 code="test-code",
                 state=state_token,
+                expected_state=state_token,
             )
 
     async def test_no_identity_returns_account(
@@ -314,6 +349,7 @@ class TestOAuth2FactorCallback:
         enrollment, account, returned_state = await oauth2_factor.callback(
             code="test-code",
             state=state_token,
+            expected_state=state_token,
         )
 
         assert enrollment is None
@@ -349,6 +385,7 @@ class TestOAuth2FactorCallback:
         enrollment, account, returned_state = await oauth2_factor.callback(
             code="test-code",
             state=state_token,
+            expected_state=state_token,
         )
 
         assert enrollment is not None
@@ -369,6 +406,7 @@ class TestOAuth2FactorCallback:
         enrollment, account, returned_state = await oauth2_factor.callback(
             code="test-code",
             state=state_token,
+            expected_state=state_token,
         )
 
         assert enrollment is not None

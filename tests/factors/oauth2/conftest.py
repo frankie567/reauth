@@ -1,15 +1,18 @@
+import dataclasses
 import datetime
 from collections.abc import AsyncGenerator
 
 import pytest
-from sqlalchemy import MetaData
+from sqlalchemy import MetaData, insert
 from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine
 
+from reauth.factors.oauth2.state import OAuth2State
 from reauth.integrations.sqlalchemy.oauth2 import create_oauth2_enrollment_table
 from reauth.integrations.sqlalchemy.oauth2_state import (
     SQLAlchemyOAuth2StateService,
     create_oauth2_state_table,
 )
+from reauth.timestamp import get_current_timestamp
 from reauth.tokens import ChecksummedTokenProvider, HMACTokenVerifier
 
 sqlalchemy_meta = MetaData()
@@ -42,3 +45,27 @@ def oauth2_state_service(
         ),
         lifetime=datetime.timedelta(minutes=10),
     )
+
+
+@pytest.fixture
+async def state_data(
+    oauth2_state_service: SQLAlchemyOAuth2StateService,
+) -> tuple[str, OAuth2State]:
+    generated = await oauth2_state_service.token_provider.generate()
+    state = OAuth2State(
+        id=42,
+        token_identifier=generated.identifier,
+        token_verifier=generated.verifier,
+        provider="provider",
+        redirect_uri="https://example.com/callback",
+        code_verifier="test_verifier",
+        nonce=None,
+        identity_id=None,
+        scope=None,
+        expires_at=get_current_timestamp() + 3600,
+        context={"auth_session_id": 789, "custom_data": "test"},
+    )
+    await oauth2_state_service.connection.execute(
+        insert(oauth2_state_table).values(**dataclasses.asdict(state))
+    )
+    return generated.token, state
