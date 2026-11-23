@@ -4,19 +4,22 @@ import dataclasses
 import pytest
 import sqlalchemy as sa
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy.ext.asyncio import AsyncEngine
 
 from reauth.factors.webauthn import (
     InvalidAuthenticationException,
     InvalidRegistrationException,
     WebAuthnEnrollment,
 )
-from reauth.factors.webauthn.state import InvalidStateException
+from reauth.factors.webauthn.state import Ceremony, InvalidStateException
 from reauth.tokens import TokenIdentifierCollision
-from tests.webauthn import make_factor, response, seed_enrollment, seed_state
+from tests.webauthn import Factor, make_factor, response, seed_enrollment, seed_state
 
 
 @pytest.mark.anyio
-async def test_revoke_and_rp_uniqueness(webauthn_factor, webauthn_tables):
+async def test_revoke_and_rp_uniqueness(
+    webauthn_factor: Factor, webauthn_tables: tuple[sa.Table, sa.Table]
+) -> None:
     await seed_enrollment(webauthn_factor, webauthn_tables)
     await seed_enrollment(webauthn_factor, webauthn_tables, b"spare")
     first, spare = await webauthn_factor.get_enrollments(42)
@@ -32,11 +35,14 @@ async def test_revoke_and_rp_uniqueness(webauthn_factor, webauthn_tables):
 
 
 @pytest.mark.anyio
-async def test_state_identifier_collision(webauthn_factor, webauthn_tables):
+async def test_state_identifier_collision(
+    webauthn_factor: Factor, webauthn_tables: tuple[sa.Table, sa.Table]
+) -> None:
     token = await seed_state(webauthn_factor, webauthn_tables)
     state = await webauthn_factor.state_service.get_by_token_identifier(
         webauthn_factor.state_service.token_provider.parse(token).identifier
     )
+    assert state is not None
     with pytest.raises(TokenIdentifierCollision):
         await webauthn_factor.state_service.insert(dataclasses.replace(state, id=None))
     assert (
@@ -51,8 +57,11 @@ async def test_state_identifier_collision(webauthn_factor, webauthn_tables):
 @pytest.mark.parametrize("ceremony", ["enrollment", "authentication"])
 @pytest.mark.parametrize("commit", [True, False])
 async def test_rejected_ceremony_transaction_ownership(
-    sqlalchemy_integration_engine, webauthn_tables, ceremony, commit
-):
+    sqlalchemy_integration_engine: AsyncEngine,
+    webauthn_tables: tuple[sa.Table, sa.Table],
+    ceremony: Ceremony,
+    commit: bool,
+) -> None:
     async with sqlalchemy_integration_engine.begin() as connection:
         factor = make_factor(connection, webauthn_tables)
         token = await seed_state(factor, webauthn_tables, ceremony, identity_id=42)
@@ -81,7 +90,10 @@ async def test_rejected_ceremony_transaction_ownership(
 
 
 @pytest.mark.anyio
-async def test_concurrent_finish(sqlalchemy_integration_engine, webauthn_tables):
+async def test_concurrent_finish(
+    sqlalchemy_integration_engine: AsyncEngine,
+    webauthn_tables: tuple[sa.Table, sa.Table],
+) -> None:
     if sqlalchemy_integration_engine.dialect.name == "sqlite":
         pytest.skip("SQLite has no row-level locks")
     async with sqlalchemy_integration_engine.begin() as connection:
@@ -89,7 +101,7 @@ async def test_concurrent_finish(sqlalchemy_integration_engine, webauthn_tables)
         await seed_enrollment(webauthn_factor, webauthn_tables)
         token = await seed_state(webauthn_factor, webauthn_tables)
 
-    async def finish():
+    async def finish() -> WebAuthnEnrollment:
         async with sqlalchemy_integration_engine.begin() as connection:
             return await make_factor(connection, webauthn_tables).finish_authentication(
                 state_token=token, session_id=5, credential=response()

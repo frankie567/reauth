@@ -14,7 +14,7 @@ from reauth.factors.webauthn import (
     ResidentKeyRequirement,
     WebAuthnEnrollment,
 )
-from reauth.factors.webauthn.state import WebAuthnState
+from reauth.factors.webauthn.state import Ceremony, WebAuthnState
 from reauth.integrations.sqlalchemy.webauthn import (
     SQLAlchemyWebAuthnFactor,
     SQLAlchemyWebAuthnStateService,
@@ -90,9 +90,9 @@ async def webauthn_factor(
 async def seed_state(
     factor: Factor,
     tables: tuple[sa.Table, sa.Table],
-    ceremony="authentication",
-    identity_id=None,
-    expires_at=None,
+    ceremony: Ceremony = "authentication",
+    identity_id: int | None = None,
+    expires_at: int | None = None,
 ) -> str:
     token = await factor.state_service.token_provider.generate()
     state = WebAuthnState(
@@ -117,8 +117,10 @@ async def seed_state(
 
 
 async def seed_enrollment(
-    factor: Factor, tables: tuple[sa.Table, sa.Table], credential_id=CREDENTIAL_ID
-):
+    factor: Factor,
+    tables: tuple[sa.Table, sa.Table],
+    credential_id: bytes = CREDENTIAL_ID,
+) -> None:
     enrollment = WebAuthnEnrollment(
         None, 42, RP, factor.identifier, credential_id, PUBLIC_KEY, 7
     )
@@ -129,14 +131,14 @@ async def seed_enrollment(
 
 def response(
     *,
-    registration=False,
+    registration: bool = False,
     handle: bytes | None = (42).to_bytes(16),
-    challenge=CHALLENGE,
-    origin=ORIGIN,
-    counter=8,
-    flags=5,
-    credential_id=CREDENTIAL_ID,
-):
+    challenge: bytes = CHALLENGE,
+    origin: str = ORIGIN,
+    counter: int = 8,
+    flags: int = 5,
+    credential_id: bytes = CREDENTIAL_ID,
+) -> dict[str, str | dict[str, str]]:
     client = json.dumps(
         {
             "type": "webauthn.create" if registration else "webauthn.get",

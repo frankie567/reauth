@@ -113,6 +113,7 @@ When implementing abstract methods for data persistence (insert, update, delete)
 
 ### Testing
 
+- Annotate all parameters and return types in Python tests, fixtures, and test helpers, including parametrized inputs. Use `-> None` for tests that return nothing. The implicit `self` and `cls` parameters follow normal Python conventions.
 - When testing a method, do not rely on other methods to prepare the initial state. Use fixtures or write directly to the test data storage instead.
 - Leverage `dataclasses.asdict(model)` to easily dump dataclass instances for database operations
 

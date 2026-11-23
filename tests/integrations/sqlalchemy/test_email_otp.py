@@ -116,7 +116,10 @@ def otp() -> EmailOTP:
 @pytest.mark.anyio
 class TestSQLAlchemyEmailOTP:
     async def test_requires_transaction(
-        self, sqlalchemy_integration_engine: AsyncEngine, tables, otp: EmailOTP
+        self,
+        sqlalchemy_integration_engine: AsyncEngine,
+        tables: tuple[sqlalchemy.Table, sqlalchemy.Table, sqlalchemy.Table],
+        otp: EmailOTP,
     ) -> None:
         async with sqlalchemy_integration_engine.connect() as connection:
             with pytest.raises(MissingTransactionException):
@@ -139,7 +142,7 @@ class TestSQLAlchemyEmailOTP:
     async def test_insert_transaction_ownership(
         self,
         sqlalchemy_integration_engine: AsyncEngine,
-        tables,
+        tables: tuple[sqlalchemy.Table, sqlalchemy.Table, sqlalchemy.Table],
         otp: EmailOTP,
         record_id: int | None,
         commit: bool,
@@ -173,7 +176,10 @@ class TestSQLAlchemyEmailOTP:
                 assert row is None
 
     async def test_missing_parent(
-        self, sqlalchemy_integration_engine: AsyncEngine, tables, otp: EmailOTP
+        self,
+        sqlalchemy_integration_engine: AsyncEngine,
+        tables: tuple[sqlalchemy.Table, sqlalchemy.Table, sqlalchemy.Table],
+        otp: EmailOTP,
     ) -> None:
         otp.authentication_session_id = 999
         async with sqlalchemy_integration_engine.begin() as connection:
@@ -189,7 +195,10 @@ class TestSQLAlchemyEmailOTP:
             ).first() is None
 
     async def test_lookup_includes_expired_and_scopes_session(
-        self, sqlalchemy_integration_engine: AsyncEngine, tables, otp: EmailOTP
+        self,
+        sqlalchemy_integration_engine: AsyncEngine,
+        tables: tuple[sqlalchemy.Table, sqlalchemy.Table, sqlalchemy.Table],
+        otp: EmailOTP,
     ) -> None:
         otp.id = 42
         async with sqlalchemy_integration_engine.begin() as connection:
@@ -202,7 +211,9 @@ class TestSQLAlchemyEmailOTP:
             assert await factor.get_by_authentication_session_id(999) is None
 
     async def test_get_enrollment(
-        self, sqlalchemy_integration_engine: AsyncEngine, tables
+        self,
+        sqlalchemy_integration_engine: AsyncEngine,
+        tables: tuple[sqlalchemy.Table, sqlalchemy.Table, sqlalchemy.Table],
     ) -> None:
         enrollment = EmailOTPEnrollment(
             id=123, identity_id=123, email="reauth@example.com"
@@ -216,7 +227,10 @@ class TestSQLAlchemyEmailOTP:
             assert await factor.get_enrollment(999) is None
 
     async def test_unique_pending_otp(
-        self, sqlalchemy_integration_engine: AsyncEngine, tables, otp: EmailOTP
+        self,
+        sqlalchemy_integration_engine: AsyncEngine,
+        tables: tuple[sqlalchemy.Table, sqlalchemy.Table, sqlalchemy.Table],
+        otp: EmailOTP,
     ) -> None:
         async with sqlalchemy_integration_engine.begin() as connection:
             await connection.execute(
@@ -234,7 +248,7 @@ class TestSQLAlchemyEmailOTP:
     async def test_delete_transaction_ownership(
         self,
         sqlalchemy_integration_engine: AsyncEngine,
-        tables,
+        tables: tuple[sqlalchemy.Table, sqlalchemy.Table, sqlalchemy.Table],
         otp: EmailOTP,
         delete_all: bool,
         commit: bool,
@@ -262,7 +276,10 @@ class TestSQLAlchemyEmailOTP:
             assert (row is None) == commit
 
     async def test_custom_ids_and_application_columns(
-        self, sqlalchemy_integration_engine: AsyncEngine, tables, otp: EmailOTP
+        self,
+        sqlalchemy_integration_engine: AsyncEngine,
+        tables: tuple[sqlalchemy.Table, sqlalchemy.Table, sqlalchemy.Table],
+        otp: EmailOTP,
     ) -> None:
         metadata = tables[2].metadata
         custom = create_email_otp_table(
@@ -305,7 +322,7 @@ class TestSQLAlchemyEmailOTP:
     async def test_concurrent_creation_serializes_on_parent(
         self,
         sqlalchemy_integration_engine: AsyncEngine,
-        tables,
+        tables: tuple[sqlalchemy.Table, sqlalchemy.Table, sqlalchemy.Table],
         otp: EmailOTP,
         existing: bool,
     ) -> None:
@@ -354,7 +371,10 @@ class TestSQLAlchemyEmailOTP:
             )
 
     async def test_concurrent_consumption_rejects_replay(
-        self, sqlalchemy_integration_engine: AsyncEngine, tables, otp: EmailOTP
+        self,
+        sqlalchemy_integration_engine: AsyncEngine,
+        tables: tuple[sqlalchemy.Table, sqlalchemy.Table, sqlalchemy.Table],
+        otp: EmailOTP,
     ) -> None:
         if sqlalchemy_integration_engine.dialect.name == "sqlite":
             pytest.skip("SQLite does not support SELECT FOR UPDATE")
