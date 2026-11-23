@@ -1,4 +1,5 @@
 from collections.abc import AsyncGenerator
+from typing import Never
 from unittest.mock import AsyncMock, Mock
 
 import pytest
@@ -95,10 +96,11 @@ async def stored_enrollment(
 
 @pytest.mark.anyio
 class TestPasswordEnroll:
-    async def test_enroll(self, factor):
+    async def test_enroll(self, factor: SQLAlchemyPasswordFactor) -> None:
         assert await factor.get_enrollment(2) is None
         enrollment = await factor.enroll(2, "new")
         assert enrollment == await stored_enrollment(factor, 2)
+        assert enrollment.password_hash is not None
         assert factor.password_hash.verify("new", enrollment.password_hash)
         with pytest.raises(AlreadyEnrolledPasswordException):
             await factor.enroll(2, "other")
@@ -108,13 +110,18 @@ class TestPasswordEnroll:
 
 @pytest.mark.anyio
 class TestPasswordVerify:
-    async def test_verify(self, factor):
+    async def test_verify(self, factor: SQLAlchemyPasswordFactor) -> None:
         assert (await factor.verify(1, "original")).identity_id == 1
         with pytest.raises(InvalidPasswordException):
             await factor.verify(1, "wrong")
 
     @pytest.mark.parametrize("identity_id", [None, 2, 3])
-    async def test_verify_without_enrollment(self, factor, monkeypatch, identity_id):
+    async def test_verify_without_enrollment(
+        self,
+        factor: SQLAlchemyPasswordFactor,
+        monkeypatch: pytest.MonkeyPatch,
+        identity_id: int | None,
+    ) -> None:
         hash_password = Mock(return_value="discarded")
         lookup = AsyncMock(wraps=factor.get_by_identity_id)
         update = AsyncMock()
@@ -132,7 +139,7 @@ class TestPasswordVerify:
             lookup.assert_awaited_once_with(identity_id)
         update.assert_not_awaited()
 
-    async def test_verify_rehash(self, factor):
+    async def test_verify_rehash(self, factor: SQLAlchemyPasswordFactor) -> None:
         old = Argon2Hasher(time_cost=1).hash("original")
         await factor.connection.execute(
             sqlalchemy.update(users_table)
@@ -146,13 +153,16 @@ class TestPasswordVerify:
 
 @pytest.mark.anyio
 class TestPasswordReset:
-    async def test_reset_replacement_and_replay(self, factor):
+    async def test_reset_replacement_and_replay(
+        self, factor: SQLAlchemyPasswordFactor
+    ) -> None:
         first = await factor.forgot_password(1)
         second = await factor.forgot_password(1)
         assert first != second
         with pytest.raises(InvalidPasswordResetTokenException):
             await factor.reset_password(first, "new")
         enrollment = await factor.reset_password(second, "new")
+        assert enrollment.password_hash is not None
         assert factor.password_hash.verify("new", enrollment.password_hash)
         assert enrollment.reset_token_identifier is None
         assert enrollment.reset_token_verifier is None
@@ -160,7 +170,12 @@ class TestPasswordReset:
         with pytest.raises(InvalidPasswordResetTokenException):
             await factor.reset_password(second, "other")
 
-    async def test_reset_invalid_and_expired(self, factor, reset_token, monkeypatch):
+    async def test_reset_invalid_and_expired(
+        self,
+        factor: SQLAlchemyPasswordFactor,
+        reset_token: str,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
         token = reset_token
         before = await stored_enrollment(factor, 1)
         parts = factor.token_provider.parse(token)
@@ -184,11 +199,16 @@ class TestPasswordReset:
             await factor.reset_password("malformed", "new")
         assert await stored_enrollment(factor, 1) == before
 
-    async def test_hash_failure_preserves_reset(self, factor, reset_token, monkeypatch):
+    async def test_hash_failure_preserves_reset(
+        self,
+        factor: SQLAlchemyPasswordFactor,
+        reset_token: str,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
         token = reset_token
         before = await stored_enrollment(factor, 1)
 
-        def fail(*args, **kwargs):
+        def fail(*args: object, **kwargs: object) -> Never:
             raise PasswordHashGenerationException()
 
         monkeypatch.setattr(factor.password_hash, "hash", fail)
@@ -199,13 +219,16 @@ class TestPasswordReset:
 
 @pytest.mark.anyio
 class TestPasswordUpdate:
-    async def test_update_clears_reset(self, factor, reset_token):
+    async def test_update_clears_reset(
+        self, factor: SQLAlchemyPasswordFactor, reset_token: str
+    ) -> None:
         token = reset_token
         before = await stored_enrollment(factor, 1)
         with pytest.raises(InvalidPasswordException):
             await factor.update_password(1, "wrong", "new")
         assert await stored_enrollment(factor, 1) == before
         enrollment = await factor.update_password(1, "original", "new")
+        assert enrollment.password_hash is not None
         assert factor.password_hash.verify("new", enrollment.password_hash)
         with pytest.raises(InvalidPasswordResetTokenException):
             await factor.reset_password(token, "other")

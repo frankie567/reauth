@@ -88,7 +88,9 @@ async def table(
 
 @pytest.mark.anyio
 class TestSQLAlchemyPassword:
-    async def test_requires_transaction(self, sqlalchemy_integration_engine, table):
+    async def test_requires_transaction(
+        self, sqlalchemy_integration_engine: AsyncEngine, table: sqlalchemy.Table
+    ) -> None:
         async with sqlalchemy_integration_engine.connect() as connection:
             with pytest.raises(MissingTransactionException):
                 make_factor(connection, table)
@@ -103,7 +105,9 @@ class TestSQLAlchemyPassword:
                     await operation()
                 assert not connection.in_transaction()
 
-    async def test_reads(self, sqlalchemy_integration_engine, table):
+    async def test_reads(
+        self, sqlalchemy_integration_engine: AsyncEngine, table: sqlalchemy.Table
+    ) -> None:
         async with sqlalchemy_integration_engine.begin() as connection:
             factor = make_factor(connection, table)
             enrollment = await factor.get_by_identity_id("first")
@@ -121,8 +125,11 @@ class TestSQLAlchemyPassword:
 
     @pytest.mark.parametrize("commit", [True, False])
     async def test_update_transaction_ownership(
-        self, sqlalchemy_integration_engine, table, commit
-    ):
+        self,
+        sqlalchemy_integration_engine: AsyncEngine,
+        table: sqlalchemy.Table,
+        commit: bool,
+    ) -> None:
         async with sqlalchemy_integration_engine.connect() as connection:
             transaction = await connection.begin()
             factor = make_factor(connection, table)
@@ -157,8 +164,8 @@ class TestSQLAlchemyPassword:
             assert row["id"] == "first"
 
     async def test_collision_preserves_transaction(
-        self, sqlalchemy_integration_engine, table
-    ):
+        self, sqlalchemy_integration_engine: AsyncEngine, table: sqlalchemy.Table
+    ) -> None:
         async with sqlalchemy_integration_engine.begin() as connection:
             factor = make_factor(connection, table)
             enrollment = await factor.get_by_identity_id("second")
@@ -187,7 +194,9 @@ class TestSQLAlchemyPassword:
                 == "new"
             )
 
-    async def test_other_integrity_error(self, sqlalchemy_integration_engine, table):
+    async def test_other_integrity_error(
+        self, sqlalchemy_integration_engine: AsyncEngine, table: sqlalchemy.Table
+    ) -> None:
         async with sqlalchemy_integration_engine.begin() as connection:
             factor = make_factor(connection, table)
             enrollment = await factor.get_by_identity_id("second")
@@ -198,7 +207,9 @@ class TestSQLAlchemyPassword:
                 )
             assert await factor.get_by_identity_id("second") == enrollment
 
-    async def test_password_reset_flow(self, sqlalchemy_integration_engine, table):
+    async def test_password_reset_flow(
+        self, sqlalchemy_integration_engine: AsyncEngine, table: sqlalchemy.Table
+    ) -> None:
         async with sqlalchemy_integration_engine.begin() as connection:
             factor = make_factor(connection, table)
             await factor.enroll("second", "original")
@@ -213,8 +224,8 @@ class TestSQLAlchemyPassword:
                 await factor.reset_password(token, "other")
 
     async def test_concurrent_reset_rejects_replay(
-        self, sqlalchemy_integration_engine, table
-    ):
+        self, sqlalchemy_integration_engine: AsyncEngine, table: sqlalchemy.Table
+    ) -> None:
         if sqlalchemy_integration_engine.dialect.name == "sqlite":
             pytest.skip("SQLite does not support SELECT FOR UPDATE")
         async with sqlalchemy_integration_engine.begin() as connection:
@@ -232,7 +243,7 @@ class TestSQLAlchemyPassword:
         attempted = anyio.Event()
         finished = anyio.Event()
 
-        async def reset_again():
+        async def reset_again() -> None:
             async with sqlalchemy_integration_engine.begin() as connection:
                 factor = make_factor(connection, table)
                 attempted.set()

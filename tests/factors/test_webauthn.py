@@ -1,5 +1,6 @@
 import datetime
 import hashlib
+from typing import TypedDict
 
 import cbor2
 import pytest
@@ -8,6 +9,7 @@ from cryptography import x509
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 from cryptography.hazmat.primitives.serialization import Encoding
 from webauthn.helpers import base64url_to_bytes, bytes_to_base64url
+from webauthn.registration.verify_registration_response import VerifiedRegistration
 
 from reauth.factors.webauthn import (
     AttestationFormat,
@@ -21,24 +23,39 @@ from tests.webauthn import (
     CREDENTIAL_ID,
     PUBLIC_KEY,
     RP,
+    Factor,
     response,
     seed_enrollment,
     seed_state,
 )
 
 
+class AssertionResponseOptions(TypedDict, total=False):
+    handle: bytes | None
+    challenge: bytes
+    origin: str
+    counter: int
+    flags: int
+    credential_id: bytes
+
+
 @pytest.mark.anyio
-async def test_start_options_and_storage(webauthn_factor, webauthn_tables):
+async def test_start_options_and_storage(
+    webauthn_factor: Factor, webauthn_tables: tuple[sa.Table, sa.Table]
+) -> None:
     for credential_id in (CREDENTIAL_ID, b"spare"):
         await seed_enrollment(webauthn_factor, webauthn_tables, credential_id)
     token, creation = await webauthn_factor.start_enrollment(
         identity_id=42, session_id=5, user_name="account"
     )
     assert creation.user.id == (42).to_bytes(16)
+    assert creation.authenticator_selection is not None
     assert creation.authenticator_selection.require_resident_key
+    assert creation.exclude_credentials is not None
     assert [c.id for c in creation.exclude_credentials] == [CREDENTIAL_ID, b"spare"]
     _, known = await webauthn_factor.start_authentication(identity_id=42, session_id=5)
     _, discoverable = await webauthn_factor.start_authentication(session_id=5)
+    assert known.allow_credentials is not None
     assert [c.id for c in known.allow_credentials] == [CREDENTIAL_ID, b"spare"]
     assert discoverable.allow_credentials is None
     with pytest.raises(InvalidAuthenticationException):
@@ -66,11 +83,13 @@ async def test_start_options_and_storage(webauthn_factor, webauthn_tables):
 
 @pytest.mark.parametrize("reject", [False, True])
 @pytest.mark.anyio
-async def test_finish_enrollment(webauthn_factor, webauthn_tables, reject):
+async def test_finish_enrollment(
+    webauthn_factor: Factor, webauthn_tables: tuple[sa.Table, sa.Table], reject: bool
+) -> None:
     token = await seed_state(webauthn_factor, webauthn_tables, "enrollment", 42)
     if reject:
 
-        async def reject_none(registration):
+        async def reject_none(registration: VerifiedRegistration) -> bool:
             return registration.fmt != "none"
 
         webauthn_factor.accept_attestation = reject_none
@@ -105,8 +124,10 @@ async def test_finish_enrollment(webauthn_factor, webauthn_tables, reject):
 @pytest.mark.anyio
 @pytest.mark.parametrize("existing_rp", [RP, "other.example"])
 async def test_registration_with_credential_id_from_another_factor(
-    webauthn_factor, webauthn_tables, existing_rp
-):
+    webauthn_factor: Factor,
+    webauthn_tables: tuple[sa.Table, sa.Table],
+    existing_rp: str,
+) -> None:
     enrollments, _ = webauthn_tables
     await webauthn_factor.connection.execute(
         enrollments.insert().values(
@@ -132,7 +153,9 @@ async def test_registration_with_credential_id_from_another_factor(
 
 
 @pytest.mark.anyio
-async def test_invalid_registration(webauthn_factor, webauthn_tables):
+async def test_invalid_registration(
+    webauthn_factor: Factor, webauthn_tables: tuple[sa.Table, sa.Table]
+) -> None:
     token = await seed_state(webauthn_factor, webauthn_tables, "enrollment", 42)
     with pytest.raises(InvalidRegistrationException):
         await webauthn_factor.finish_enrollment(
@@ -148,8 +171,11 @@ async def test_invalid_registration(webauthn_factor, webauthn_tables):
 )
 @pytest.mark.anyio
 async def test_finish_authentication(
-    webauthn_factor, webauthn_tables, identity_id, handle
-):
+    webauthn_factor: Factor,
+    webauthn_tables: tuple[sa.Table, sa.Table],
+    identity_id: int | None,
+    handle: bytes | None,
+) -> None:
     await seed_enrollment(webauthn_factor, webauthn_tables)
     token = await seed_state(webauthn_factor, webauthn_tables, identity_id=identity_id)
     credential = response(handle=handle)
@@ -183,7 +209,12 @@ async def test_finish_authentication(
     ],
 )
 @pytest.mark.anyio
-async def test_rejected_assertions(webauthn_factor, webauthn_tables, identity_id, args):
+async def test_rejected_assertions(
+    webauthn_factor: Factor,
+    webauthn_tables: tuple[sa.Table, sa.Table],
+    identity_id: int | None,
+    args: AssertionResponseOptions,
+) -> None:
     await seed_enrollment(
         webauthn_factor, webauthn_tables, args.get("credential_id", CREDENTIAL_ID)
     )
@@ -204,34 +235,47 @@ async def test_rejected_assertions(webauthn_factor, webauthn_tables, identity_id
     "mismatch", ["session_id", "ceremony", "factor_identifier", "rp_id", "expiry"]
 )
 @pytest.mark.anyio
-async def test_state_binding(webauthn_factor, webauthn_tables, mismatch):
+async def test_state_binding(
+    webauthn_factor: Factor, webauthn_tables: tuple[sa.Table, sa.Table], mismatch: str
+) -> None:
     token = await seed_state(
         webauthn_factor, webauthn_tables, expires_at=0 if mismatch == "expiry" else None
     )
-    binding = {
-        "session_id": 5,
-        "ceremony": "authentication",
-        "factor_identifier": webauthn_factor.identifier,
-        "rp_id": RP,
-    }
-    if mismatch != "expiry":
-        binding[mismatch] = "different"
     with pytest.raises(InvalidStateException):
-        await webauthn_factor.state_service.consume(token, **binding)
+        await webauthn_factor.state_service.consume(
+            token,
+            session_id="different" if mismatch == "session_id" else 5,
+            ceremony="enrollment" if mismatch == "ceremony" else "authentication",
+            factor_identifier=(
+                "different"
+                if mismatch == "factor_identifier"
+                else webauthn_factor.identifier
+            ),
+            rp_id="different" if mismatch == "rp_id" else RP,
+        )
 
 
 @pytest.mark.parametrize("trusted", [True, False])
 @pytest.mark.anyio
-async def test_packed_attestation_roots(webauthn_factor, webauthn_tables, trusted):
+async def test_packed_attestation_roots(
+    webauthn_factor: Factor, webauthn_tables: tuple[sa.Table, sa.Table], trusted: bool
+) -> None:
     """Validate a signed packed attestation using the application's configured roots."""
     token = await seed_state(webauthn_factor, webauthn_tables, "enrollment", 42)
     credential = response(registration=True)
     fields = credential["response"]
+    assert isinstance(fields, dict)
     attestation = cbor2.loads(base64url_to_bytes(fields["attestationObject"]))
     signer = Ed25519PrivateKey.generate()
     now = datetime.datetime.now(datetime.UTC)
 
-    def certificate(name, key, issuer_name, issuer_key, ca):
+    def certificate(
+        name: x509.Name,
+        key: Ed25519PrivateKey,
+        issuer_name: x509.Name,
+        issuer_key: Ed25519PrivateKey,
+        ca: bool,
+    ) -> x509.Certificate:
         return (
             x509.CertificateBuilder()
             .subject_name(name)

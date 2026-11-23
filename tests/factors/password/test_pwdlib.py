@@ -1,14 +1,17 @@
+from typing import Never
+
 import pwdlib.exceptions
 import pytest
 
 from reauth.factors.password.hashing import (
+    PasswordHashException,
     PasswordHashGenerationException,
     PasswordHashVerificationException,
 )
 from reauth.factors.password.pwdlib import PwdlibPasswordHash
 
 
-def test_round_trip():
+def test_round_trip() -> None:
     hasher = PwdlibPasswordHash()
     stored = hasher.hash("secret")
     assert hasher.verify("secret", stored)
@@ -18,7 +21,7 @@ def test_round_trip():
 
 
 @pytest.mark.parametrize("method", ["verify", "verify_and_update"])
-def test_invalid_hash(method):
+def test_invalid_hash(method: str) -> None:
     with pytest.raises(PasswordHashVerificationException) as exc:
         getattr(PwdlibPasswordHash(), method)("secret", "unknown")
     assert exc.value.__cause__ is not None
@@ -31,11 +34,13 @@ def test_invalid_hash(method):
         ("verify_and_update", PasswordHashVerificationException),
     ],
 )
-def test_hashing_failure(monkeypatch, method, exception):
+def test_hashing_failure(
+    monkeypatch: pytest.MonkeyPatch, method: str, exception: type[PasswordHashException]
+) -> None:
     hasher = PwdlibPasswordHash()
     error = pwdlib.exceptions.HashGenerationError()
 
-    def fail(*args, **kwargs):
+    def fail(*args: object, **kwargs: object) -> Never:
         raise error
 
     monkeypatch.setattr(hasher._impl, method, fail)
@@ -45,17 +50,17 @@ def test_hashing_failure(monkeypatch, method, exception):
     assert exc.value.__cause__ is error
 
 
-def test_programming_error():
+def test_programming_error() -> None:
     with pytest.raises(TypeError):
         PwdlibPasswordHash().hash(None)  # ty: ignore[invalid-argument-type]
 
 
 @pytest.mark.parametrize("method", ["verify", "verify_and_update"])
-def test_verification_failure(monkeypatch, method):
+def test_verification_failure(monkeypatch: pytest.MonkeyPatch, method: str) -> None:
     hasher = PwdlibPasswordHash()
     error = pwdlib.exceptions.HashVerificationError()
 
-    def fail(*args, **kwargs):
+    def fail(*args: object, **kwargs: object) -> Never:
         raise error
 
     monkeypatch.setattr(hasher._impl, method, fail)
