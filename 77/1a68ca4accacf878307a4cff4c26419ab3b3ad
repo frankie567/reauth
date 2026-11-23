@@ -1,0 +1,33 @@
+tests/factors/oauth2/conftest.py
+  s_00d44d7d2491b1::t_eb5690de8c4921 1,6,9,15,48-58,60-71
+  s_00d44d7d2491b1::t_d1a928cbc75d0e 59
+tests/factors/oauth2/test_state.py
+  s_00d44d7d2491b1::t_eb5690de8c4921 2
+tests/factors/oauth2/test_base.py
+  s_00d44d7d2491b1::t_8a658a66525058 2,219-223,225-226,228-245
+  s_00d44d7d2491b1::t_7c9c3d3c0810d2 188,205,216,260,299,338,352,388,409
+  s_00d44d7d2491b1::t_a53e31e267f03a 224,227
+  s_00d44d7d2491b1::t_202348ed925c5d 246
+reauth/factors/oauth2/apple.py
+  s_00d44d7d2491b1::t_894e29bce40056 22-25
+reauth/factors/oauth2/base.py
+  s_00d44d7d2491b1::t_ee6f993a0ba30a 265-267
+  s_00d44d7d2491b1::t_b7f6ae39c83cf9 378-379
+  s_00d44d7d2491b1::t_7eec2e1a128fcd 3,14-18,317,343-346,357-358,373-377,380-382
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "771a68ca4accacf878307a4cff4c26419ab3b3ad",
+  "prompts": {},
+  "sessions": {
+    "s_00d44d7d2491b1": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1fe44-406d-7ba1-aafc-e6d4fbe6f9e4",
+        "model": "gpt-6.2-sol"
+      },
+      "human_author": "François Voron <me@fvoron.com>"
+    }
+  }
+}
